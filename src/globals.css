@@ -1,0 +1,433 @@
+/* Import retro fonts */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap');
+/* LED/Scoreboard style fonts */
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Audiowide&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&display=swap');
+
+/* Make html/body full height so min-h-screen works */
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+/* Global retro background */
+.sega-bg {
+  background-color: #0b0b1d;
+  background-image: radial-gradient(
+      circle,
+      rgba(255, 255, 255, 0.05) 1px,
+      transparent 1px
+    ),
+    linear-gradient(45deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px, 20px 20px;
+  background-repeat: repeat;
+  min-height: 100vh;
+}
+
+/* Make main/footer transparent */
+main,
+footer {
+  background: transparent;
+}
+
+/* Subtle pixel grid overlay */
+main {
+  flex: 1;
+  padding: 2rem;
+  background-image: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px
+  );
+  background-size: 40px 40px;
+}
+
+/* ---------- FONTS ---------- */
+
+/* Default text = scoreboard/stat font */
+body {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  letter-spacing: 1px;
+  color: white;
+}
+
+/* Nav + headers + buttons = Sega arcade font */
+header,
+nav,
+footer,
+button,
+h1,
+h2,
+h3 {
+  font-family: 'Press Start 2P', cursive;
+}
+
+/* ---------- COLORS ---------- */
+
+.hover\:text-neon-cyan:hover {
+  color: #00ffff;
+}
+
+.border-neon-red {
+  border-color: #ff0000;
+}
+
+.bg-neon-purple {
+  background-color: #9b30ff;
+}
+
+.neon-glow {
+  color: #ff59c1;
+  text-shadow: 0 0 4px #ff59c1, 0 0 8px #ff59c1, 0 0 16px #ff59c1;
+}
+
+.scoreboard-header {
+  background: linear-gradient(180deg, #1b1b4d, #000033);
+  border: 4px solid #ff0000;
+  padding: 12px 20px;
+  text-align: center;
+  font-family: 'Press Start 2P', cursive;
+  font-size: 18px;
+  color: #00ffff;
+  text-shadow: 0 0 6px #00ffff;
+  box-shadow: 0 0 10px #ff0000;
+}
+
+/* ---------- NHL95 ICE RINK BACKGROUND ---------- */
+
+/* ---------- NHL95 SEGA ARCADE BACKGROUND ---------- */
+
+/* Animated ice rink with moving scanlines */
+.nhl95-bg {
+  position: relative;
+  background: 
+    /* Ice surface base */ linear-gradient(
+    180deg,
+    rgba(223, 239, 255, 0.95) 0%,
+    rgba(200, 230, 255, 0.95) 50%,
+    rgba(223, 239, 255, 0.95) 100%
+  );
+  overflow: hidden;
+}
+
+/* Animated scanlines (classic arcade effect) */
+.nhl95-bg::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.15) 0px,
+    rgba(0, 0, 0, 0.15) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  pointer-events: none;
+  z-index: 1;
+  animation: scanlines 8s linear infinite;
+}
+
+/* Center ice red line */
+.nhl95-bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 8px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 0, 0, 0) 0%,
+    rgba(255, 0, 0, 0.5) 5%,
+    rgba(255, 0, 0, 0.5) 95%,
+    rgba(255, 0, 0, 0) 100%
+  );
+  transform: translateX(-50%);
+  box-shadow: 0 0 10px rgba(255, 0, 0, 0.3),
+    inset 0 0 5px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Blue lines */
+.blue-line-left,
+.blue-line-right {
+  position: absolute;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  background: linear-gradient(
+    180deg,
+    rgba(0, 100, 255, 0) 0%,
+    rgba(0, 100, 255, 0.6) 5%,
+    rgba(0, 100, 255, 0.6) 95%,
+    rgba(0, 100, 255, 0) 100%
+  );
+  box-shadow: 0 0 8px rgba(0, 100, 255, 0.4),
+    inset 0 0 3px rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.blue-line-left {
+  left: 25%;
+  transform: translateX(-50%);
+}
+
+.blue-line-right {
+  left: 75%;
+  transform: translateX(-50%);
+}
+
+/* Ice texture with sparkle effect */
+.ice-texture {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: radial-gradient(
+      circle at 15% 20%,
+      rgba(255, 255, 255, 0.4) 0%,
+      transparent 3%
+    ),
+    radial-gradient(
+      circle at 85% 30%,
+      rgba(255, 255, 255, 0.3) 0%,
+      transparent 3%
+    ),
+    radial-gradient(
+      circle at 45% 60%,
+      rgba(255, 255, 255, 0.35) 0%,
+      transparent 3%
+    ),
+    radial-gradient(
+      circle at 25% 75%,
+      rgba(255, 255, 255, 0.3) 0%,
+      transparent 3%
+    ),
+    radial-gradient(
+      circle at 65% 85%,
+      rgba(255, 255, 255, 0.4) 0%,
+      transparent 3%
+    ),
+    radial-gradient(
+      circle at 90% 65%,
+      rgba(255, 255, 255, 0.3) 0%,
+      transparent 3%
+    );
+  background-size: 200% 200%;
+  animation: sparkle 15s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Skate scratch marks (static) */
+.skate-marks {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image:
+    /* Curved scratch marks */ repeating-linear-gradient(
+      25deg,
+      transparent 0px,
+      transparent 40px,
+      rgba(180, 200, 220, 0.2) 40px,
+      rgba(180, 200, 220, 0.2) 42px
+    ),
+    repeating-linear-gradient(
+      -35deg,
+      transparent 0px,
+      transparent 60px,
+      rgba(180, 200, 220, 0.15) 60px,
+      rgba(180, 200, 220, 0.15) 61px
+    ),
+    repeating-linear-gradient(
+      65deg,
+      transparent 0px,
+      transparent 80px,
+      rgba(180, 200, 220, 0.18) 80px,
+      rgba(180, 200, 220, 0.18) 81px
+    );
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* CRT screen curvature effect */
+.crt-curve {
+  position: relative;
+}
+
+.crt-curve::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 0%,
+    transparent 70%,
+    rgba(0, 0, 0, 0.15) 100%
+  );
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Neon glow border (optional for containers) */
+.arcade-border {
+  border: 4px solid #00ffff;
+  box-shadow: 0 0 10px #00ffff, 0 0 20px #00ffff,
+    inset 0 0 10px rgba(0, 255, 255, 0.2);
+  position: relative;
+}
+
+.arcade-border::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: -8px;
+  right: -8px;
+  bottom: -8px;
+  background: linear-gradient(45deg, #ff0000, #00ffff, #ff00ff, #00ff00);
+  background-size: 400% 400%;
+  animation: border-glow 4s ease infinite;
+  z-index: -1;
+  opacity: 0.3;
+  filter: blur(10px);
+}
+
+/* ---------- ANIMATIONS ---------- */
+
+@keyframes scanlines {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(4px);
+  }
+}
+
+@keyframes sparkle {
+  0%,
+  100% {
+    background-position: 0% 0%;
+    opacity: 0.4;
+  }
+  25% {
+    background-position: 50% 50%;
+    opacity: 0.6;
+  }
+  50% {
+    background-position: 100% 100%;
+    opacity: 0.4;
+  }
+  75% {
+    background-position: 50% 0%;
+    opacity: 0.5;
+  }
+}
+
+@keyframes border-glow {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* Pixel-perfect fonts remain crisp */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .nhl95-bg::before {
+    background-size: 100% 2px;
+  }
+}
+
+@font-face {
+  font-family: 'Scoreboard';
+  src: url('/fonts/scoreboard.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+}
+
+.page-title {
+  font-family: 'Scoreboard', sans-serif;
+  color: #ffb800; /* solid old-school yellow-orange */
+  text-align: center;
+  font-size: 2.5rem;
+  margin-bottom: 2.5rem;
+  letter-spacing: 1px; /* optional, makes it look more dot-matrix */
+  text-shadow: none; /* explicitly remove any glow */
+}
+
+/* ---------- HERO BAR ---------- */
+header.hero-bar {
+  display: flex;
+  align-items: center; /* vertically center logo + nav */
+  justify-content: space-between; /* logo left, nav right */
+  padding: 0.5rem 1rem; /* smaller padding */
+  height: 60px; /* reduce overall height */
+  background: linear-gradient(
+    180deg,
+    #1b1b4d,
+    #000033
+  ); /* retro scoreboard gradient */
+  border-bottom: 4px solid #ff0000;
+  box-shadow: 0 0 10px #ff0000;
+  font-family: 'Press Start 2P', cursive;
+}
+
+header.hero-bar img.logo {
+  height: 40px; /* shrink logo */
+  width: auto; /* keep aspect ratio */
+}
+
+/* ---------- NAVIGATION ---------- */
+nav.hero-nav {
+  display: flex;
+  gap: 2rem; /* space between links */
+  justify-content: center; /* center nav links horizontally */
+  flex: 1; /* take remaining space next to logo */
+}
+
+nav.hero-nav a {
+  color: #00ffff;
+  text-decoration: none;
+  font-size: 0.75rem;
+  transition: color 0.2s;
+}
+
+nav.hero-nav a:hover {
+  color: #ff59c1;
+}
+
+/* ---------- MOBILE RESPONSIVE ---------- */
+@media (max-width: 768px) {
+  header.hero-bar {
+    flex-direction: column;
+    height: auto;
+    padding: 0.25rem 0.5rem;
+  }
+
+  nav.hero-nav {
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 0.25rem;
+  }
+
+  header.hero-bar img.logo {
+    height: 35px; /* slightly smaller on mobile */
+  }
+}

@@ -9,10 +9,10 @@ export default function Standings() {
   const [standings, setStandings] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Sorting state
+  // Sorting state - default to Pts descending
   const [sortConfig, setSortConfig] = useState({
-    key: 'season_rank',
-    direction: 'ascending',
+    key: 'pts',
+    direction: 'descending',
   });
 
   // Define which stats are "lower is better"
@@ -20,27 +20,25 @@ export default function Standings() {
 
   const handleSort = (key) => {
     if (key === 'season_rank') {
-      // Reset to default rank sorting
-      setSortConfig({ key: 'season_rank', direction: 'ascending' });
+      setSortConfig({ key: 'pts', direction: 'descending' });
       return;
     }
 
     let direction = 'ascending';
-
-    // If clicking same column, toggle direction
     if (sortConfig.key === key) {
-      direction =
-        sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+      direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
-      // New column - set default direction based on stat type
       direction = reverseSortColumns.includes(key) ? 'ascending' : 'descending';
     }
 
     setSortConfig({ key, direction });
   };
 
-  // Sorted standings
-  const sortedStandings = [...standings].sort((a, b) => {
+  // Sorted standings with calculated pts_pct
+  const sortedStandings = [...standings].map(s => ({
+    ...s,
+    pts_pct: s.gp > 0 ? s.pts / (s.gp * 2) : 0
+  })).sort((a, b) => {
     const { key, direction } = sortConfig;
 
     if (a[key] === null) return 1;
@@ -120,31 +118,30 @@ export default function Standings() {
   }, [selectedLeague, selectedSeason]);
 
   const columns = [
-    { label: 'Rank', key: 'season_rank', width: '60px' },
-    { label: 'Team', key: 'team', width: '140px' },
-    { label: 'Coach', key: 'coach', width: '140px' },
-    { label: 'GP', key: 'gp', width: '50px' },
-    { label: 'W', key: 'w', width: '50px' },
-    { label: 'L', key: 'l', width: '50px' },
-    { label: 'OTL', key: 'otl', width: '50px' },
-    { label: 'Pts', key: 'pts', width: '60px' },
-    { label: 'GF', key: 'gf', width: '60px' },
-    { label: 'GA', key: 'ga', width: '60px' },
-    { label: 'GD', key: 'gd', width: '60px' },
-    { label: 'OTW', key: 'otw', width: '50px' },
-    { label: 'SO', key: 'shutouts', width: '50px' },
+    { label: 'Rank', key: 'season_rank', width: '50px' },
+    { label: 'Team', key: 'team', width: '85px' },
+    { label: 'Coach', key: 'coach', width: '160px' },
+    { label: 'GP', key: 'gp', width: '40px' },
+    { label: 'W', key: 'w', width: '40px' },
+    { label: 'L', key: 'l', width: '40px' },
+    { label: 'OTL', key: 'otl', width: '40px' },
+    { label: 'Pts', key: 'pts', width: '45px' },
+    { label: 'Pts%', key: 'pts_pct', width: '55px' },
+    { label: 'GF', key: 'gf', width: '40px' },
+    { label: 'GA', key: 'ga', width: '40px' },
+    { label: 'GD', key: 'gd', width: '45px' },
+    { label: 'OTW', key: 'otw', width: '40px' },
+    { label: 'SO', key: 'shutouts', width: '40px' },
   ];
 
   return (
     <div className="standings-page">
-      {/* Scoreboard Header */}
       <div className="scoreboard-header-container">
         <div className="scoreboard-header">
           <div className="led-text">LEAGUE STANDINGS</div>
         </div>
       </div>
 
-      {/* Control Panel */}
       <div className="control-panel">
         <div className="control-group">
           <label>LEAGUE</label>
@@ -155,7 +152,7 @@ export default function Standings() {
               setSelectedLeague(e.target.value);
               setSelectedSeason('');
               setStandings([]);
-              setSortConfig({ key: 'season_rank', direction: 'ascending' });
+              setSortConfig({ key: 'pts', direction: 'descending' });
             }}
           >
             <option value="">SELECT LEAGUE</option>
@@ -174,7 +171,7 @@ export default function Standings() {
             value={selectedSeason}
             onChange={(e) => {
               setSelectedSeason(e.target.value);
-              setSortConfig({ key: 'season_rank', direction: 'ascending' });
+              setSortConfig({ key: 'pts', direction: 'descending' });
             }}
             disabled={!selectedLeague || seasons.length === 0}
           >
@@ -188,7 +185,6 @@ export default function Standings() {
         </div>
       </div>
 
-      {/* Standings Display */}
       {loading ? (
         <div className="loading-screen">
           <div className="loading-spinner"></div>
@@ -209,10 +205,7 @@ export default function Standings() {
                       key={col.key}
                       onClick={() => handleSort(col.key)}
                       style={{ width: col.width }}
-                      className={`
-                        ${sortConfig.key === col.key ? 'sorted-column' : ''}
-                        ${col.key === 'season_rank' ? 'rank-column' : ''}
-                      `}
+                      className={`${sortConfig.key === col.key ? 'sorted-column' : ''} ${col.key === 'season_rank' ? 'rank-column' : ''}`}
                     >
                       <div className="th-content">
                         <span>{col.label}</span>
@@ -228,69 +221,58 @@ export default function Standings() {
               </thead>
               <tbody>
                 {sortedStandings.map((s, idx) => (
-                  <tr
-                    key={idx}
-                    className={idx % 2 === 0 ? 'even-row' : 'odd-row'}
-                  >
+                  <tr key={s.season_rank || idx} className={idx % 2 === 0 ? 'even-row' : 'odd-row'}>
                     <td className="rank-cell">
-                      <span className="rank-number">{s.season_rank}</span>
+                      <div className="row-banner-overlay">
+                        <img
+                          src={`/assets/banners/${s.team}.png`}
+                          alt=""
+                          className="banner-image"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                      {idx + 1}
                     </td>
-                    <td className="team-cell">{s.team}</td>
+                    <td className="team-cell">
+                      <div className="team-info">
+                        <div className="logo-container">
+                          <img
+                            src={`/assets/teamLogos/${s.team}.png`}
+                            alt={s.team}
+                            className="team-logo"
+                            onError={(e) => {
+                              console.log(`Failed to load logo for team: ${s.team}`, e.target.src);
+                              e.target.style.display = 'none';
+                              e.target.nextElementSibling.style.display = 'flex';
+                            }}
+                            onLoad={() => {
+                              console.log(`Successfully loaded logo for team: ${s.team}`);
+                            }}
+                          />
+                          <div className="logo-fallback" style={{ display: 'none' }}>
+                            {s.team}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
                     <td className="coach-cell">{s.coach}</td>
-                    <td
-                      className={sortConfig.key === 'gp' ? 'sorted-cell' : ''}
-                    >
-                      {s.gp}
+                    <td className={`stat-cell ${sortConfig.key === 'gp' ? 'sorted-cell' : ''}`}>{s.gp}</td>
+                    <td className={`stat-cell ${sortConfig.key === 'w' ? 'sorted-cell' : ''}`}>{s.w}</td>
+                    <td className={`stat-cell ${sortConfig.key === 'l' ? 'sorted-cell' : ''}`}>{s.l}</td>
+                    <td className={`stat-cell ${sortConfig.key === 'otl' ? 'sorted-cell' : ''}`}>{s.otl}</td>
+                    <td className={`stat-cell pts-cell ${sortConfig.key === 'pts' ? 'sorted-cell' : ''}`}>{s.pts}</td>
+                    <td className={`stat-cell pts-pct-cell ${sortConfig.key === 'pts_pct' ? 'sorted-cell' : ''}`}>
+                      {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
                     </td>
-                    <td className={sortConfig.key === 'w' ? 'sorted-cell' : ''}>
-                      {s.w}
+                    <td className={`stat-cell ${sortConfig.key === 'gf' ? 'sorted-cell' : ''}`}>{s.gf}</td>
+                    <td className={`stat-cell ${sortConfig.key === 'ga' ? 'sorted-cell' : ''}`}>{s.ga}</td>
+                    <td className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${sortConfig.key === 'gd' ? 'sorted-cell' : ''}`}>
+                      {s.gd > 0 ? '+' : ''}{s.gd}
                     </td>
-                    <td className={sortConfig.key === 'l' ? 'sorted-cell' : ''}>
-                      {s.l}
-                    </td>
-                    <td
-                      className={sortConfig.key === 'otl' ? 'sorted-cell' : ''}
-                    >
-                      {s.otl}
-                    </td>
-                    <td
-                      className={sortConfig.key === 'pts' ? 'sorted-cell' : ''}
-                    >
-                      {s.pts}
-                    </td>
-                    <td
-                      className={sortConfig.key === 'gf' ? 'sorted-cell' : ''}
-                    >
-                      {s.gf}
-                    </td>
-                    <td
-                      className={sortConfig.key === 'ga' ? 'sorted-cell' : ''}
-                    >
-                      {s.ga}
-                    </td>
-                    <td
-                      className={`
-                      ${
-                        s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''
-                      }
-                      ${sortConfig.key === 'gd' ? 'sorted-cell' : ''}
-                    `}
-                    >
-                      {s.gd > 0 ? '+' : ''}
-                      {s.gd}
-                    </td>
-                    <td
-                      className={sortConfig.key === 'otw' ? 'sorted-cell' : ''}
-                    >
-                      {s.otw}
-                    </td>
-                    <td
-                      className={
-                        sortConfig.key === 'shutouts' ? 'sorted-cell' : ''
-                      }
-                    >
-                      {s.shutouts}
-                    </td>
+                    <td className={`stat-cell ${sortConfig.key === 'otw' ? 'sorted-cell' : ''}`}>{s.otw}</td>
+                    <td className={`stat-cell ${sortConfig.key === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
                   </tr>
                 ))}
               </tbody>
@@ -301,27 +283,25 @@ export default function Standings() {
 
       <style>{`
         .standings-page {
-          padding: 2rem;
+          padding: 1rem 2rem;
           min-height: 100vh;
+          background: radial-gradient(ellipse at top, #0a0a15 0%, #000000 100%);
         }
 
-        /* Scoreboard Header - LED Matrix Style */
         .scoreboard-header-container {
           display: flex;
           justify-content: center;
-          margin-bottom: 2rem;
+          margin-bottom: 1rem;
         }
 
         .scoreboard-header {
           background: #000000;
           border: 6px solid #333;
           border-radius: 8px;
-          padding: 1.5rem 3rem;
-          box-shadow: 
-            0 0 0 2px #000,
-            inset 0 0 20px rgba(0, 0, 0, 0.8),
-            0 8px 16px rgba(0, 0, 0, 0.5);
+          padding: 1rem 2rem;
+          box-shadow: 0 0 0 2px #000, inset 0 0 20px rgba(0, 0, 0, 0.8), 0 8px 16px rgba(0, 0, 0, 0.5), 0 0 40px rgba(255, 215, 0, 0.3);
           position: relative;
+          overflow: hidden;
         }
 
         .scoreboard-header::before {
@@ -331,40 +311,41 @@ export default function Standings() {
           left: 0;
           right: 0;
           bottom: 0;
-          background: 
-            repeating-linear-gradient(
-              0deg,
-              transparent 0px,
-              transparent 2px,
-              rgba(255, 215, 0, 0.03) 2px,
-              rgba(255, 215, 0, 0.03) 4px
-            ),
-            repeating-linear-gradient(
-              90deg,
-              transparent 0px,
-              transparent 2px,
-              rgba(255, 215, 0, 0.03) 2px,
-              rgba(255, 215, 0, 0.03) 4px
-            );
+          background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(255, 215, 0, 0.03) 2px, rgba(255, 215, 0, 0.03) 4px), repeating-linear-gradient(90deg, transparent 0px, transparent 2px, rgba(255, 215, 0, 0.03) 2px, rgba(255, 215, 0, 0.03) 4px);
           pointer-events: none;
+        }
+
+        .scoreboard-header::after {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: linear-gradient(45deg, transparent 30%, rgba(255, 215, 0, 0.1) 50%, transparent 70%);
+          animation: shimmer 3s infinite;
+        }
+
+        @keyframes shimmer {
+          0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+          100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
         }
 
         .led-text {
           font-family: 'Press Start 2P', monospace;
           font-size: 2rem;
-          color: #FFD700;
+          color: #FF8C00;
           letter-spacing: 6px;
-          
+          text-shadow: 0 0 10px #FF8C00, 0 0 20px #FF8C00, 0 0 30px #FFD700;
           filter: contrast(1.3) brightness(1.2);
           position: relative;
         }
 
-        /* Control Panel */
         .control-panel {
           display: flex;
           gap: 2rem;
           justify-content: center;
-          margin-bottom: 3rem;
+          margin-bottom: 1.5rem;
           flex-wrap: wrap;
         }
 
@@ -377,33 +358,29 @@ export default function Standings() {
         .control-group label {
           font-family: 'Press Start 2P', monospace;
           font-size: 0.7rem;
-          color: #00FFFF;
+          color: #FF8C00;
           letter-spacing: 2px;
-          text-shadow: 0 0 5px #00FFFF;
+          text-shadow: 0 0 5px #FF8C00;
         }
 
         .arcade-select {
           background: linear-gradient(180deg, #1a1a2e 0%, #0a0a15 100%);
-          color: #00FFFF;
-          border: 3px solid #00FFFF;
+          color: #87CEEB;
+          border: 3px solid #87CEEB;
           padding: 0.75rem 1rem;
           font-family: 'VT323', monospace;
           font-size: 1.2rem;
           cursor: pointer;
           border-radius: 8px;
-          box-shadow: 
-            0 0 10px rgba(0, 255, 255, 0.3),
-            inset 0 0 10px rgba(0, 255, 255, 0.1);
+          box-shadow: 0 0 10px rgba(135, 206, 235, 0.3), inset 0 0 10px rgba(135, 206, 235, 0.1);
           transition: all 0.3s ease;
           letter-spacing: 1px;
         }
 
         .arcade-select:hover:not(:disabled) {
-          border-color: #FFD700;
-          color: #FFD700;
-          box-shadow: 
-            0 0 15px rgba(255, 215, 0, 0.5),
-            inset 0 0 15px rgba(255, 215, 0, 0.1);
+          border-color: #FF8C00;
+          color: #FF8C00;
+          box-shadow: 0 0 15px rgba(255, 140, 0, 0.5), inset 0 0 15px rgba(255, 140, 0, 0.1);
           transform: translateY(-2px);
         }
 
@@ -414,10 +391,9 @@ export default function Standings() {
 
         .arcade-select option {
           background: #1a1a2e;
-          color: #00FFFF;
+          color: #87CEEB;
         }
 
-        /* Table Container */
         .table-container {
           overflow-x: auto;
           border-radius: 12px;
@@ -427,12 +403,9 @@ export default function Standings() {
           background: linear-gradient(180deg, #0a0a15 0%, #1a1a2e 100%);
           border: 4px solid #FF0000;
           border-radius: 12px;
-          box-shadow: 
-            0 0 20px rgba(255, 0, 0, 0.4),
-            inset 0 0 20px rgba(255, 0, 0, 0.1);
+          box-shadow: 0 0 20px rgba(255, 0, 0, 0.4), 0 0 40px rgba(255, 0, 0, 0.2), inset 0 0 20px rgba(255, 0, 0, 0.1);
         }
 
-        /* Arcade Table */
         .arcade-table {
           width: 100%;
           border-collapse: separate;
@@ -440,22 +413,21 @@ export default function Standings() {
           font-family: 'VT323', monospace;
         }
 
-        /* Table Header */
         .arcade-table thead {
-          background: linear-gradient(180deg, #00FFFF 0%, #0080FF 100%);
+          background: linear-gradient(180deg, #FF8C00 0%, #FF6347 100%);
         }
 
         .arcade-table th {
           padding: 0.75rem 0.5rem;
           font-family: 'Press Start 2P', monospace;
           font-size: 0.6rem;
-          color: #000;
+          color: #FFF;
           text-align: center;
           cursor: pointer;
           user-select: none;
           transition: all 0.3s ease;
           position: relative;
-          border-right: 1px solid rgba(0, 0, 0, 0.2);
+          border-right: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .arcade-table th:last-child {
@@ -470,9 +442,7 @@ export default function Standings() {
 
         .arcade-table th.sorted-column {
           background: linear-gradient(180deg, #FFD700 0%, #FFA500 100%);
-          box-shadow: 
-            inset 0 0 10px rgba(255, 255, 255, 0.3),
-            0 0 15px rgba(255, 215, 0, 0.6);
+          box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3), 0 0 15px rgba(255, 140, 0, 0.6);
         }
 
         .arcade-table th.rank-column {
@@ -496,9 +466,64 @@ export default function Standings() {
           50% { transform: translateY(-3px); }
         }
 
-        /* Table Rows */
         .arcade-table tbody tr {
           transition: all 0.2s ease;
+          position: relative;
+        }
+
+        /* Banner Overlay - Crazy Sleek Transparent Effect */
+        .row-banner-overlay {
+          position: absolute;
+          left: 0;
+          top: 0;
+          bottom: 0;
+          width: 400px;
+          pointer-events: none;
+          z-index: 0;
+          overflow: hidden;
+          opacity: 0.15;
+          transition: all 0.3s ease;
+        }
+
+        .arcade-table tbody tr:hover .row-banner-overlay {
+          opacity: 0.25;
+          width: 450px;
+        }
+
+        .banner-image {
+          position: absolute;
+          left: -20px;
+          top: 50%;
+          transform: translateY(-50%);
+          height: 140%;
+          width: auto;
+          object-fit: contain;
+          filter: blur(1px) brightness(1.2);
+          mask-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.8) 0%,
+            rgba(0, 0, 0, 0.7) 20%,
+            rgba(0, 0, 0, 0.5) 40%,
+            rgba(0, 0, 0, 0.3) 60%,
+            rgba(0, 0, 0, 0.15) 75%,
+            rgba(0, 0, 0, 0.05) 85%,
+            rgba(0, 0, 0, 0) 100%
+          );
+          -webkit-mask-image: linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0.8) 0%,
+            rgba(0, 0, 0, 0.7) 20%,
+            rgba(0, 0, 0, 0.5) 40%,
+            rgba(0, 0, 0, 0.3) 60%,
+            rgba(0, 0, 0, 0.15) 75%,
+            rgba(0, 0, 0, 0.05) 85%,
+            rgba(0, 0, 0, 0) 100%
+          );
+        }
+
+        .arcade-table tbody tr:hover .banner-image {
+          filter: blur(0.5px) brightness(1.4);
+          transform: translateY(-50%) scale(1.05);
         }
 
         .arcade-table tbody tr.even-row {
@@ -510,41 +535,88 @@ export default function Standings() {
         }
 
         .arcade-table tbody tr:hover {
-          background: rgba(0, 255, 255, 0.15);
+          background: rgba(255, 140, 0, 0.15) !important;
           transform: scale(1.01);
-          box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+          box-shadow: 0 0 15px rgba(255, 140, 0, 0.4), inset 0 0 20px rgba(255, 140, 0, 0.1);
+          z-index: 2;
         }
 
-        /* Table Cells */
         .arcade-table td {
-          padding: 0.6rem 0.5rem;
+          padding: 0.25rem 0.5rem;
           text-align: center;
           font-size: 1.2rem;
           color: #E0E0E0;
-          border-bottom: 1px solid rgba(0, 255, 255, 0.1);
+          border-bottom: 1px solid rgba(255, 140, 0, 0.2);
           letter-spacing: 1px;
+          position: relative;
+          z-index: 1;
         }
 
-        /* Rank Cell */
         .rank-cell {
           font-family: 'Press Start 2P', monospace;
           font-size: 0.9rem;
-          color: #FFD700;
+          color: #FF8C00;
           font-weight: bold;
+          text-shadow: 0 0 5px #FF8C00;
         }
 
-        .rank-number {
-          text-shadow: 0 0 5px #FFD700;
-        }
-
-        /* Team & Coach Cells */
         .team-cell {
+          text-align: center;
+          padding-left: 0;
+        }
+
+        .team-info {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0;
+        }
+
+        .logo-container {
+          position: relative;
+          width: 38px;
+          height: 38px;
+          flex-shrink: 0;
+          background: rgba(0, 0, 0, 0.6);
+          border-radius: 8px;
+          padding: 3px;
+          border: 2px solid rgba(135, 206, 235, 0.4);
+          box-shadow: 0 0 10px rgba(135, 206, 235, 0.3);
+          transition: all 0.3s ease;
+        }
+
+        .arcade-table tbody tr:hover .logo-container {
+          border-color: rgba(255, 140, 0, 0.8);
+          box-shadow: 0 0 15px rgba(255, 140, 0, 0.6);
+        }
+
+        .team-logo {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+          filter: drop-shadow(0 0 6px rgba(135, 206, 235, 0.4));
+          transition: all 0.3s ease;
+        }
+
+        .arcade-table tbody tr:hover .team-logo {
+          filter: drop-shadow(0 0 15px rgba(255, 140, 0, 1)) drop-shadow(0 0 25px rgba(255, 140, 0, 0.6));
+          transform: scale(1.15);
+        }
+
+        .logo-fallback {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 100%;
+          height: 100%;
+          background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
+          border: 2px solid #87CEEB;
+          border-radius: 8px;
           font-family: 'Press Start 2P', monospace;
-          font-size: 0.7rem;
-          color: #00FFFF;
-          text-align: left;
-          padding-left: 1rem;
-          text-shadow: 0 0 5px #00FFFF;
+          font-size: 0.5rem;
+          color: #000;
+          font-weight: bold;
+          box-shadow: 0 0 10px rgba(135, 206, 235, 0.5);
         }
 
         .coach-cell {
@@ -553,26 +625,42 @@ export default function Standings() {
           padding-left: 1rem;
         }
 
-        /* Goal Differential Color Coding */
+        .stat-cell {
+          transition: all 0.2s ease;
+        }
+
+        .pts-cell {
+          font-weight: bold;
+          color: #FFD700;
+        }
+
+        .pts-pct-cell {
+          font-size: 1.1rem;
+          color: #87CEEB;
+        }
+
         .positive-gd {
           color: #00FF00;
           font-weight: bold;
-          text-shadow: 0 0 5px #00FF00;
+          text-shadow: 0 0 8px #00FF00;
         }
 
         .negative-gd {
           color: #FF0000;
           font-weight: bold;
-          text-shadow: 0 0 5px #FF0000;
+          text-shadow: 0 0 8px #FF0000;
         }
 
-        /* Sorted Cell Highlight */
         .sorted-cell {
-          background: rgba(255, 215, 0, 0.15);
-          box-shadow: inset 0 0 8px rgba(255, 215, 0, 0.3);
+          background: rgba(255, 215, 0, 0.15) !important;
+          box-shadow: inset 0 0 8px rgba(255, 215, 0, 0.3) !important;
         }
 
-        /* Loading Screen */
+        /* Explicitly reset non-sorted cells */
+        .arcade-table td:not(.sorted-cell) {
+          background: transparent;
+        }
+
         .loading-screen {
           display: flex;
           flex-direction: column;
@@ -585,10 +673,11 @@ export default function Standings() {
         .loading-spinner {
           width: 60px;
           height: 60px;
-          border: 6px solid rgba(0, 255, 255, 0.2);
-          border-top: 6px solid #00FFFF;
+          border: 6px solid rgba(255, 140, 0, 0.2);
+          border-top: 6px solid #FF8C00;
           border-radius: 50%;
           animation: spin 1s linear infinite;
+          box-shadow: 0 0 20px rgba(255, 140, 0, 0.5);
         }
 
         @keyframes spin {
@@ -599,17 +688,16 @@ export default function Standings() {
         .loading-text {
           font-family: 'Press Start 2P', monospace;
           font-size: 1rem;
-          color: #00FFFF;
+          color: #87CEEB;
           letter-spacing: 2px;
           animation: pulse 1.5s ease-in-out infinite;
         }
 
         @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 1; }
+          0%, 100% { opacity: 0.5; text-shadow: 0 0 5px #87CEEB; }
+          50% { opacity: 1; text-shadow: 0 0 20px #FF8C00; }
         }
 
-        /* No Data Screen */
         .no-data {
           display: flex;
           justify-content: center;
@@ -620,40 +708,48 @@ export default function Standings() {
         .no-data-text {
           font-family: 'Press Start 2P', monospace;
           font-size: 1.2rem;
-          color: #FFD700;
-          text-shadow: 0 0 10px #FFD700;
+          color: #FF8C00;
+          text-shadow: 0 0 10px #FF8C00, 0 0 20px #FF8C00;
           letter-spacing: 3px;
+          animation: glow-pulse 2s ease-in-out infinite;
         }
 
-        /* Responsive */
         @media (max-width: 768px) {
           .led-text {
             font-size: 1.2rem;
             letter-spacing: 3px;
           }
-
           .scoreboard-header {
             padding: 1rem 1.5rem;
           }
-
           .control-panel {
             flex-direction: column;
             gap: 1rem;
           }
-
           .arcade-table th {
             font-size: 0.5rem;
             padding: 0.5rem 0.25rem;
           }
-
           .arcade-table td {
             font-size: 1rem;
             padding: 0.5rem 0.25rem;
           }
-
-          .team-cell,
-          .coach-cell {
+          .logo-container {
+            width: 36px;
+            height: 36px;
+          }
+          .team-name {
             font-size: 0.6rem;
+          }
+          .coach-cell {
+            font-size: 0.9rem;
+          }
+          .rank-badge {
+            min-width: 28px;
+            height: 28px;
+          }
+          .rank-number {
+            font-size: 0.7rem;
           }
         }
       `}</style>

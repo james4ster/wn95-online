@@ -155,22 +155,22 @@ h3 {
   z-index: 2;
 }
 
-/* Blue lines */
+/* Blue lines - ENHANCED FOR PROMINENCE */
 .blue-line-left,
 .blue-line-right {
   position: absolute;
   top: 0;
-  width: 6px;
+  width: 8px;
   height: 100%;
   background: linear-gradient(
     180deg,
     rgba(0, 100, 255, 0) 0%,
-    rgba(0, 100, 255, 0.6) 5%,
-    rgba(0, 100, 255, 0.6) 95%,
+    rgba(0, 100, 255, 0.85) 5%,
+    rgba(0, 100, 255, 0.85) 95%,
     rgba(0, 100, 255, 0) 100%
   );
-  box-shadow: 0 0 8px rgba(0, 100, 255, 0.4),
-    inset 0 0 3px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 12px rgba(0, 100, 255, 0.6),
+    inset 0 0 5px rgba(255, 255, 255, 0.4);
   pointer-events: none;
   z-index: 2;
 }
@@ -183,6 +183,15 @@ h3 {
 .blue-line-right {
   left: 75%;
   transform: translateX(-50%);
+  background: linear-gradient(
+    180deg,
+    rgba(255, 50, 50, 0) 0%,
+    rgba(255, 30, 30, 0.85) 5%,
+    rgba(255, 30, 30, 0.85) 95%,
+    rgba(255, 50, 50, 0) 100%
+  );
+  box-shadow: 0 0 12px rgba(255, 30, 30, 0.6),
+    inset 0 0 5px rgba(255, 255, 255, 0.4);
 }
 
 /* Ice texture with sparkle effect */

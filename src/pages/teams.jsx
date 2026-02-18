@@ -1,3 +1,7 @@
+/************************
+ v1 that used league and season drop down before changing structure
+ */
+
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 

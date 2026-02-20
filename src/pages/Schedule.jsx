@@ -64,8 +64,8 @@ export default function Schedule() {
 
       // 2. Completed games for this team this season (games that exist in the table)
       const [homeRes, awayRes] = await Promise.all([
-        supabase.from('games').select('*').eq('lg', selectedSeason).ilike('home', selectedTeamAbr),
-        supabase.from('games').select('*').eq('lg', selectedSeason).ilike('away', selectedTeamAbr),
+        supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('home', selectedTeamAbr),
+        supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('away', selectedTeamAbr),
       ]);
       const played = [
         ...(homeRes.data || []),

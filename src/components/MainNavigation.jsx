@@ -65,6 +65,11 @@ export default function MainNavigation() {
             <span className="link-label">HOME</span>
           </Link>
 
+          <Link to="/players" className="nav-link">
+  <span className="nav-icon">🏒</span>
+  <span className="link-label">PLAYERS</span>
+</Link>
+
           {/* LEAGUE DROPDOWN */}
           <div className="nav-dropdown" ref={dropdownRef}>
             <button

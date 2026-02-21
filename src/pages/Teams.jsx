@@ -424,7 +424,7 @@ export default function Teams() {
                     </div>
                     <div className="thdr-identity">
                       <span className="thdr-code">{teamCode}</span>
-                      <span className="thdr-count">{sortedPlayers.length} PLAYERS</span>
+                     
                     </div>
                     <TeamStatStrip stat={teamStat} />
                   </div>

@@ -350,7 +350,7 @@ export default function Home() {
 
           {/* Recent Transactions */}
           <section className="panel">
-            <SectionHeader icon="🔄" title="TRANSACTIONS" />
+            <SectionHeader icon="🔄" title="RECENT TRANSACTIONS" />
             <div className="transactions">
               {recentTrades.length === 0 ? (
                 <div className="tx-placeholder">

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from '../components/LeagueContext';
 import PlayoffBracket from '../components/PlayoffBracket';
+import { Bracket, Seed, SeedItem } from "react-brackets";
 
 
 export default function Standings() {

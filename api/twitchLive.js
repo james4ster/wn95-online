@@ -1,17 +1,3 @@
-// api/twitchLive.js
-//
-// SETUP REQUIRED — add these to your .env file:
-//   TWITCH_CLIENT_ID=xxx
-//   TWITCH_CLIENT_SECRET=xxx
-//
-// This handler auto-generates an App Access Token using client_credentials flow.
-// You do NOT need to manually manage TWITCH_OAUTH_TOKEN — it's fetched automatically.
-//
-// To get TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET:
-//   1. Go to https://dev.twitch.tv/console
-//   2. Register a new application (any name, redirect URL can be http://localhost)
-//   3. Copy Client ID and generate a Client Secret
-
 import { createClient } from "@supabase/supabase-js";
 
 // Use server-side supabase (no VITE_ prefix needed in API routes)
@@ -58,12 +44,35 @@ export default async function handler(req, res) {
       });
     }
 
-    // Fetch all managers with a twitch username
+    // ── Fetch all standings to determine latest season per league
+    const { data: allStandings, error: standErr } = await supabase
+      .from("standings")
+      .select("season, coach");
+
+    if (standErr) {
+      console.error("Error fetching standings:", standErr.message);
+    }
+
+    const latestSeasons = {};
+    allStandings?.forEach(s => {
+      const league = s.season.charAt(0); // W, Q, V
+      if (!latestSeasons[league] || s.season > latestSeasons[league]) {
+        latestSeasons[league] = s.season;
+      }
+    });
+
+    // ── Fetch managers with twitch_username AND in latest season per league
     const { data: managers, error: dbErr } = await supabase
       .from("managers")
       .select("twitch_username, coach_name")
       .not("twitch_username", "is", null)
-      .neq("twitch_username", "");
+      .neq("twitch_username", "")
+      .in(
+        "coach_name",
+        allStandings
+          .filter(s => Object.values(latestSeasons).includes(s.season))
+          .map(s => s.coach)
+      );
 
     if (dbErr) throw dbErr;
     if (!managers?.length) return res.status(200).json([]);

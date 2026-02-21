@@ -108,16 +108,28 @@ export default function Home() {
     })();
   }, []);
 
-  // ── Discord events ─────────────────────────────────────────────────────────
+  // ── Discord events — via Supabase Edge Function ────────────────────────────
+  // Both edge functions fire on mount and every 10 min.
+  // fetch-avatars updates the DB in the background; we only track events in state.
   useEffect(() => {
-    (async () => {
-      setEvtLoading(true);
-      try {
-        const r = await fetch('/api/discordEvents');
-        if (r.ok) setDiscordEvents((await r.json()).slice(0, 6));
-      } catch { /* degrades gracefully */ }
+    const refresh = async () => {
+      const [eventsResult] = await Promise.allSettled([
+        supabase.functions.invoke('discord-events'),
+        supabase.functions.invoke('fetch-avatars'), // background, updates DB
+      ]);
+
+      if (eventsResult.status === 'fulfilled') {
+        const { data, error } = eventsResult.value;
+        if (!error && Array.isArray(data)) setDiscordEvents(data.slice(0, 6));
+        else if (error) console.warn('[discord-events]', error.message);
+      }
       setEvtLoading(false);
-    })();
+    };
+
+    setEvtLoading(true);
+    refresh();
+    const id = setInterval(refresh, 10 * 60 * 1000); // every 10 minutes
+    return () => clearInterval(id);
   }, []);
 
   const tickerList = recentGames.length > 0 ? [...recentGames, ...recentGames] : [];

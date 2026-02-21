@@ -715,7 +715,11 @@ export default function Players() {
         .scoreboard-header::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px);pointer-events:none}
         .scoreboard-header::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent 30%,rgba(255,215,0,.1) 50%,transparent 70%);animation:shimmer 3s infinite}
         @keyframes shimmer{0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)}100%{transform:translateX(100%) translateY(100%) rotate(45deg)}}
-        .led-text{font-family:'Press Start 2P',monospace;font-size:2rem;color:#FFD700;letter-spacing:6px;text-shadow:0 0 8px #FFD700,0 0 16px #FFD700,0 0 32px #FFA500;position:relative}
+        .led-text {
+            font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
+            text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
+            filter:contrast(1.3) brightness(1.2); position:relative;
+          }
 
         /* ══ TABS ══════════════════════════════════════════════════════════════ */
         .page-tabs{display:flex;gap:.5rem;margin-bottom:1.25rem;border-bottom:2px solid rgba(255,165,0,.2);padding-bottom:.5rem}
@@ -797,11 +801,11 @@ export default function Players() {
         .bar-good{background:linear-gradient(90deg,#FFD700,#FFA500);box-shadow:0 0 4px rgba(255,215,0,.35)}
         .bar-avg{background:linear-gradient(90deg,#87CEEB,#4682B4)}
         .bar-low{background:rgba(255,255,255,.18)}
-
+        
         /* ══ BADGES ════════════════════════════════════════════════════════════ */
         .ovr-badge{display:inline-block;font-family:'Press Start 2P',monospace;font-size:.62rem;padding:.22rem .48rem;border-radius:5px;letter-spacing:1px}
-        .ovr-elite{background:rgba(255,215,0,.15);border:2px solid rgba(255,215,0,.5);color:#FFD700;text-shadow:0 0 8px rgba(255,215,0,.6)}
-        .ovr-good{background:rgba(0,255,100,.1);border:2px solid rgba(0,255,100,.38);color:#00FF64}
+        .ovr-elite{background:rgba(0,255,100,.12);border:2px solid rgba(0,255,100,.5);color:#00FF64;text-shadow:0 0 8px rgba(0,255,100,.6)}
+        .ovr-good{background:rgba(255,215,0,.12);border:2px solid rgba(255,215,0,.5);color:#FFD700}
         .ovr-avg{background:rgba(135,206,235,.1);border:2px solid rgba(135,206,235,.28);color:#87CEEB}
         .ovr-low{background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.12);color:rgba(255,255,255,.35)}
         .pos-badge{font-family:'Press Start 2P',monospace;font-size:.42rem;border-radius:4px;padding:.16rem .38rem;letter-spacing:1px}

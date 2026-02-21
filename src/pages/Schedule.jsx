@@ -421,7 +421,7 @@ export default function Schedule() {
           100%{ transform:translateX(100%)  translateY(100%)  rotate(45deg); }
         }
         .led-text {
-          font-family:'Press Start 2P',monospace; font-size:2rem; color:#FF8C00; letter-spacing:6px;
+          font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
           text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
           filter:contrast(1.3) brightness(1.2); position:relative;
         }

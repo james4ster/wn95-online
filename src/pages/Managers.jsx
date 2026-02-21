@@ -641,7 +641,11 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
         .scoreboard-header::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px); pointer-events:none; }
         .scoreboard-header::after { content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%; background:linear-gradient(45deg,transparent 30%,rgba(255,215,0,.1) 50%,transparent 70%); animation:shimmer 3s infinite; }
         @keyframes shimmer { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)} 100%{transform:translateX(100%) translateY(100%) rotate(45deg)} }
-        .led-text { font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px; text-shadow:0 0 8px #FFD700,0 0 16px #FFD700,0 0 32px #FFA500; position:relative; }
+        .led-text {
+          font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
+          text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
+          filter:contrast(1.3) brightness(1.2); position:relative;
+        }
 
         /* ===== CONTROLS ===== */
         .control-panel { display:flex; gap:2rem; justify-content:center; margin-bottom:1.5rem; flex-wrap:wrap; }

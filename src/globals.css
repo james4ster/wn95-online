@@ -422,6 +422,27 @@ nav.hero-nav a:hover {
   color: #ff59c1;
 }
 
+
+/* Teams */
+.teams-page { padding:2rem; min-height:100vh; background:#0a0a15; color:#fff; }
+.page-header { text-align:center; margin-bottom:2rem; }
+.led-text { font-family:'Press Start 2P',monospace; font-size:2rem; color:#FF8C00; text-shadow:0 0 10px #FF8C00; }
+.control-panel { display:flex; flex-direction:column; align-items:center; margin-bottom:2rem; gap:0.5rem; }
+.arcade-select { padding:0.5rem 1rem; font-family:'VT323',monospace; font-size:1rem; border:2px solid #87CEEB; border-radius:8px; background:#0a0a15; color:#87CEEB; }
+.teams-container { display:flex; flex-direction:column; gap:2rem; }
+.team-block { background:#111125; padding:1rem; border-radius:12px; border:2px solid #FF8C00; }
+.team-header { display:flex; align-items:center; gap:1rem; margin-bottom:1rem; }
+.team-logo { width:50px; height:50px; object-fit:contain; }
+.team-name { font-family:'Press Start 2P',monospace; font-size:1rem; color:#FFD700; }
+.roster-table { display:flex; flex-direction:column; gap:0.25rem; }
+.roster-row { display:flex; gap:1rem; align-items:center; }
+.roster-row.header { font-weight:bold; color:#87CEEB; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:0.25rem; }
+.player-name { min-width:140px; }
+.player-ovr { width:50px; text-align:center; }
+.loading-screen { text-align:center; font-family:'Press Start 2P',monospace; font-size:1.2rem; }
+
+
+
 /* ---------- MOBILE RESPONSIVE ---------- */
 @media (max-width: 768px) {
   header.hero-bar {

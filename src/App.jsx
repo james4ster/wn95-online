@@ -6,9 +6,10 @@ import LeagueSubNav from './components/LeagueSubNav';
 import Home from './pages/Home';
 import Standings from './pages/Standings';
 import Schedule from './pages/Schedule';
-// import Teams from './pages/teams'; 
+import Teams from './pages/Teams'; 
 import Managers from './pages/Managers';
 import Players from './pages/Players';
+
 
 function App() {
   return (
@@ -25,7 +26,7 @@ function App() {
             <Route path="/league/:leagueCode/managers" element={<Managers />} />
             <Route path="/league/:leagueCode/schedule" element={<Schedule />} />
             <Route path="/players" element={<Players />} />
-          {/*  <Route path="/league/:leagueCode/teams" element={<Teams />} /> */ }
+            <Route path="/league/:leagueCode/teams" element={<Teams />} /> 
           </Routes>
         </div>
       </Router>

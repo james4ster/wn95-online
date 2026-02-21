@@ -113,20 +113,23 @@ export default function Home() {
   // fetch-avatars updates the DB in the background; we only track events in state.
   useEffect(() => {
     const refresh = async () => {
-      const [eventsResult] = await Promise.allSettled([
-        supabase.functions.invoke('discord-events'),
-        supabase.functions.invoke('fetch-avatars'), // background, updates DB
-      ]);
-
-      if (eventsResult.status === 'fulfilled') {
-        const { data, error } = eventsResult.value;
-        if (!error && Array.isArray(data)) setDiscordEvents(data.slice(0, 6));
-        else if (error) console.warn('[discord-events]', error.message);
+      setEvtLoading(true);
+  
+      // Fetch Discord events first
+      const eventsResult = await supabase.functions.invoke('discord-events');
+  
+      if (eventsResult.error) {
+        console.warn('[discord-events]', eventsResult.error.message);
+      } else if (Array.isArray(eventsResult.data)) {
+        setDiscordEvents(eventsResult.data.slice(0, 6));
       }
+  
       setEvtLoading(false);
+  
+      // Fire-and-forget avatars in background
+      supabase.functions.invoke('fetch-avatars').catch(console.error);
     };
-
-    setEvtLoading(true);
+  
     refresh();
     const id = setInterval(refresh, 10 * 60 * 1000); // every 10 minutes
     return () => clearInterval(id);

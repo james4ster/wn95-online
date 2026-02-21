@@ -10,6 +10,13 @@ import Teams from './pages/Teams';
 import Managers from './pages/Managers';
 import Players from './pages/Players';
 
+const originalFetch = window.fetch;
+window.fetch = async (...args) => {
+  if (args[0].includes("player_stats")) {
+    console.log("Detected player_stats fetch!", new Error().stack);
+  }
+  return originalFetch(...args);
+};
 
 function App() {
   return (

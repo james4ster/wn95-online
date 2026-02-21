@@ -1,35 +1,50 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../utils/supabaseClient';
+import { supabase } from "../utils/supabaseClient";
+import TwitchLiveWidget from "../components/TwitchLiveWidget";
 
 export default function Home() {
   const [recentGames, setRecentGames] = useState([]);
   const [topScorers, setTopScorers] = useState([]);
+  const [managers, setManagers] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchHomeData = async () => {
       setLoading(true);
 
-      // Fetch recent games (adjust table/fields as needed)
+      // Fetch recent games
       const { data: games } = await supabase
         .from('games')
         .select('*')
-        .order('game_date', { ascending: false })
+        .order('game', { ascending: false })
         .limit(10);
 
-      // Fetch top scorers (adjust table/fields as needed)
-      const { data: scorers } = await supabase
+      // Fetch top scorers
+      /*const { data: scorers } = await supabase
         .from('player_stats')
         .select('player_name, team, goals, assists, points')
         .order('points', { ascending: false })
         .limit(8);
 
       setRecentGames(games || []);
-      setTopScorers(scorers || []);
+      setTopScorers(scorers || []); */
       setLoading(false);
     };
 
     fetchHomeData();
+  }, []);
+
+  useEffect(() => {
+    const fetchManagers = async () => {
+      const { data, error } = await supabase
+        .from('managers')
+        .select('twitch_username, coach_name');
+
+      if (error) console.error('Error fetching managers:', error);
+      else setManagers(data || []);
+    };
+
+    fetchManagers();
   }, []);
 
   const leagues = [
@@ -52,12 +67,17 @@ export default function Home() {
         </svg>
       </a>
 
+      {/* Twitch Live Panel */}
+      <div className="twitch-panel-wrapper">
+        <TwitchLiveWidget managers={managers} />
+      </div>
+
       {/* Compact Hero Title */}
       <div className="compact-hero">
         <div className="hero-title">NHL '95 ONLINE</div>
       </div>
 
-      {/* Leagues Strip - Compact Horizontal */}
+      {/* Leagues Strip */}
       <div className="leagues-strip">
         {leagues.map((league, idx) => (
           <div key={idx} className="league-badge">
@@ -78,7 +98,7 @@ export default function Home() {
         ))}
       </div>
 
-      {/* Main Content Area - Two Column Layout */}
+      {/* Main Content Grid */}
       <div className="main-content-grid">
         {/* Left Column - Top Scorers */}
         <div className="content-section">
@@ -129,7 +149,7 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Bottom Ticker - Recent Scores */}
+      {/* Bottom Ticker */}
       <div className="scores-ticker">
         <div className="ticker-label">RECENT RESULTS</div>
         <div className="ticker-scroll">

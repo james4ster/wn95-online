@@ -1,14 +1,18 @@
 // api/twitchLive.js
-import fetch from "node-fetch";
 import { supabase } from "../src/utils/supabaseClient";
 
 export default async function handler(req, res) {
   try {
-    // Read users from DB
-    const users = await db.query("SELECT twitch_username FROM users"); 
+    // Get users from Supabase
+    const { data: users, error } = await supabase
+      .from("users")
+      .select("twitch_username");
+
+    if (error) throw error;
+
     const results = [];
 
-    for (let u of users.rows) {
+    for (let u of users) {
       const response = await fetch(
         `https://api.twitch.tv/helix/streams?user_login=${u.twitch_username}`,
         {
@@ -19,15 +23,17 @@ export default async function handler(req, res) {
         }
       );
       const data = await response.json();
+
       results.push({
         username: u.twitch_username,
-        isLive: data.data.length > 0,
+        isLive: data.data?.length > 0,
+        twitchData: data.data?.[0] || null,
       });
     }
 
     res.status(200).json(results);
   } catch (err) {
-    console.error(err);
+    console.error("Twitch API error:", err);
     res.status(500).json({ error: "Failed to fetch Twitch data" });
   }
 }

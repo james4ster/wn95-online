@@ -1,345 +1,263 @@
-// TwitchLiveWidget.jsx
-// API fix note: twitchLive.js returns ALL managers (including offline ones).
-// We filter to isLive === true on the client side.
-// Make sure TWITCH_CLIENT_ID and TWITCH_OAUTH_TOKEN are set in your .env
-
+// src/components/TwitchLiveWidget.jsx
 import { useEffect, useState } from "react";
 
 export default function TwitchLiveWidget() {
-  const [streams, setStreams] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [all,       setAll]       = useState([]);
+  const [loading,   setLoading]   = useState(true);
   const [collapsed, setCollapsed] = useState(false);
+  const [error,     setError]     = useState(null);
 
   useEffect(() => {
-    const fetchLive = async () => {
+    const fetch_ = async () => {
       try {
         const res = await fetch("/api/twitchLive");
+        // Check content-type before parsing — catches 500 HTML error pages
+        const ct = res.headers.get("content-type") || "";
+        if (!ct.includes("application/json")) {
+          const txt = await res.text();
+          throw new Error(`Server error (${res.status}): ${txt.slice(0, 120)}`);
+        }
         const data = await res.json();
-        // Filter to only live users — the API returns all managers including offline
-        const live = (data || []).filter(u => u.isLive);
-        setStreams(live);
+        if (data.error) throw new Error(data.error);
+        setAll(data || []);
+        setError(null);
       } catch (err) {
-        console.error("Failed to fetch Twitch streams:", err);
+        console.error("[TwitchWidget]", err.message);
+        setError(err.message);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLive();
-    const interval = setInterval(fetchLive, 60000);
-    return () => clearInterval(interval);
+    fetch_();
+    const id = setInterval(fetch_, 60000);
+    return () => clearInterval(id);
   }, []);
 
-  const hasLive = streams.length > 0;
+  const live    = all.filter(u => u.isLive);
+  const offline = all.filter(u => !u.isLive).slice(0, 4);
+  const hasLive = live.length > 0;
 
   return (
     <>
-      <div className={`twitch-widget ${hasLive ? "has-live" : "offline"} ${collapsed ? "collapsed" : ""}`}>
-        {/* Header bar */}
-        <div className="tw-header" onClick={() => setCollapsed(c => !c)}>
-          <div className="tw-header-left">
-            {/* Twitch icon */}
-            <svg className="tw-logo" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
-            </svg>
-            <span className="tw-title">LIVE NOW</span>
-            {hasLive && (
-              <span className="tw-count">{streams.length}</span>
-            )}
-          </div>
-          <div className="tw-header-right">
-            {hasLive && <span className="live-pulse-dot" />}
-            <span className="tw-chevron">{collapsed ? "▶" : "▼"}</span>
-          </div>
-        </div>
+      <div className={`twg ${hasLive ? "twg-live" : "twg-off"} ${collapsed ? "twg-col" : ""}`}>
 
-        {/* Stream list */}
+        {/* ── Header ── */}
+        <button className="twg-hdr" onClick={() => setCollapsed(c => !c)}>
+          <svg className="twg-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.571 4.714h1.715v5.143H11.57zm4.715 0H18v5.143h-1.714zM6 0L1.714 4.286v15.428h5.143V24l4.286-4.286h3.428L22.286 12V0zm14.571 11.143l-3.428 3.428h-3.429l-3 3v-3H6.857V1.714h13.714z"/>
+          </svg>
+          <span className="twg-title">STREAMS</span>
+          {hasLive && <span className="twg-badge">{live.length} LIVE</span>}
+          {!hasLive && !loading && <span className="twg-badge twg-badge-off">OFFLINE</span>}
+          <span className="twg-caret">{collapsed ? "▶" : "▼"}</span>
+        </button>
+
+        {/* ── Body ── */}
         {!collapsed && (
-          <div className="tw-body">
+          <div className="twg-body">
             {loading ? (
-              <div className="tw-loading">
-                <span className="tw-loading-dot" />
-                <span className="tw-loading-dot" />
-                <span className="tw-loading-dot" />
+              <div className="twg-dots">
+                <span/><span/><span/>
               </div>
-            ) : !hasLive ? (
-              <div className="tw-offline-msg">
-                <span className="tw-offline-dot" />
-                No streams active
+            ) : error ? (
+              <div className="twg-err">
+                <span className="twg-err-icon">⚠</span>
+                <span className="twg-err-msg">
+                  {error.includes("CLIENT_ID") || error.includes("credentials")
+                    ? "Add TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET to .env"
+                    : "Twitch unavailable"}
+                </span>
               </div>
             ) : (
-              streams.map(stream => (
-                <a
-                  key={stream.username}
-                  href={`https://twitch.tv/${stream.username}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="tw-stream-row"
-                >
-                  <span className="tw-live-indicator" />
-                  <div className="tw-stream-info">
-                    <span className="tw-username">{stream.username}</span>
-                    {stream.twitchData?.game_name && (
-                      <span className="tw-game">{stream.twitchData.game_name}</span>
-                    )}
+              <>
+                {/* Live streams */}
+                {hasLive && (
+                  <div className="twg-section">
+                    <div className="twg-section-lbl twg-lbl-live">● LIVE NOW</div>
+                    {live.map(s => (
+                      <a key={s.username} href={`https://twitch.tv/${s.username}`}
+                        target="_blank" rel="noopener noreferrer" className="twg-row twg-row-live">
+                        <span className="twg-pulse"/>
+                        <div className="twg-info">
+                          <span className="twg-uname">{s.username}</span>
+                          {s.twitchData?.game_name && (
+                            <span className="twg-game">{s.twitchData.game_name}</span>
+                          )}
+                        </div>
+                        {s.twitchData?.viewer_count != null && (
+                          <span className="twg-viewers">
+                            {s.twitchData.viewer_count.toLocaleString()}
+                            <em>👁</em>
+                          </span>
+                        )}
+                      </a>
+                    ))}
                   </div>
-                  {stream.twitchData?.viewer_count != null && (
-                    <span className="tw-viewers">
-                      👁 {stream.twitchData.viewer_count.toLocaleString()}
-                    </span>
-                  )}
-                  <span className="tw-watch">WATCH →</span>
-                </a>
-              ))
+                )}
+
+                {/* Offline / recent */}
+                {offline.length > 0 && (
+                  <div className="twg-section">
+                    <div className="twg-section-lbl">LEAGUE STREAMERS</div>
+                    {offline.map(s => (
+                      <a key={s.username} href={`https://twitch.tv/${s.username}`}
+                        target="_blank" rel="noopener noreferrer" className="twg-row twg-row-off">
+                        <span className="twg-dot-off"/>
+                        <div className="twg-info">
+                          <span className="twg-uname twg-uname-off">{s.username}</span>
+                          {s.coachName && <span className="twg-game">{s.coachName}</span>}
+                        </div>
+                        <span className="twg-watch-lbl">FOLLOW</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+
+                {all.length === 0 && (
+                  <div className="twg-empty">No streamers configured yet</div>
+                )}
+              </>
             )}
           </div>
         )}
       </div>
 
       <style>{`
-        .twitch-widget {
-          position: fixed;
-          top: 80px;
-          right: 1.5rem;
-          z-index: 500;
-          width: 240px;
-          background: linear-gradient(180deg, #0e0e1a 0%, #0a0a12 100%);
-          border-radius: 10px;
-          overflow: hidden;
-          transition: all 0.3s ease;
-          font-family: 'VT323', monospace;
+        .twg {
+          position: fixed; top: 80px; right: 1.25rem; z-index: 500;
+          width: 230px;
+          background: linear-gradient(180deg,#0b0b18 0%,#070710 100%);
+          border-radius: 10px; overflow: hidden; font-family:'VT323',monospace;
+          transition: box-shadow .3s, border-color .3s;
         }
-
-        .twitch-widget.has-live {
-          border: 2px solid rgba(0, 255, 100, 0.6);
-          box-shadow:
-            0 0 20px rgba(0, 255, 100, 0.25),
-            0 0 40px rgba(0, 255, 100, 0.1),
-            inset 0 0 20px rgba(0, 255, 100, 0.04);
+        .twg-live {
+          border: 1.5px solid rgba(0,255,100,.55);
+          box-shadow: 0 0 18px rgba(0,255,100,.18), 0 0 40px rgba(0,255,100,.07);
         }
-
-        .twitch-widget.offline {
-          border: 2px solid rgba(100, 100, 130, 0.35);
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-        }
-
-        .twitch-widget.collapsed {
-          width: 200px;
+        .twg-off {
+          border: 1.5px solid rgba(100,100,140,.3);
+          box-shadow: 0 4px 20px rgba(0,0,0,.5);
         }
 
         /* Header */
-        .tw-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 0.55rem 0.85rem;
-          cursor: pointer;
-          user-select: none;
-          transition: background 0.2s;
+        .twg-hdr {
+          width: 100%; display: flex; align-items: center; gap: .45rem;
+          padding: .5rem .75rem; cursor: pointer; background: none; border: none;
+          transition: background .2s; text-align: left;
+        }
+        .twg-live .twg-hdr { background: rgba(0,255,100,.05); }
+        .twg-hdr:hover { background: rgba(255,255,255,.04); }
+
+        .twg-icon {
+          width: 12px; height: 12px; flex-shrink: 0;
+          color: rgba(145,70,255,.7);
+        }
+        .twg-live .twg-icon { color: #00FF64; }
+
+        .twg-title {
+          font-family: 'Press Start 2P', monospace; font-size: .38rem;
+          letter-spacing: 2px; color: rgba(255,255,255,.4); flex: 1;
+        }
+        .twg-live .twg-title { color: #00FF64; text-shadow: 0 0 8px rgba(0,255,100,.5); }
+
+        .twg-badge {
+          font-family: 'Press Start 2P', monospace; font-size: .3rem;
+          background: #00FF64; color: #000; border-radius: 3px;
+          padding: .1rem .35rem; letter-spacing: 1px;
+        }
+        .twg-badge-off {
+          background: transparent; color: rgba(255,255,255,.2);
+          border: 1px solid rgba(255,255,255,.1);
         }
 
-        .twitch-widget.has-live .tw-header {
-          background: linear-gradient(90deg, rgba(0,255,100,0.08) 0%, transparent 100%);
-        }
-
-        .tw-header:hover {
-          background: rgba(255,255,255,0.04);
-        }
-
-        .tw-header-left {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .tw-logo {
-          width: 14px;
-          height: 14px;
-          color: #9146FF;
-          flex-shrink: 0;
-        }
-
-        .twitch-widget.has-live .tw-logo {
-          color: #00FF64;
-        }
-
-        .tw-title {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 0.42rem;
-          letter-spacing: 2px;
-          color: #aaa;
-        }
-
-        .twitch-widget.has-live .tw-title {
-          color: #00FF64;
-          text-shadow: 0 0 8px rgba(0,255,100,0.6);
-        }
-
-        .tw-count {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 0.38rem;
-          background: #00FF64;
-          color: #000;
-          border-radius: 3px;
-          padding: 0.1rem 0.3rem;
-          font-weight: bold;
-        }
-
-        .tw-header-right {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-
-        .live-pulse-dot {
-          width: 8px;
-          height: 8px;
-          background: #00FF64;
-          border-radius: 50%;
-          box-shadow: 0 0 8px #00FF64;
-          animation: livePulse 1.4s ease-in-out infinite;
-        }
-
-        @keyframes livePulse {
-          0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 8px #00FF64; }
-          50% { opacity: 0.7; transform: scale(1.3); box-shadow: 0 0 16px #00FF64, 0 0 24px rgba(0,255,100,0.4); }
-        }
-
-        .tw-chevron {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 0.4rem;
-          color: rgba(255,255,255,0.3);
+        .twg-caret {
+          font-family: 'Press Start 2P', monospace; font-size: .35rem;
+          color: rgba(255,255,255,.2);
         }
 
         /* Body */
-        .tw-body {
-          padding: 0 0.5rem 0.6rem;
+        .twg-body { padding: 0 0 .5rem; }
+
+        .twg-dots {
+          display: flex; justify-content: center; gap: .35rem; padding: .75rem 0;
+        }
+        .twg-dots span {
+          width: 4px; height: 4px; border-radius: 50%;
+          background: rgba(255,255,255,.2);
+          animation: twgBounce 1.2s ease-in-out infinite;
+        }
+        .twg-dots span:nth-child(2) { animation-delay:.15s }
+        .twg-dots span:nth-child(3) { animation-delay:.3s  }
+        @keyframes twgBounce {
+          0%,100%{opacity:.2;transform:translateY(0)}
+          50%{opacity:.8;transform:translateY(-3px)}
         }
 
-        /* Loading dots */
-        .tw-loading {
-          display: flex;
-          justify-content: center;
-          gap: 0.4rem;
-          padding: 0.75rem 0;
+        /* Error */
+        .twg-err {
+          display: flex; align-items: flex-start; gap: .4rem;
+          padding: .6rem .75rem; font-size: .85rem; color: rgba(255,140,0,.7);
+        }
+        .twg-err-icon { font-size: 1rem; flex-shrink: 0; }
+        .twg-err-msg { font-size: .85rem; line-height: 1.3; }
+
+        /* Section labels */
+        .twg-section { border-top: 1px solid rgba(255,255,255,.06); }
+        .twg-section:first-child { border-top: none; }
+        .twg-section-lbl {
+          font-family: 'Press Start 2P', monospace; font-size: .3rem;
+          letter-spacing: 1.5px; color: rgba(255,255,255,.2);
+          padding: .45rem .75rem .2rem;
+        }
+        .twg-lbl-live { color: #00FF64; text-shadow: 0 0 6px rgba(0,255,100,.4); }
+
+        /* Stream rows */
+        .twg-row {
+          display: flex; align-items: center; gap: .45rem;
+          padding: .35rem .75rem; text-decoration: none;
+          transition: background .15s; border-radius: 0;
+        }
+        .twg-row:hover { background: rgba(255,255,255,.04); }
+        .twg-row-live:hover { background: rgba(0,255,100,.06); }
+
+        .twg-pulse {
+          width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+          background: #00FF64; box-shadow: 0 0 6px #00FF64;
+          animation: twgPulse 1.4s ease-in-out infinite;
+        }
+        @keyframes twgPulse {
+          0%,100%{opacity:1;box-shadow:0 0 6px #00FF64}
+          50%{opacity:.6;box-shadow:0 0 14px #00FF64,0 0 24px rgba(0,255,100,.3)}
         }
 
-        .tw-loading-dot {
-          width: 5px;
-          height: 5px;
-          background: rgba(255,255,255,0.3);
-          border-radius: 50%;
-          animation: loadBounce 1.2s ease-in-out infinite;
-        }
-        .tw-loading-dot:nth-child(2) { animation-delay: 0.2s; }
-        .tw-loading-dot:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes loadBounce {
-          0%, 100% { opacity: 0.3; transform: translateY(0); }
-          50% { opacity: 1; transform: translateY(-3px); }
+        .twg-dot-off {
+          width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+          background: rgba(255,255,255,.12);
         }
 
-        /* Offline */
-        .tw-offline-msg {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.5rem 0.35rem;
-          font-size: 1.05rem;
-          color: rgba(255,255,255,0.25);
+        .twg-info { flex: 1; display: flex; flex-direction: column; gap: .05rem; min-width: 0; }
+        .twg-uname { font-size: 1rem; color: #E0E0E0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .twg-uname-off { color: rgba(255,255,255,.35); }
+        .twg-game { font-size: .8rem; color: rgba(135,206,235,.4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .twg-viewers { font-size: .85rem; color: rgba(255,215,0,.6); white-space: nowrap; flex-shrink: 0; }
+        .twg-viewers em { font-style: normal; margin-left: .15rem; }
+
+        .twg-watch-lbl {
+          font-family: 'Press Start 2P', monospace; font-size: .28rem;
+          color: rgba(145,70,255,.4); letter-spacing: 1px; flex-shrink: 0;
+          opacity: 0; transition: opacity .15s;
+        }
+        .twg-row:hover .twg-watch-lbl { opacity: 1; }
+
+        .twg-empty {
+          font-size: .95rem; color: rgba(255,255,255,.2); padding: .6rem .75rem;
+          text-align: center; letter-spacing: 1px;
         }
 
-        .tw-offline-dot {
-          width: 6px;
-          height: 6px;
-          background: rgba(255,255,255,0.2);
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-
-        /* Stream row */
-        .tw-stream-row {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.45rem 0.35rem;
-          border-radius: 6px;
-          text-decoration: none;
-          transition: background 0.15s;
-          border-top: 1px solid rgba(0,255,100,0.08);
-        }
-
-        .tw-stream-row:first-child {
-          border-top: none;
-        }
-
-        .tw-stream-row:hover {
-          background: rgba(0,255,100,0.08);
-        }
-
-        .tw-live-indicator {
-          width: 6px;
-          height: 6px;
-          background: #00FF64;
-          border-radius: 50%;
-          flex-shrink: 0;
-          box-shadow: 0 0 6px #00FF64;
-          animation: livePulse 1.4s ease-in-out infinite;
-        }
-
-        .tw-stream-info {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          gap: 0.05rem;
-          min-width: 0;
-        }
-
-        .tw-username {
-          font-size: 1.1rem;
-          color: #E0E0E0;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          letter-spacing: 0.5px;
-        }
-
-        .tw-game {
-          font-size: 0.85rem;
-          color: rgba(135,206,235,0.5);
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .tw-viewers {
-          font-size: 0.85rem;
-          color: rgba(255,215,0,0.6);
-          white-space: nowrap;
-          flex-shrink: 0;
-        }
-
-        .tw-watch {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 0.32rem;
-          color: #00FF64;
-          letter-spacing: 1px;
-          flex-shrink: 0;
-          opacity: 0;
-          transition: opacity 0.15s;
-        }
-
-        .tw-stream-row:hover .tw-watch {
-          opacity: 1;
-        }
-
-        @media (max-width: 768px) {
-          .twitch-widget {
-            top: auto;
-            bottom: 60px;
-            right: 0.75rem;
-            width: 210px;
-          }
+        @media (max-width:768px) {
+          .twg { top: auto; bottom: 60px; right: .75rem; width: 210px; }
         }
       `}</style>
     </>

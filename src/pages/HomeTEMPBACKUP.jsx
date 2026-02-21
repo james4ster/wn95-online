@@ -111,26 +111,22 @@ function GameCard({ game, index }) {
             <img src={`/assets/teamLogos/${game.away}.png`} alt={game.away} className="gc-logo"
               onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.display='flex'; }} />
             <div className="gc-logo-fb">{(game.away||'').slice(0,3)}</div>
+            <span className="gc-team-code">{game.away}</span>
           </div>
           <div className="gc-divline" />
           <div className="gc-row">
             <img src={`/assets/teamLogos/${game.home}.png`} alt={game.home} className="gc-logo"
               onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.display='flex'; }} />
             <div className="gc-logo-fb">{(game.home||'').slice(0,3)}</div>
+            <span className="gc-team-code">{game.home}</span>
           </div>
         </div>
         {/* Right side: away score top, home score bottom, OT badge */}
-                <div className="gc-scores">
-          <span className={`gc-score ${awayWin ? 'gc-win' : ''}`}>
-            {game.score_away ?? '—'}
-          </span>
-
-          <span className={`gc-score ${homeWin ? 'gc-win' : ''}`}>
-            {game.score_home ?? '—'}
-          </span>
+        <div className="gc-scores">
+          <span className={`gc-score ${awayWin ? 'gc-win' : ''}`}>{game.score_away ?? '—'}</span>
+          <span className={`gc-score ${homeWin ? 'gc-win' : ''}`}>{game.score_home ?? '—'}</span>
+          {isOT && <span className="gc-ot">OT</span>}
         </div>
-
-        {isOT && <span className="gc-ot-corner">OT</span>}
       </div>
     </div>
   );
@@ -702,18 +698,7 @@ export default function Home() {
           gap: .4rem; padding: .4rem .5rem;
         }
         /* Left column: two rows of logo+teamcode */
-        .gc-logo {
-          width: 28px;
-          height: 28px;
-          object-fit: contain;
-          filter: drop-shadow(0 0 4px rgba(135,206,235,.25));
-          flex-shrink: 0;
-        }
-        
-        .gc-logo-fb {
-          width: 28px;
-          height: 28px;
-        }
+        .gc-logos { display: flex; flex-direction: column; gap: 0; flex: 1; min-width: 0; }
         .gc-row {
           display: flex; align-items: center; gap: .28rem;
           padding: .18rem 0;
@@ -726,22 +711,22 @@ export default function Home() {
         }
         .gc-name-ph { width: 24px; height: 7px; background: rgba(255,255,255,.05); border-radius: 2px; }
         /* Right column: two scores + OT badge */
-       .gc-score {
-  font-family: 'VT323', monospace;
-  font-size: 1.6rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  height: 26px;
-}
+        .gc-scores {
+          display: flex; flex-direction: column; align-items: flex-end;
+          gap: .05rem; flex-shrink: 0;
+        }
         .gc-win { color: #FFD700 !important; text-shadow: 0 0 8px rgba(255,215,0,.55) !important; }
+        .gc-logo { width: 22px; height: 22px; object-fit: contain; filter: drop-shadow(0 0 3px rgba(135,206,235,.2)); flex-shrink: 0; }
         .gc-logo-fb {
           width: 22px; height: 22px; display: none; align-items: center; justify-content: center;
           background: rgba(135,206,235,.1); border: 1px solid rgba(135,206,235,.15);
           border-radius: 3px; font-family: 'Press Start 2P', monospace; font-size: .22rem; color: #87CEEB; flex-shrink: 0;
         }
-        
+        .gc-score {
+          font-family: 'VT323', monospace; font-size: 1.3rem;
+          color: rgba(255,255,255,.4); line-height: 1; min-width: 16px; text-align: right;
+          display: block;
+        }
         .gc-ot {
           font-family: 'Press Start 2P', monospace; font-size: .22rem;
           color: #FF8C00; letter-spacing: 1px; margin-top: .08rem;
@@ -1053,52 +1038,6 @@ export default function Home() {
           .lc-unit { min-width:32px; padding:.15rem .35rem; }
           .gc { min-width:92px; }
         }
-
-        /* ===== FIX SCORE ALIGNMENT ===== */
-
-.gc-body {
-  display: grid !important;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-}
-
-.gc-scores {
-  display: grid;
-  grid-template-rows: 1fr 1fr;
-  align-items: center;
-  justify-items: end;
-  min-width: 26px;
-}
-
-.gc-score {
-  font-family: 'VT323', monospace;
-  font-size: 1.3rem;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  height: 22px;
-}
-
-/* ===== OT IN CORNER ===== */
-
-.gc {
-  position: relative;
-}
-
-.gc-ot-corner {
-  position: absolute;
-  top: 3px;
-  right: 5px;
-  font-family: 'Press Start 2P', monospace;
-  font-size: .22rem;
-  color: #FF8C00;
-  background: rgba(255,140,0,.1);
-  border: 1px solid rgba(255,140,0,.25);
-  border-radius: 2px;
-  padding: .05rem .18rem;
-  line-height: 1;
-}
       `}</style>
     </div>
   );

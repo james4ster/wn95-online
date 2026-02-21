@@ -12,7 +12,7 @@ export const useLeague = () => {
 
 export const LeagueProvider = ({ children }) => {
   const [selectedLeague, setSelectedLeague] = useState(
-    localStorage.getItem('selectedLeague') || ''
+    localStorage.getItem('selectedLeague') || 'W'  // ← default to 'W'
   );
 
   useEffect(() => {

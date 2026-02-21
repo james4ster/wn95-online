@@ -34,9 +34,23 @@ export default function TwitchLiveWidget() {
     return () => clearInterval(id);
   }, []);
 
-  const live    = all.filter(u => u.isLive);
-  const offline = all.filter(u => !u.isLive).slice(0, 4);
-  const hasLive = live.length > 0;
+      const MAX = 4;
+
+      const live = all
+        .filter(u => u.isLive)
+        .sort((a, b) =>
+          (b.twitchData?.viewer_count || 0) -
+          (a.twitchData?.viewer_count || 0)
+        );
+
+      const offline = all.filter(u => !u.isLive);
+
+      const displayLive = live.slice(0, MAX);
+      const remainingSlots = MAX - displayLive.length;
+      const displayOffline =
+        remainingSlots > 0 ? offline.slice(0, remainingSlots) : [];
+
+      const hasLive = displayLive.length > 0;
 
   return (
     <>
@@ -75,7 +89,7 @@ export default function TwitchLiveWidget() {
                 {hasLive && (
                   <div className="twg-section">
                     <div className="twg-section-lbl twg-lbl-live">● LIVE NOW</div>
-                    {live.map(s => (
+                    {displayLive.map(s => (
                       <a key={s.username} href={`https://twitch.tv/${s.username}`}
                         target="_blank" rel="noopener noreferrer" className="twg-row twg-row-live">
                         <span className="twg-pulse"/>
@@ -100,7 +114,7 @@ export default function TwitchLiveWidget() {
                 {offline.length > 0 && (
                   <div className="twg-section">
                     <div className="twg-section-lbl">LEAGUE STREAMERS</div>
-                    {offline.map(s => (
+                    {displayOffline.map(s => (
                       <a key={s.username} href={`https://twitch.tv/${s.username}`}
                         target="_blank" rel="noopener noreferrer" className="twg-row twg-row-off">
                         <span className="twg-dot-off"/>

@@ -139,10 +139,15 @@ export default function TwitchLiveWidget() {
 
       <style>{`
         .twg {
-          position: fixed; top: 80px; right: 1.25rem; z-index: 500;
+          position: fixed;
+          top: 140px; /* move it below the submenu */
+          right: 1.25rem;
+          z-index: 500;
           width: 230px;
           background: linear-gradient(180deg,#0b0b18 0%,#070710 100%);
-          border-radius: 10px; overflow: hidden; font-family:'VT323',monospace;
+          border-radius: 10px;
+          overflow: hidden;
+          font-family:'VT323',monospace;
           transition: box-shadow .3s, border-color .3s;
         }
         .twg-live {
@@ -271,7 +276,7 @@ export default function TwitchLiveWidget() {
         }
 
         @media (max-width:768px) {
-          .twg { top: auto; bottom: 60px; right: .75rem; width: 210px; }
+          .twg { top: 160px; bottom: auto; right: .75rem; width: 210px; }
         }
       `}</style>
     </>

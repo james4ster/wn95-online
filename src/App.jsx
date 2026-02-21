@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LeagueProvider } from './components/LeagueContext';
 import MainNavigation from './components/MainNavigation';
@@ -10,15 +10,17 @@ import Teams from './pages/Teams';
 import Managers from './pages/Managers';
 import Players from './pages/Players';
 
-const originalFetch = window.fetch;
-window.fetch = async (...args) => {
-  if (args[0].includes("player_stats")) {
-    console.log("Detected player_stats fetch!", new Error().stack);
-  }
-  return originalFetch(...args);
-};
-
 function App() {
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      if (args[0].includes("player_stats")) {
+        console.log("Detected player_stats fetch!", new Error().stack);
+      }
+      return originalFetch(...args);
+    };
+  }, []);
+
   return (
     <LeagueProvider>
       <Router>

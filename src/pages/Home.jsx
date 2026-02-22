@@ -323,10 +323,6 @@ export default function Home() {
                 })}
               </div>
             </section>
-
-            {/* Twitch — inline, sits directly below Discord Events */}
-            <TwitchLiveWidget />
-
           </div>{/* end .media-cluster */}
 
           {/* Live Streaks */}

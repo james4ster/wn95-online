@@ -140,9 +140,9 @@ export default function TwitchLiveWidget() {
       <style>{`
         .twg {
           position: fixed;
-          top: 140px; /* move it below the submenu */
+          top: 110px;      /* adjust until it visually sits over the orange bar */
           right: 1.25rem;
-          z-index: 500;
+          z-index: 1200;   /* higher than scoresBar 1100 and subnav 1000 */
           width: 230px;
           background: linear-gradient(180deg,#0b0b18 0%,#070710 100%);
           border-radius: 10px;

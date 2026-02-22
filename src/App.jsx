@@ -9,6 +9,8 @@ import Schedule from './pages/Schedule';
 import Teams from './pages/Teams'; 
 import Managers from './pages/Managers';
 import Players from './pages/Players';
+import ScoresBar from "./components/ScoresBar";
+
 
 function App() {
   useEffect(() => {
@@ -25,6 +27,7 @@ function App() {
     <LeagueProvider>
       <Router>
         <div className="app">
+        <ScoresBar />
           <MainNavigation />
           <LeagueSubNav />
           

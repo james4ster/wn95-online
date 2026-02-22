@@ -177,7 +177,7 @@ function LeagueCountdown({ cfg, tick }) {
 
       {tick && !tick.done && tick.d < 7 && (
         <div className="lc-urgency">
-          {tick.urgent ? '🚨 FINALS IMMINENT' : '⚡ FINAL WEEK'}
+          {tick.urgent ? '🚨 FINAL WEEK' : '⚡ FINAL WEEK'}
         </div>
       )}
     </div>

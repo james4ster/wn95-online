@@ -2,50 +2,56 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useLeague } from './LeagueContext';
 
+// ─── Sticky top offset breakdown ─────────────────────────────────────────────
+// ScoresBar:   ~80px  (sticky, top: 0,   z-index: 1100)
+// MainNav:     ~72px  (sticky, top: 0,   z-index: 1000  — sits below ScoresBar)
+// LeagueSubNav: this  (sticky, top: 152px, z-index: 999)
+//
+// On mobile ScoresBar shrinks to ~64px and MainNav to ~60px → top: 124px
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function LeagueSubNav() {
   const { selectedLeague } = useLeague();
 
-  if (!selectedLeague) {
-    return null;
-  }
+  if (!selectedLeague) return null;
 
   return (
     <div className="league-subnav">
       <div className="subnav-container">
-        <NavLink 
-          to={`/league/${selectedLeague}/Standings`} 
+        <NavLink
+          to={`/league/${selectedLeague}/Standings`}
           className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
         >
           <span className="subnav-icon">📊</span>
           <span>STANDINGS</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/stats`} 
+        <NavLink
+          to={`/league/${selectedLeague}/stats`}
           className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
         >
           <span className="subnav-icon">⭐</span>
           <span>PLAYER STATS</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/managers`} 
+        <NavLink
+          to={`/league/${selectedLeague}/managers`}
           className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
         >
           <span className="subnav-icon">👔</span>
           <span>MANAGERS</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/schedule`} 
+        <NavLink
+          to={`/league/${selectedLeague}/schedule`}
           className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
         >
           <span className="subnav-icon">📅</span>
           <span>SCHEDULE</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/teams`} 
+        <NavLink
+          to={`/league/${selectedLeague}/teams`}
           className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
         >
           <span className="subnav-icon">🛡️</span>
@@ -57,11 +63,12 @@ export default function LeagueSubNav() {
         .league-subnav {
           background: linear-gradient(180deg, #0f0f1a 0%, #05050a 100%);
           border-bottom: 3px solid #87CEEB;
-          box-shadow: 
+          box-shadow:
             0 4px 15px rgba(135, 206, 235, 0.3),
             inset 0 -2px 10px rgba(135, 206, 235, 0.15);
           position: sticky;
-          top: 70px;
+          /* ScoresBar (~80px) + MainNav (~72px) = 152px */
+          top: 152px;
           z-index: 999;
         }
 
@@ -96,18 +103,14 @@ export default function LeagueSubNav() {
         .subnav-link::before {
           content: '';
           position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
+          bottom: 0; left: 0; right: 0;
           height: 3px;
           background: linear-gradient(90deg, transparent, #87CEEB, transparent);
           transform: scaleX(0);
           transition: transform 0.3s ease;
         }
 
-        .subnav-link:hover::before {
-          transform: scaleX(1);
-        }
+        .subnav-link:hover::before { transform: scaleX(1); }
 
         .subnav-link:hover {
           color: #FFD700;
@@ -133,22 +136,18 @@ export default function LeagueSubNav() {
 
         @media (max-width: 768px) {
           .league-subnav {
-            top: 60px;
+            /* ScoresBar (~64px) + MainNav (~60px) = 124px */
+            top: 124px;
           }
-
           .subnav-container {
             padding: 0 1rem;
             gap: 0.25rem;
           }
-
           .subnav-link {
             padding: 0.75rem 1rem;
             font-size: 0.9rem;
           }
-
-          .subnav-link span:not(.subnav-icon) {
-            display: none;
-          }
+          .subnav-link span:not(.subnav-icon) { display: none; }
         }
       `}</style>
     </div>

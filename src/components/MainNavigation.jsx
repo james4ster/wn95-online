@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from './LeagueContext';
-import DefendingChampion from "./DefendingChampion";
 
 export default function MainNavigation() {
   const [leagues, setLeagues] = useState([]);
@@ -127,7 +126,7 @@ export default function MainNavigation() {
             <div className="discord-glow-ring"></div>
           </a>
 
-          <DefendingChampion />
+         
                           
         </div>
       </div>

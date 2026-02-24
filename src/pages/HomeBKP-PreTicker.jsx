@@ -12,14 +12,6 @@ const LEAGUE_CONFIG = [
 const leagueCfg = prefix => LEAGUE_CONFIG.find(l => l.prefix === prefix) ??
   { prefix, label: prefix, color: '#aaa' };
 
- 
-// ── TICKER HELPER ──────────────────────────────────────────────────────────
-const getFullTeamName = (teamCode, teams) => {
-  const teamObj = teams.find(t => t.code === teamCode);
-  return teamObj ? teamObj.team : teamCode;
-};
-
-
 function useLeagueCountdown(season) {
   const [tick, setTick] = useState(null);
   useEffect(() => {
@@ -239,20 +231,6 @@ export default function Home() {
 
   const tick = useLeagueCountdown(currentSeason);
 
-  /* Ticker Variable */
-    const [tickerItems, setTickerItems] = useState([]);
-
-    const [teams, setTeams] = useState([]);
-
-      useEffect(() => {
-        const loadTeams = async () => {
-          const { data } = await supabase.from('teams').select('code, team');
-          if (data) setTeams(data);
-        };
-        loadTeams();
-      }, []);
-
-
   const loadLeagueData = useCallback(async (prefix) => {
     if (!prefix) return;
     setLoading(true);
@@ -318,68 +296,6 @@ export default function Home() {
       cold: [...form].sort((a,b)=>a.pct-b.pct).slice(0,5),
     });
     setLoading(false);
-
-    // ── Generate ticker items ──────────────────────────────
-const bigScoreThreshold = 4; // now 4 goals for a "big win"
-const lastGames = games.slice(0, 15).reverse(); // most recent games first
-const tickerEvents = [];
-const teamStreaks = {};
-const eventSet = new Set();
-
-lastGames.forEach(g => {
-  const hScore = Number(g.result_home || 0);
-  const aScore = Number(g.result_away || 0);
-
-  // Get full team names
-  const homeName = getFullTeamName(g.home, teams);
-  const awayName = getFullTeamName(g.away, teams);
-
-  // Track win/loss streaks
-  const hWin = hScore > aScore;
-  const aWin = aScore > hScore;
-
-  [[g.home, hWin, homeName], [g.away, aWin, awayName]].forEach(([team, win, name]) => {
-    if (!teamStreaks[team]) teamStreaks[team] = [];
-    teamStreaks[team].push(win);
-    if (teamStreaks[team].length > 5) teamStreaks[team].shift();
-
-    const last3 = teamStreaks[team].slice(-3);
-    if (last3.length === 3) {
-      const streakMsg = last3.every(Boolean)
-        ? ` ${name} won 3 straight games!`
-        : last3.every(v => !v)
-          ? ` ${name} lost 3 straight games!`
-          : null;
-      if (streakMsg && !eventSet.has(streakMsg)) {
-        tickerEvents.push(streakMsg);
-        eventSet.add(streakMsg);
-      }
-    }
-  });
-
-  // Big scoring game (total goals >= threshold)
-  if (hScore + aScore >= bigScoreThreshold) {
-    const scoreMsg = `⚡ ${homeName} ${hScore} - ${aScore} ${awayName} ⚡`;
-    if (!eventSet.has(scoreMsg)) {
-      tickerEvents.push(scoreMsg);
-      eventSet.add(scoreMsg);
-    }
-  }
-});
-
-// Optional: playoff / top teams
-recentForm.hot.slice(0, 3).forEach(t => {
-  const name = getFullTeamName(t.team, teams);
-  const msg = ` ${name} is in playoff position!`;
-  if (!eventSet.has(msg)) {
-    tickerEvents.push(msg);
-    eventSet.add(msg);
-  }
-});
-
-setTickerItems(tickerEvents);
-
-
   }, []);
 
   useEffect(() => { loadLeagueData(selectedLeague); }, [selectedLeague, loadLeagueData]);
@@ -505,32 +421,14 @@ setTickerItems(tickerEvents);
       </div>
 
       {/* Ticker */}
-      {/* ── Ticker ── */}
-      {/* ── Ticker ── */}
-<div className="ticker">
-  <div className="ticker-tag">NEWS</div>
-  <div className="ticker-track">
-    <div className="ticker-txt">
-      {tickerItems.length > 0 ? (
-        tickerItems.concat(tickerItems).map((ev, i) => (
-          <span key={i} className="ticker-item">
-            {ev}
-            <span className="ticker-sep">◆</span>
+      <div className="ticker">
+        <div className="ticker-tag">NEWS</div>
+        <div className="ticker-track">
+          <span className="ticker-txt">
+            LEAGUE NEWS &amp; UPDATES &nbsp;◆&nbsp; PODCASTS &nbsp;◆&nbsp; TRADE ANNOUNCEMENTS &nbsp;◆&nbsp; DRAFT NEWS &nbsp;◆&nbsp; SEASON EVENTS &nbsp;◆&nbsp; LEAGUE NEWS &amp; UPDATES &nbsp;◆&nbsp; PODCASTS &nbsp;◆&nbsp; TRADE ANNOUNCEMENTS &nbsp;◆&nbsp; DRAFT NEWS &nbsp;◆&nbsp; SEASON EVENTS &nbsp;◆&nbsp;
           </span>
-        ))
-      ) : (
-        ['LEAGUE NEWS','PODCASTS','TRADE ANNOUNCEMENTS','DRAFT NEWS','SEASON EVENTS'].map((txt,i) => (
-          <span key={i} className="ticker-item">
-            {txt}
-            <span className="ticker-sep">◆</span>
-          </span>
-        ))
-      )}
-    </div>
-  </div>
-</div>
-
- 
+        </div>
+      </div>
 
       <style>{`
         *,*::before,*::after{box-sizing:border-box;}
@@ -669,75 +567,6 @@ setTickerItems(tickerEvents);
         .ticker-track::after{right:0;background:linear-gradient(-90deg,#06061a,transparent);}
         .ticker-txt{font-family:'VT323',monospace;font-size:19px;color:rgba(255,255,255,.18);letter-spacing:4px;animation:scroll 22s linear infinite;white-space:nowrap;will-change:transform;}
         @keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-
-        /* ── MODERN TICKER ── */
-        .ticker {
-          display: flex;
-          align-items: center;
-          background: #000; /* solid black */
-          border: 2px solid #FF8C00;
-          border-radius: 6px;
-          padding: 0.3rem 0.5rem;
-          font-family: 'Arial', 'Helvetica', sans-serif;
-          font-weight: bold;
-          text-transform: uppercase;
-          overflow: hidden;
-          white-space: nowrap;
-          color: #FFA500; /* brighter orange for readability */
-          letter-spacing: 0;
-        }
-        
-        .ticker-tag {
-          background: #111;
-          color: #FFA500;
-          font-weight: bold;
-          text-transform: uppercase;
-          padding: 0.15rem 0.5rem;
-          border-radius: 4px;
-          margin-right: 0.5rem;
-          flex-shrink: 0;
-        }
-        
-        .ticker-track {
-          display: flex;
-          flex-wrap: nowrap;
-          overflow: hidden;
-          flex: 1;
-        }
-        
-        .ticker-txt {
-          display: flex;
-          flex-wrap: nowrap;
-          color: #FFB733;
-          gap: 1rem;
-          animation: tickerScroll 40s linear infinite; /* slower */
-        }
-        
-        .ticker-item {
-          display: flex;
-          align-items: center; /* ensures separator is vertically centered */
-          white-space: nowrap;
-          letter-spacing: 0;
-        }
-        
-        .ticker-sep {
-          display: flex;
-          align-items: center; /* vertically center separator */
-          margin: 0 0.5rem;
-          color: #FFA500;
-          font-weight: bold;
-        }
-        
-        /* Smooth endless scroll */
-        @keyframes tickerScroll {
-          0%   { transform: translateX(100%); }  /* start offscreen right */
-          100% { transform: translateX(-100%); } /* end offscreen left */
-        }
-        
-        
-        
-        
-
 
         /* ── RESPONSIVE ────────────────────────────────────────────────── */
         @media(max-width:1200px){

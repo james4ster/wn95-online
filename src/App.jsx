@@ -9,7 +9,9 @@ import Schedule from './pages/Schedule';
 import Teams from './pages/Teams'; 
 import Managers from './pages/Managers';
 import Players from './pages/Players';
+import Stats from './pages/Stats';
 import ScoresBar from "./components/ScoresBar";
+
 
 
 function App() {
@@ -34,7 +36,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/league/:leagueCode/standings" element={<Standings />} />
-            <Route path="/league/:leagueCode/stats" element={<div>Player Stats Coming Soon</div>} />
+            <Route path="/league/:leagueCode/stats" element={<Stats />} />
             <Route path="/league/:leagueCode/managers" element={<Managers />} />
             <Route path="/league/:leagueCode/schedule" element={<Schedule />} />
             <Route path="/players" element={<Players />} />

@@ -1,153 +1,173 @@
-import React from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useLeague } from './LeagueContext';
 
-// ─── Sticky top offset breakdown ─────────────────────────────────────────────
-// ScoresBar:   ~80px  (sticky, top: 0,   z-index: 1100)
-// MainNav:     ~72px  (sticky, top: 0,   z-index: 1000  — sits below ScoresBar)
-// LeagueSubNav: this  (sticky, top: 152px, z-index: 999)
-//
-// On mobile ScoresBar shrinks to ~64px and MainNav to ~60px → top: 124px
-// ─────────────────────────────────────────────────────────────────────────────
+const FALLBACK_TOP = 152; // px — used until elements are measured
+
+function useHeaderHeight() {
+  const [top, setTop] = useState(FALLBACK_TOP);
+
+  useLayoutEffect(() => {
+    function measure() {
+      const scores = document.getElementById('scores-bar') 
+        || document.querySelector('.scores-bar, [data-scores-bar]');
+      const nav    = document.getElementById('main-nav') 
+        || document.querySelector('.main-nav, header > nav, [data-main-nav]');
+
+      const sh = scores ? scores.offsetHeight : 80;
+      const nh = nav    ? nav.offsetHeight    : 72;
+
+      setTop(sh + nh);
+    }
+
+    measure();
+
+    window.addEventListener('resize', measure, { passive: true });
+
+    const mo = new MutationObserver(measure);
+    mo.observe(document.body, { childList: true, subtree: true, attributes: false });
+
+    return () => {
+      window.removeEventListener('resize', measure);
+      mo.disconnect();
+    };
+  }, []);
+
+  return top;
+}
 
 export default function LeagueSubNav() {
   const { selectedLeague } = useLeague();
+  const topPx = useHeaderHeight();
 
   if (!selectedLeague) return null;
 
   return (
-    <div className="league-subnav">
+    <div
+      id="league-subnav"
+      className="league-subnav"
+      style={{ top: `${topPx}px` }}
+    >
       <div className="subnav-container">
         <NavLink
-          to={`/league/${selectedLeague}/Standings`}
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+          to={`/league/${selectedLeague}/standings`}
+          className={({ isActive }) => `subnav-link${isActive ? ' active' : ''}`}
         >
-          <span className="subnav-icon">📊</span>
-          <span>STANDINGS</span>
+          <span className="subnav-icon">📈</span>
+          <span className="subnav-txt">STANDINGS</span>
         </NavLink>
 
         <NavLink
           to={`/league/${selectedLeague}/stats`}
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+          className={({ isActive }) => `subnav-link${isActive ? ' active' : ''}`}
         >
-          <span className="subnav-icon">⭐</span>
-          <span>PLAYER STATS</span>
+          <span className="subnav-icon">📊</span>
+          <span className="subnav-txt">STATS</span>
         </NavLink>
 
         <NavLink
           to={`/league/${selectedLeague}/managers`}
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+          className={({ isActive }) => `subnav-link${isActive ? ' active' : ''}`}
         >
           <span className="subnav-icon">👔</span>
-          <span>MANAGERS</span>
+          <span className="subnav-txt">MANAGERS</span>
         </NavLink>
 
         <NavLink
           to={`/league/${selectedLeague}/schedule`}
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+          className={({ isActive }) => `subnav-link${isActive ? ' active' : ''}`}
         >
           <span className="subnav-icon">📅</span>
-          <span>SCHEDULE</span>
+          <span className="subnav-txt">SCHEDULE</span>
         </NavLink>
 
         <NavLink
           to={`/league/${selectedLeague}/teams`}
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+          className={({ isActive }) => `subnav-link${isActive ? ' active' : ''}`}
         >
           <span className="subnav-icon">🛡️</span>
-          <span>TEAMS</span>
+          <span className="subnav-txt">TEAMS</span>
         </NavLink>
       </div>
 
       <style>{`
         .league-subnav {
+          position: sticky;
+          top: ${topPx}px;
+          z-index: 998;
           background: linear-gradient(180deg, #0f0f1a 0%, #05050a 100%);
           border-bottom: 3px solid #87CEEB;
-          box-shadow:
-            0 4px 15px rgba(135, 206, 235, 0.3),
-            inset 0 -2px 10px rgba(135, 206, 235, 0.15);
-          position: sticky;
-          /* ScoresBar (~80px) + MainNav (~72px) = 152px */
-          top: 152px;
-          z-index: 999;
+          box-shadow: 0 4px 15px rgba(135, 206, 235, 0.3),
+                      inset 0 -2px 10px rgba(135, 206, 235, 0.15);
         }
 
         .subnav-container {
+          display: flex;
+          gap: 0.25rem;
+          overflow-x: auto;
+          width: 100%;
           max-width: 1400px;
           margin: 0 auto;
-          padding: 0 2rem;
-          display: flex;
-          gap: 0.5rem;
-          overflow-x: auto;
         }
+        .subnav-container::-webkit-scrollbar { display: none; }
 
         .subnav-link {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          padding: 1rem 1.5rem;
+          gap: 0.45rem;
+          padding: 0.85rem 1.3rem;
           background: transparent;
           border: none;
           border-bottom: 3px solid transparent;
+          margin-bottom: -3px;
           color: #87CEEB;
           font-family: 'VT323', monospace;
           font-size: 1.1rem;
           text-decoration: none;
           cursor: pointer;
-          transition: all 0.3s ease;
+          transition: color 0.2s ease, background 0.2s ease;
           letter-spacing: 1px;
           white-space: nowrap;
           position: relative;
         }
 
-        .subnav-link::before {
+        .subnav-link::after {
           content: '';
           position: absolute;
-          bottom: 0; left: 0; right: 0;
+          bottom: -3px; left: 20%; right: 20%;
           height: 3px;
           background: linear-gradient(90deg, transparent, #87CEEB, transparent);
           transform: scaleX(0);
-          transition: transform 0.3s ease;
+          transform-origin: center;
+          transition: transform 0.2s ease;
         }
-
-        .subnav-link:hover::before { transform: scaleX(1); }
+        .subnav-link:hover::after { transform: scaleX(1); }
 
         .subnav-link:hover {
           color: #FFD700;
-          background: rgba(135, 206, 235, 0.1);
+          background: rgba(135, 206, 235, 0.07);
         }
 
         .subnav-link.active {
           color: #FFD700;
-          background: rgba(255, 215, 0, 0.1);
+          background: rgba(255, 215, 0, 0.07);
           border-bottom-color: #FFD700;
-          box-shadow: 0 -2px 15px rgba(255, 215, 0, 0.4);
         }
-
-        .subnav-link.active::before {
+        .subnav-link.active::after {
           background: linear-gradient(90deg, transparent, #FFD700, transparent);
           transform: scaleX(1);
         }
 
         .subnav-icon {
-          font-size: 1.2rem;
-          filter: drop-shadow(0 0 5px currentColor);
+          font-size: 1.05rem;
+          filter: drop-shadow(0 0 4px currentColor);
+          flex-shrink: 0;
         }
 
         @media (max-width: 768px) {
-          .league-subnav {
-            /* ScoresBar (~64px) + MainNav (~60px) = 124px */
-            top: 124px;
-          }
-          .subnav-container {
-            padding: 0 1rem;
-            gap: 0.25rem;
-          }
-          .subnav-link {
-            padding: 0.75rem 1rem;
-            font-size: 0.9rem;
-          }
-          .subnav-link span:not(.subnav-icon) { display: none; }
+          .subnav-container { padding: 0 0.6rem; gap: 0.05rem; }
+          .subnav-link { padding: 0.65rem 0.75rem; }
+          .subnav-txt  { display: none; }
         }
       `}</style>
     </div>

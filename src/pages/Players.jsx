@@ -107,13 +107,14 @@ export default function Players() {
     const go = async () => {
       setLoading(true);
       const offset = page * PAGE_SIZE;
-  
-      // 1️⃣ fetch master list
-      let { data: masterData, error: masterError } = await supabase
+      const end = offset + PAGE_SIZE - 1; // Supabase uses inclusive range
+
+      let { data: masterData, error: masterError, count } = await supabase
         .from('player_master')
-        .select('player_master_id, player_name')
-        .ilike('player_name', dsearch ? `%${dsearch}%` : '%') // search if any
-        .order('player_name', { ascending: true });
+        .select('player_master_id, player_name', { count: 'exact' }) // get total rows
+        .ilike('player_name', dsearch ? `%${dsearch}%` : '%') // optional search
+        .order('player_name', { ascending: true })
+        .range(offset, end); // server-side pagination
   
       if (masterError) {
         console.error('Error fetching player_master:', masterError);
@@ -121,45 +122,62 @@ export default function Players() {
         return;
       }
   
-      const masterIds = masterData.map(p => p.player_master_id);
-  
-      // 2️⃣ fetch attributes for the filtered master ids
-      let attrQuery = supabase
-        .from('player_attributes_by_season')
-        .select('player_master_id, year, pos, hand, ovr')
-        .in('player_master_id', masterIds);
-  
-      if (posFilter)  attrQuery = attrQuery.eq('pos', posFilter);
-      if (handFilter) attrQuery = attrQuery.eq('hand', handFilter);
-      if (yearFrom)   attrQuery = attrQuery.gte('year', parseInt(yearFrom));
-      if (yearTo)     attrQuery = attrQuery.lte('year', parseInt(yearTo));
-  
-      const { data: attrData, error: attrError } = await attrQuery;
-  
-      if (attrError) {
-        console.error('Error fetching player_attributes_by_season:', attrError);
-        setLoading(false);
-        return;
-      }
+      // Only fetch attributes for the players on this page
+      const masterIds = (masterData || []).map(p => p.player_master_id);
+
+        let attrQuery = supabase
+          .from('player_attributes_by_season')
+          .select('player_master_id, year, pos, hand, ovr')
+          .in('player_master_id', masterIds); // only fetch visible players
+
+        if (posFilter)  attrQuery = attrQuery.eq('pos', posFilter);
+        if (handFilter) attrQuery = attrQuery.eq('hand', handFilter);
+        if (yearFrom)   attrQuery = attrQuery.gte('year', parseInt(yearFrom));
+        if (yearTo)     attrQuery = attrQuery.lte('year', parseInt(yearTo));
+
+        const { data: attrData, error: attrError } = await attrQuery;
+
+        if (attrError) {
+          console.error(attrError);
+          return;
+        }
   
       // 3️⃣ merge master + latest attributes
-      const grouped = {};
+      // 3️⃣ merge master + latest attributes
+const grouped = {};
+
+      // combine master + attribute data
       for (const r of attrData) {
-        if (!grouped[r.player_master_id]) grouped[r.player_master_id] = { ...masterData.find(m => m.player_master_id === r.player_master_id), allOvr: [] };
+        if (!grouped[r.player_master_id]) {
+          grouped[r.player_master_id] = {
+            ...masterData.find(m => m.player_master_id === r.player_master_id),
+            allOvr: []
+          };
+        }
         grouped[r.player_master_id].allOvr.push(r.ovr);
-        grouped[r.player_master_id].pos = r.pos;  // optional: latest overwrites
+
+        // optional: latest overwrites
+        grouped[r.player_master_id].pos  = r.pos;
         grouped[r.player_master_id].hand = r.hand;
         grouped[r.player_master_id].year = r.year;
       }
-  
-      const unique = Object.values(grouped).map(p => ({ ...p, avgOvr: avg(p.allOvr) }));
-  
-      setTotalPages(Math.ceil(unique.length / PAGE_SIZE));
-      setPlayers(unique.slice(offset, offset + PAGE_SIZE));
-  
+
+      // convert to array and calculate average
+      const mergedPlayers = Object.values(grouped).map(p => ({
+        ...p,
+        avgOvr: avg(p.allOvr)
+      }));
+
+      // ✅ total pages based on total filtered records, not just this page
+      const totalFiltered = mergedPlayers.length;
+      setTotalPages(Math.ceil(totalFiltered / PAGE_SIZE));
+
+      // ✅ slice the current page
+      const pageOffset = page * PAGE_SIZE;
+      setPlayers(mergedPlayers.slice(pageOffset, pageOffset + PAGE_SIZE));
+
       setLoading(false);
-    };
-  
+    }
     go();
   }, [dsearch, posFilter, handFilter, yearFrom, yearTo, page]);
   
@@ -235,9 +253,8 @@ export default function Players() {
   };
 
   const removeFromCompare = (pid) => {
-    setCompareList(prev => prev.filter(p => p.player_master_id !== player_master_id));
-    setCmpSeasons(prev => { const n = { ...prev }; delete n[player_master_id]; return n; });
-
+    setCompareList(prev => prev.filter(p => p.player_master_id !== pid));
+    setCmpSeasons(prev => { const n = { ...prev }; delete n[pid]; return n; });
   };
 
   const addFromScout = async (e, player) => {

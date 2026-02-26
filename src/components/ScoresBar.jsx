@@ -23,9 +23,9 @@ const LEAGUE_CFG = {
 async function fetchH2H(teamA, teamB) {
   const { data } = await supabase
     .from('games')
-    .select('game, home, away, result_home, result_away, ot, lg')
+    .select('legacy_game_id, home, away, result_home, result_away, ot, lg')
     .or(`and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`)
-    .order('game', { ascending: false })
+    .order('legacy_game_id', { ascending: false })
     .limit(10);
 
   const games = data || [];
@@ -223,9 +223,9 @@ export default function ScoresBar() {
         new Date(s.end_date) > new Date(b.end_date) ? s : b);
       const { data } = await supabase
         .from('games')
-        .select('lg, game, home, away, score_home, score_away, ot, result_home, result_away')
+        .select('lg, legacy_game_id, home, away, score_home, score_away, ot, result_home, result_away')
         .eq('lg', latest.lg)
-        .order('game', { ascending: false })
+        .order('legacy_game_id', { ascending: false })
         .limit(8);
       setGames(data || []);
       setLoading(false);
@@ -257,9 +257,7 @@ export default function ScoresBar() {
       <style>{`
         /* ══ SCORES BAR ══════════════════════════════════════════════════════ */
         .sb-root {
-          position: sticky;
-          top: 0;
-          z-index: 1100;
+          /* Not sticky — scrolls away naturally when user scrolls down */
           display: flex;
           align-items: center;
           min-height: 80px;
@@ -402,7 +400,7 @@ export default function ScoresBar() {
         /* OT badge — floats above the card top edge, clears scores entirely */
         .sc-ot {
           position: absolute;
-          top: -4px; right: -3px;
+          top: -8px; right: -3px;
           font-family: 'Press Start 2P', monospace;
           font-size: .28rem;
           color: #FF8C00;

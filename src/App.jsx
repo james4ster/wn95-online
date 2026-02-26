@@ -6,13 +6,12 @@ import LeagueSubNav from './components/LeagueSubNav';
 import Home from './pages/Home';
 import Standings from './pages/Standings';
 import Schedule from './pages/Schedule';
-import Teams from './pages/Teams'; 
+import Teams from './pages/Teams';
 import Managers from './pages/Managers';
 import Players from './pages/Players';
 import Stats from './pages/Stats';
+import Scores from './pages/Scores';
 import ScoresBar from "./components/ScoresBar";
-
-
 
 function App() {
   useEffect(() => {
@@ -29,10 +28,26 @@ function App() {
     <LeagueProvider>
       <Router>
         <div className="app">
-        <ScoresBar />
+          {/*
+           * ScoresBar — NOT sticky, scrolls away naturally.
+           * NO wrapper div — sticky elements must be direct children
+           * of the scroll container. A wrapper div confines the sticky
+           * element inside itself, so it can never actually stick.
+           */}
+          <ScoresBar />
+
+          {/*
+           * MainNavigation — position: sticky; top: 0
+           * Locks to top of viewport as ScoresBar scrolls away.
+           */}
           <MainNavigation />
+
+          {/*
+           * LeagueSubNav — position: sticky; top: 76px
+           * Locks flush under MainNav (72px height + 4px border).
+           */}
           <LeagueSubNav />
-          
+
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/league/:leagueCode/standings" element={<Standings />} />
@@ -40,7 +55,8 @@ function App() {
             <Route path="/league/:leagueCode/managers" element={<Managers />} />
             <Route path="/league/:leagueCode/schedule" element={<Schedule />} />
             <Route path="/players" element={<Players />} />
-            <Route path="/league/:leagueCode/teams" element={<Teams />} /> 
+            <Route path="/league/:leagueCode/teams" element={<Teams />} />
+            <Route path="/league/:leagueCode/scores" element={<Scores />} />
           </Routes>
         </div>
       </Router>

@@ -12,13 +12,10 @@ const LEAGUE_CONFIG = [
 const leagueCfg = prefix => LEAGUE_CONFIG.find(l => l.prefix === prefix) ??
   { prefix, label: prefix, color: '#aaa' };
 
- 
-// ── TICKER HELPER ──────────────────────────────────────────────────────────
 const getFullTeamName = (teamCode, teams) => {
-  const teamObj = teams.find(t => t.code === teamCode);
-  return teamObj ? teamObj.team : teamCode;
+  const t = teams.find(t => t.code === teamCode);
+  return t ? t.team : teamCode;
 };
-
 
 function useLeagueCountdown(season) {
   const [tick, setTick] = useState(null);
@@ -28,15 +25,10 @@ function useLeagueCountdown(season) {
       if (!season.end_date) { setTick({ done: true, seasonLabel: season.lg }); return; }
       const diff = new Date(season.end_date) - Date.now();
       if (diff <= 0) { setTick({ done: true, seasonLabel: season.lg }); return; }
-      setTick({
-        done: false, seasonLabel: season.lg,
-        d: Math.floor(diff / 86400000),
-        h: Math.floor((diff % 86400000) / 3600000),
-        m: Math.floor((diff % 3600000) / 60000),
-        s: Math.floor((diff % 60000) / 1000),
-        urgent: diff < 48 * 3600000,
-        warning: diff < 7 * 86400000,
-      });
+      setTick({ done:false, seasonLabel:season.lg,
+        d:Math.floor(diff/86400000), h:Math.floor((diff%86400000)/3600000),
+        m:Math.floor((diff%3600000)/60000), s:Math.floor((diff%60000)/1000),
+        urgent:diff<48*3600000, warning:diff<7*86400000 });
     };
     calc();
     const id = setInterval(calc, 1000);
@@ -53,15 +45,30 @@ function daysUntil(iso) {
   const evMs = new Date(norm).getTime();
   if (isNaN(evMs) || evMs < Date.now()) return null;
   const now = new Date(), ev = new Date(evMs);
-  const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const evMid    = new Date(ev.getFullYear(),  ev.getMonth(),  ev.getDate()).getTime();
+  const todayMid = new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
+  const evMid    = new Date(ev.getFullYear(),ev.getMonth(),ev.getDate()).getTime();
   const days = Math.round((evMid - todayMid) / 86400000);
   if (days === 0) return 'TODAY';
   if (days === 1) return 'TMRW';
   return `${days}D`;
 }
 
-// ── Countdown ─────────────────────────────────────────────────────────────────
+function ClockDisplay() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const update = () => setTime(new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}));
+    update();
+    const id = setInterval(update, 10000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className="ht-clock-inner">
+      <span className="ht-clock-time">{time}</span>
+      <span className="ht-clock-label">ET</span>
+    </div>
+  );
+}
+
 function InlineCountdown({ cfg, tick }) {
   const uc = tick?.urgent ? '#FF3B3B' : tick?.warning ? '#FFB800' : cfg.color;
   return (
@@ -75,22 +82,21 @@ function InlineCountdown({ cfg, tick }) {
         </div>
       </div>
       <div className="icd-right">
-        {!tick ? (
-          <span className="icd-awaiting">AWAITING</span>
-        ) : tick.done ? (
+        {!tick ? <span className="icd-awaiting">AWAITING</span>
+        : tick.done ? (
           <div className="icd-complete">
-            <span style={{ fontSize: 15 }}>🏆</span>
+            <span style={{fontSize:15}}>🏆</span>
             <span className="icd-done-txt">COMPLETE</span>
           </div>
         ) : (
           <div className="icd-clock">
-            {[{v:tick.d,u:'D'},{v:tick.h,u:'H'},{v:tick.m,u:'M'},{v:tick.s,u:'S'}].map(({v,u}) => (
+            {[{v:tick.d,u:'D'},{v:tick.h,u:'H'},{v:tick.m,u:'M'},{v:tick.s,u:'S'}].map(({v,u})=>(
               <div key={u} className="icd-unit">
                 <span className="icd-n">{p2(v)}</span>
                 <span className="icd-u">{u}</span>
               </div>
             ))}
-            {tick.d < 7 && <span style={{ fontSize: 15, marginLeft: 2 }}>{tick.urgent ? '🚨' : '⚡'}</span>}
+            {tick.d<7&&<span style={{fontSize:15,marginLeft:2}}>{tick.urgent?'🚨':'⚡'}</span>}
           </div>
         )}
       </div>
@@ -108,107 +114,89 @@ function PanelHeader({ icon, title, action }) {
   );
 }
 
-// ── Spotlight rotating widget ─────────────────────────────────────────────────
 const SL_PANELS = [
-  { id: 'hot',     icon: '🔥', label: 'HOTTEST TEAMS',  sub: 'Best record last 10' },
-  { id: 'cold',    icon: '🥶', label: 'COLDEST TEAMS',  sub: 'Worst record last 10' },
-  { id: 'wstreak', icon: '🏆', label: 'WIN STREAKS',    sub: 'Active win streaks'   },
-  { id: 'lstreak', icon: '💀', label: 'LOSS STREAKS',   sub: 'Active loss streaks'  },
-  { id: 'scorers', icon: '⭐', label: 'TOP SCORERS',    sub: 'Season leaders'       },
+  { id:'hot',     icon:'🔥', label:'HOTTEST TEAMS',  sub:'Best record last 10' },
+  { id:'cold',    icon:'🥶', label:'COLDEST TEAMS',  sub:'Worst record last 10' },
+  { id:'wstreak', icon:'🏆', label:'WIN STREAKS',    sub:'Active win streaks' },
+  { id:'lstreak', icon:'💀', label:'LOSS STREAKS',   sub:'Active loss streaks' },
+  { id:'scorers', icon:'⭐', label:'TOP SCORERS',    sub:'Season leaders' },
 ];
 
 function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
   const [idx, setIdx] = useState(0);
   const timerRef = useRef(null);
-  const INTERVAL = 8000;
-
-  const startTimer = useCallback(() => {
+  const startTimer = useCallback(()=>{
     clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setIdx(i => (i + 1) % SL_PANELS.length), INTERVAL);
-  }, []);
-
-  useEffect(() => { startTimer(); return () => clearInterval(timerRef.current); }, [startTimer]);
-
+    timerRef.current = setInterval(()=>setIdx(i=>(i+1)%SL_PANELS.length), 8000);
+  },[]);
+  useEffect(()=>{ startTimer(); return()=>clearInterval(timerRef.current); },[startTimer]);
   const goTo = i => { setIdx(i); startTimer(); };
   const p = SL_PANELS[idx];
 
   const rows = () => {
-    if (loading) return [1,2,3,4].map(i => (
-      <div key={i} className="skel" style={{ height: 24, margin: '.12rem .65rem' }} />
-    ));
-
-    if (p.id === 'hot' || p.id === 'cold') {
-      const list = p.id === 'hot' ? recentForm.hot : recentForm.cold;
-      if (!list.length) return <div className="sl-empty">No data available</div>;
-      return list.map((t, i) => (
+    if(loading) return [1,2,3,4].map(i=>(<div key={i} className="skel" style={{height:24,margin:'.12rem .65rem'}}/>));
+    if(p.id==='hot'||p.id==='cold'){
+      const list=p.id==='hot'?recentForm.hot:recentForm.cold;
+      if(!list.length) return <div className="sl-empty">No data available</div>;
+      return list.map((t,i)=>(
         <div key={t.team} className="sl-row">
           <span className="sl-rank">#{i+1}</span>
-          <img src={`/assets/teamLogos/${t.team}.png`} alt="" className="sl-logo"
-            onError={e => { e.currentTarget.style.display='none'; }} />
+          <img src={`/assets/teamLogos/${t.team}.png`} alt="" className="sl-logo" onError={e=>{e.currentTarget.style.display='none';}}/>
           <span className="sl-team">{t.team}</span>
-          <div className="sl-dots">
-            {t.last10.map((w,j) => <span key={j} className={`sl-dot ${w?'sl-dot-w':'sl-dot-l'}`} />)}
-          </div>
+          <div className="sl-dots">{t.last10.map((w,j)=><span key={j} className={`sl-dot ${w?'sl-dot-w':'sl-dot-l'}`}/>)}</div>
           <span className={`sl-val ${p.id==='hot'?'sl-val-hot':'sl-val-cold'}`}>{t.w}-{t.l}</span>
         </div>
       ));
     }
-    if (p.id === 'wstreak') {
-      if (!winStreaks.length) return <div className="sl-empty">No active win streaks</div>;
-      return winStreaks.slice(0,5).map((s,i) => (
+    if(p.id==='wstreak'){
+      if(!winStreaks.length) return <div className="sl-empty">No active win streaks</div>;
+      return winStreaks.slice(0,5).map((s,i)=>(
         <div key={s.team} className="sl-row">
           <span className="sl-rank">#{i+1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo"
-            onError={e => { e.currentTarget.style.display='none'; }} />
+          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={e=>{e.currentTarget.style.display='none';}}/>
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
-            {Array.from({length:Math.min(s.count,10)},(_,j) => <span key={j} className="sl-dot sl-dot-w"/>)}
+            {Array.from({length:Math.min(s.count,10)},(_,j)=><span key={j} className="sl-dot sl-dot-w"/>)}
             {s.count>10&&<span className="sl-dots-more">+{s.count-10}</span>}
           </div>
           <span className="sl-val sl-val-hot">{s.count}W</span>
         </div>
       ));
     }
-    if (p.id === 'lstreak') {
-      if (!lossStreaks.length) return <div className="sl-empty">No active loss streaks</div>;
-      return lossStreaks.slice(0,5).map((s,i) => (
+    if(p.id==='lstreak'){
+      if(!lossStreaks.length) return <div className="sl-empty">No active loss streaks</div>;
+      return lossStreaks.slice(0,5).map((s,i)=>(
         <div key={s.team} className="sl-row">
           <span className="sl-rank">#{i+1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo"
-            onError={e => { e.currentTarget.style.display='none'; }} />
+          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={e=>{e.currentTarget.style.display='none';}}/>
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
-            {Array.from({length:Math.min(s.count,10)},(_,j) => <span key={j} className="sl-dot sl-dot-l"/>)}
+            {Array.from({length:Math.min(s.count,10)},(_,j)=><span key={j} className="sl-dot sl-dot-l"/>)}
             {s.count>10&&<span className="sl-dots-more">+{s.count-10}</span>}
           </div>
           <span className="sl-val sl-val-cold">{s.count}L</span>
         </div>
       ));
     }
-    if (p.id === 'scorers') {
-      return (
-        <div>
-          {[1,2,3,4,5].map(i => (
-            <div key={i} className="sl-row" style={{opacity:1-i*.15}}>
-              <span className="sl-rank">#{i}</span>
-              <div className="sl-bar-wrap"><div className="sl-bar" style={{width:`${100-i*13}%`}}/></div>
-              <span className="sl-val" style={{color:'rgba(255,255,255,.18)'}}>—</span>
-            </div>
-          ))}
-          <div className="sl-coming">PLAYER STATS COMING SOON</div>
-        </div>
-      );
-    }
+    return (
+      <div>
+        {[1,2,3,4,5].map(i=>(
+          <div key={i} className="sl-row" style={{opacity:1-i*.15}}>
+            <span className="sl-rank">#{i}</span>
+            <div className="sl-bar-wrap"><div className="sl-bar" style={{width:`${100-i*13}%`}}/></div>
+            <span className="sl-val" style={{color:'rgba(255,255,255,.18)'}}>—</span>
+          </div>
+        ))}
+        <div className="sl-coming">PLAYER STATS COMING SOON</div>
+      </div>
+    );
   };
 
   return (
     <section className="panel sl-panel">
       <div className="sl-tabs">
-        {SL_PANELS.map((sp, i) => (
-          <button key={sp.id}
-            className={`sl-tab ${i===idx?'sl-tab-on':''}`}
-            onClick={() => goTo(i)} title={sp.label}
-          >{sp.icon}</button>
+        {SL_PANELS.map((sp,i)=>(
+          <button key={sp.id} className={`sl-tab ${i===idx?'sl-tab-on':''}`} onClick={()=>goTo(i)} title={sp.label}>{sp.icon}</button>
         ))}
       </div>
       <div className="sl-titlebar">
@@ -216,231 +204,150 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
         <span className="sl-sub">{p.sub}</span>
       </div>
       <div className="sl-body">{rows()}</div>
-      <div className="sl-prog-wrap">
-        <div className="sl-prog" key={`${idx}-${loading}`} />
-      </div>
+      <div className="sl-prog-wrap"><div className="sl-prog" key={`${idx}-${loading}`}/></div>
     </section>
   );
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
 export default function Home() {
   const { selectedLeague } = useLeague();
   const cfg = leagueCfg(selectedLeague);
 
-  const [currentSeason, setCurrentSeason] = useState(null);
-  const [winStreaks,     setWinStreaks]     = useState([]);
-  const [lossStreaks,    setLossStreaks]    = useState([]);
-  const [recentForm,    setRecentForm]     = useState({ hot: [], cold: [] });
-  const [discordEvents, setDiscordEvents]  = useState([]);
-  const [recentTrades,  setRecentTrades]   = useState([]);
-  const [loading,       setLoading]        = useState(true);
-  const [evtLoading,    setEvtLoading]     = useState(true);
+  const [currentSeason,setCurrentSeason]=useState(null);
+  const [winStreaks,setWinStreaks]=useState([]);
+  const [lossStreaks,setLossStreaks]=useState([]);
+  const [recentForm,setRecentForm]=useState({hot:[],cold:[]});
+  const [discordEvents,setDiscordEvents]=useState([]);
+  const [recentTrades,setRecentTrades]=useState([]);
+  const [loading,setLoading]=useState(true);
+  const [evtLoading,setEvtLoading]=useState(true);
+  const [tickerItems,setTickerItems]=useState([]);
+  const [teams,setTeams]=useState([]);
 
   const tick = useLeagueCountdown(currentSeason);
 
-  /* Ticker Variable */
-    const [tickerItems, setTickerItems] = useState([]);
+  useEffect(()=>{
+    supabase.from('teams').select('code,team').then(({data})=>{ if(data) setTeams(data); });
+  },[]);
 
-    const [teams, setTeams] = useState([]);
-
-      useEffect(() => {
-        const loadTeams = async () => {
-          const { data } = await supabase.from('teams').select('code, team');
-          if (data) setTeams(data);
-        };
-        loadTeams();
-      }, []);
-
-
-  const loadLeagueData = useCallback(async (prefix) => {
-    if (!prefix) return;
+  const loadLeagueData = useCallback(async(prefix)=>{
+    if(!prefix) return;
     setLoading(true);
-    setCurrentSeason(null); setWinStreaks([]); setLossStreaks([]); setRecentForm({ hot: [], cold: [] });
+    setCurrentSeason(null); setWinStreaks([]); setLossStreaks([]); setRecentForm({hot:[],cold:[]});
 
-    const { data: seasons } = await supabase
-      .from('seasons').select('*').order('year', { ascending: false }).limit(20);
-    const ps = (seasons || []).filter(s => lgPrefix(s.lg) === prefix);
-    if (!ps.length) { setLoading(false); return; }
-
-    const latest = ps.reduce((b, s) => new Date(s.end_date) > new Date(b.end_date) ? s : b);
+    const {data:seasons}=await supabase.from('seasons').select('*').order('year',{ascending:false}).limit(20);
+    const ps=(seasons||[]).filter(s=>lgPrefix(s.lg)===prefix);
+    if(!ps.length){setLoading(false);return;}
+    const latest=ps.reduce((b,s)=>new Date(s.end_date)>new Date(b.end_date)?s:b);
     setCurrentSeason(latest);
 
-    const { data: allGames } = await supabase
-      .from('games')
-      .select('lg, game, home, away, result_home, result_away')
-      .eq('lg', latest.lg)
-      .order('game', { ascending: false });
+    const {data:allGames}=await supabase.from('games')
+      .select('lg,legacy_game_id,home,away,result_home,result_away')
+      .eq('lg',latest.lg).order('legacy_game_id',{ascending:false});
+    const games=allGames||[];
 
-    const games = allGames || [];
-
-    // Streaks
-    const teamHist = {};
-    games.forEach(g => {
-      const hW = ['W','OTW'].includes((g.result_home||'').toUpperCase());
-      const aW = ['W','OTW'].includes((g.result_away||'').toUpperCase());
-      if (!teamHist[g.home]) teamHist[g.home] = [];
-      if (!teamHist[g.away]) teamHist[g.away] = [];
-      teamHist[g.home].push({ win: hW });
-      teamHist[g.away].push({ win: aW });
+    const teamHist={};
+    games.forEach(g=>{
+      const hW=['W','OTW'].includes((g.result_home||'').toUpperCase());
+      const aW=['W','OTW'].includes((g.result_away||'').toUpperCase());
+      if(!teamHist[g.home]) teamHist[g.home]=[];
+      if(!teamHist[g.away]) teamHist[g.away]=[];
+      teamHist[g.home].push({win:hW});
+      teamHist[g.away].push({win:aW});
     });
-    const wins = [], losses = [];
-    Object.entries(teamHist).forEach(([team, hist]) => {
-      if (!hist.length) return;
-      const first = hist[0].win; let count = 0;
-      for (const h of hist) { if (h.win === first) count++; else break; }
-      if (first) wins.push({ team, count }); else losses.push({ team, count });
+    const wins=[],losses=[];
+    Object.entries(teamHist).forEach(([team,hist])=>{
+      if(!hist.length) return;
+      const first=hist[0].win; let count=0;
+      for(const h of hist){if(h.win===first)count++;else break;}
+      if(first) wins.push({team,count}); else losses.push({team,count});
     });
-    wins.sort((a,b)=>b.count-a.count);
-    losses.sort((a,b)=>b.count-a.count);
-    setWinStreaks(wins.slice(0,5));
-    setLossStreaks(losses.slice(0,5));
+    wins.sort((a,b)=>b.count-a.count); losses.sort((a,b)=>b.count-a.count);
+    setWinStreaks(wins.slice(0,5)); setLossStreaks(losses.slice(0,5));
 
-    // Recent form (last 10 per team)
-    const last10 = {};
-    games.forEach(g => {
-      const hW = ['W','OTW'].includes((g.result_home||'').toUpperCase());
-      const aW = ['W','OTW'].includes((g.result_away||'').toUpperCase());
-      [[g.home,hW],[g.away,aW]].forEach(([t,w]) => {
-        if (!last10[t]) last10[t] = [];
-        if (last10[t].length < 10) last10[t].push(w);
+    const last10={};
+    games.forEach(g=>{
+      const hW=['W','OTW'].includes((g.result_home||'').toUpperCase());
+      const aW=['W','OTW'].includes((g.result_away||'').toUpperCase());
+      [[g.home,hW],[g.away,aW]].forEach(([t,w])=>{
+        if(!last10[t]) last10[t]=[];
+        if(last10[t].length<10) last10[t].push(w);
       });
     });
-    const form = Object.entries(last10)
-      .filter(([,a]) => a.length >= 3)
-      .map(([team, arr]) => {
-        const w = arr.filter(Boolean).length;
-        return { team, w, l: arr.length-w, last10: arr, pct: w/arr.length };
-      });
+    const form=Object.entries(last10).filter(([,a])=>a.length>=3).map(([team,arr])=>{
+      const w=arr.filter(Boolean).length;
+      return{team,w,l:arr.length-w,last10:arr,pct:w/arr.length};
+    });
     form.sort((a,b)=>b.pct-a.pct);
-    setRecentForm({
-      hot:  form.slice(0,5),
-      cold: [...form].sort((a,b)=>a.pct-b.pct).slice(0,5),
-    });
+    setRecentForm({hot:form.slice(0,5),cold:[...form].sort((a,b)=>a.pct-b.pct).slice(0,5)});
     setLoading(false);
 
-    // ── Generate ticker items ──────────────────────────────
-const bigScoreThreshold = 4; // now 4 goals for a "big win"
-const lastGames = games.slice(0, 15).reverse(); // most recent games first
-const tickerEvents = [];
-const teamStreaks = {};
-const eventSet = new Set();
-
-lastGames.forEach(g => {
-  const hScore = Number(g.result_home || 0);
-  const aScore = Number(g.result_away || 0);
-
-  // Get full team names
-  const homeName = getFullTeamName(g.home, teams);
-  const awayName = getFullTeamName(g.away, teams);
-
-  // Track win/loss streaks
-  const hWin = hScore > aScore;
-  const aWin = aScore > hScore;
-
-  [[g.home, hWin, homeName], [g.away, aWin, awayName]].forEach(([team, win, name]) => {
-    if (!teamStreaks[team]) teamStreaks[team] = [];
-    teamStreaks[team].push(win);
-    if (teamStreaks[team].length > 5) teamStreaks[team].shift();
-
-    const last3 = teamStreaks[team].slice(-3);
-    if (last3.length === 3) {
-      const streakMsg = last3.every(Boolean)
-        ? ` ${name} won 3 straight games!`
-        : last3.every(v => !v)
-          ? ` ${name} lost 3 straight games!`
-          : null;
-      if (streakMsg && !eventSet.has(streakMsg)) {
-        tickerEvents.push(streakMsg);
-        eventSet.add(streakMsg);
+    // Ticker items
+    const lastGames=games.slice(0,15).reverse();
+    const tickerEvents=[]; const teamStk={}; const evSet=new Set();
+    lastGames.forEach(g=>{
+      const hS=Number(g.result_home||0),aS=Number(g.result_away||0);
+      const hName=getFullTeamName(g.home,teams),aName=getFullTeamName(g.away,teams);
+      [[g.home,hS>aS,hName],[g.away,aS>hS,aName]].forEach(([team,win,name])=>{
+        if(!teamStk[team]) teamStk[team]=[];
+        teamStk[team].push(win);
+        if(teamStk[team].length>5) teamStk[team].shift();
+        const l3=teamStk[team].slice(-3);
+        if(l3.length===3){
+          const msg=l3.every(Boolean)?`🔥 ${name} — 3-GAME WIN STREAK`:l3.every(v=>!v)?`📉 ${name} — 3 STRAIGHT LOSSES`:null;
+          if(msg&&!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
+        }
+      });
+      if(hS+aS>=4){
+        const msg=`⚡ FINAL: ${hName} ${hS} — ${aS} ${aName}`;
+        if(!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
       }
-    }
-  });
+    });
+    form.slice(0,3).forEach(t=>{
+      const msg=`📈 ${getFullTeamName(t.team,teams)} — PLAYOFF POSITION`;
+      if(!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
+    });
+    setTickerItems(tickerEvents);
+  },[]);
 
-  // Big scoring game (total goals >= threshold)
-  if (hScore + aScore >= bigScoreThreshold) {
-    const scoreMsg = `⚡ ${homeName} ${hScore} - ${aScore} ${awayName} ⚡`;
-    if (!eventSet.has(scoreMsg)) {
-      tickerEvents.push(scoreMsg);
-      eventSet.add(scoreMsg);
-    }
-  }
-});
+  useEffect(()=>{loadLeagueData(selectedLeague);},[selectedLeague,loadLeagueData]);
 
-// Optional: playoff / top teams
-recentForm.hot.slice(0, 3).forEach(t => {
-  const name = getFullTeamName(t.team, teams);
-  const msg = ` ${name} is in playoff position!`;
-  if (!eventSet.has(msg)) {
-    tickerEvents.push(msg);
-    eventSet.add(msg);
-  }
-});
-
-setTickerItems(tickerEvents);
-
-
-  }, []);
-
-  useEffect(() => { loadLeagueData(selectedLeague); }, [selectedLeague, loadLeagueData]);
-
-  useEffect(() => {
-    const refresh = async () => {
+  useEffect(()=>{
+    const refresh=async()=>{
       setEvtLoading(true);
-      const result = await supabase.functions.invoke('discord-events');
-      if (!result.error && Array.isArray(result.data)) setDiscordEvents(result.data.slice(0,6));
-      else if (result.error) console.warn('[discord-events]', result.error.message);
+      const result=await supabase.functions.invoke('discord-events');
+      if(!result.error&&Array.isArray(result.data)) setDiscordEvents(result.data.slice(0,6));
+      else if(result.error) console.warn('[discord-events]',result.error.message);
       setEvtLoading(false);
       supabase.functions.invoke('hyper-endpoint').catch(console.error);
     };
     refresh();
-    const id = setInterval(refresh, 10 * 60 * 1000);
-    return () => clearInterval(id);
-  }, []);
+    const id=setInterval(refresh,10*60*1000);
+    return()=>clearInterval(id);
+  },[]);
 
-  const fmtTime = iso => iso ? new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}) : '';
+  const fmtTime=iso=>iso?new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+  const displayItems=tickerItems.length>0?tickerItems:['LEAGUE NEWS','TRADE ANNOUNCEMENTS','DRAFT NEWS','SEASON EVENTS','SCHEDULE UPDATES'];
 
   return (
     <div className="hp">
       <div className="scanlines" aria-hidden />
 
-      {/*
-       * GRID LAYOUT:
-       *   Col A (left,  370px):  Countdown → Spotlight → Transactions
-       *   Col B (center, 1fr):   EMPTY — placeholder for future content
-       *   Col C (right,  370px): Media cluster (Twitch + Discord Events)
-       *
-       * Col A === Col C width (370px). Spotlight is compact, fits in the column.
-       * Col B collapses cleanly when empty.
-       */}
       <div className="cg">
-
-        {/* ── COL A ── */}
         <div className="cg-a">
-          <InlineCountdown cfg={cfg} tick={tick} />
-
-          <Spotlight
-            recentForm={recentForm}
-            winStreaks={winStreaks}
-            lossStreaks={lossStreaks}
-            loading={loading}
-          />
-
+          <InlineCountdown cfg={cfg} tick={tick}/>
+          <Spotlight recentForm={recentForm} winStreaks={winStreaks} lossStreaks={lossStreaks} loading={loading}/>
           <section className="panel">
-            <PanelHeader icon="🔄" title="TRANSACTIONS" />
+            <PanelHeader icon="🔄" title="TRANSACTIONS"/>
             <div className="tx-body">
-              {recentTrades.length === 0 ? (
+              {recentTrades.length===0?(
                 <div className="tx-ph">
                   <span style={{fontSize:18,opacity:.2}}>📋</span>
                   <span className="tx-ph-msg">TRADE TRACKER COMING SOON</span>
                 </div>
-              ) : recentTrades.slice(0,5).map((t,i) => (
+              ):recentTrades.slice(0,5).map((t,i)=>(
                 <div key={i} className="tx-row">
-                  <div className="tx-teams">
-                    <span className="tx-team">{t.from_team}</span>
-                    <span className="tx-arr">⇄</span>
-                    <span className="tx-team">{t.to_team}</span>
-                  </div>
+                  <div className="tx-teams"><span className="tx-team">{t.from_team}</span><span className="tx-arr">⇄</span><span className="tx-team">{t.to_team}</span></div>
                   <span className="tx-player">{t.player_name}</span>
                   <span className="tx-date">{t.trade_date}</span>
                 </div>
@@ -449,37 +356,28 @@ setTickerItems(tickerEvents);
           </section>
         </div>
 
-        {/* ── COL B: Empty center — add future panels here ── */}
-        <div className="cg-b" />
+        <div className="cg-b"/>
 
-        {/* ── COL C: Media ── */}
         <div className="cg-c">
           <div className="media-cluster">
-            <section className="panel twg-panel">
-              <TwitchLiveWidget />
-            </section>
+            <section className="panel twg-panel"><TwitchLiveWidget/></section>
             <section className="panel">
               <PanelHeader
-                icon={
-                  <svg style={{width:12,height:12,color:'#5865F2',verticalAlign:'middle',flexShrink:0}} viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.62.874-1.395 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/>
-                  </svg>
-                }
+                icon={<svg style={{width:12,height:12,color:'#5865F2',verticalAlign:'middle',flexShrink:0}} viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.62.874-1.395 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>}
                 title="UPCOMING EVENTS"
                 action={<a href="https://discord.gg/YOUR_INVITE" target="_blank" rel="noopener noreferrer" className="discord-join">JOIN →</a>}
               />
               <div className="events">
-                {evtLoading ? (
-                  [1,2,3].map(i => <div key={i} className="skel" style={{height:52,margin:'.2rem .72rem'}}/>)
-                ) : discordEvents.length === 0 ? (
+                {evtLoading?([1,2,3].map(i=><div key={i} className="skel" style={{height:52,margin:'.2rem .72rem'}}/>))
+                :discordEvents.length===0?(
                   <div className="panel-empty ev-cta">
                     <p>🎮 No upcoming events.</p>
                     <p className="ev-setup">Deploy <code>discord-events</code> edge fn.</p>
                   </div>
-                ) : discordEvents.map(ev => {
-                  const du = daysUntil(ev.startTime);
-                  const isToday = du==='TODAY', isTmrw = du==='TMRW';
-                  return (
+                ):discordEvents.map(ev=>{
+                  const du=daysUntil(ev.startTime);
+                  const isToday=du==='TODAY',isTmrw=du==='TMRW';
+                  return(
                     <a key={ev.id} href={ev.url} target="_blank" rel="noopener noreferrer" className="ev-row">
                       <div className="ev-cal">
                         <span className="ev-mon">{new Date(ev.startTime).toLocaleDateString('en-US',{month:'short'})}</span>
@@ -490,10 +388,8 @@ setTickerItems(tickerEvents);
                         <span className="ev-time">{fmtTime(ev.startTime)}</span>
                       </div>
                       <div className="ev-right">
-                        {ev.status===2
-                          ? <span className="ev-live">● LIVE</span>
-                          : du ? <span className={`ev-du${isToday?' ev-today':isTmrw?' ev-tmrw':''}`}>{du}</span>
-                          : null}
+                        {ev.status===2?<span className="ev-live">● LIVE</span>
+                        :du?<span className={`ev-du${isToday?' ev-today':isTmrw?' ev-tmrw':''}`}>{du}</span>:null}
                       </div>
                     </a>
                   );
@@ -504,41 +400,54 @@ setTickerItems(tickerEvents);
         </div>
       </div>
 
-      {/* Ticker */}
-      {/* ── Ticker ── */}
-      {/* ── Ticker ── */}
-<div className="ticker">
-  <div className="ticker-tag">NEWS</div>
-  <div className="ticker-track">
-    <div className="ticker-txt">
-      {tickerItems.length > 0 ? (
-        tickerItems.concat(tickerItems).map((ev, i) => (
-          <span key={i} className="ticker-item">
-            {ev}
-            <span className="ticker-sep">◆</span>
-          </span>
-        ))
-      ) : (
-        ['LEAGUE NEWS','PODCASTS','TRADE ANNOUNCEMENTS','DRAFT NEWS','SEASON EVENTS'].map((txt,i) => (
-          <span key={i} className="ticker-item">
-            {txt}
-            <span className="ticker-sep">◆</span>
-          </span>
-        ))
-      )}
-    </div>
-  </div>
-</div>
+      {/* ═══════════════════════════════════════════════════════════════════
+          HDTV BROADCAST TICKER — NHL Network / ESPN Lower Third style
+          3 zones: brand bug | scrolling belt | live clock
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="hdtv-ticker">
 
- 
+        {/* Zone 1: Brand bug */}
+        <div className="ht-brand">
+          <div className="ht-brand-top">{cfg.label}</div>
+          <div className="ht-brand-bottom">
+            <span className="ht-live-dot"/>
+            <span>LIVE</span>
+          </div>
+        </div>
+
+        {/* Zone 2: Scrolling content belt */}
+        <div className="ht-stage">
+          <div className="ht-fade-l"/>
+          <div className="ht-fade-r"/>
+          <div className="ht-rail">
+            <div className="ht-belt">
+              {displayItems.concat(displayItems).map((item,i)=>(
+                <span key={i} className="ht-story">
+                  <span className={`ht-text ht-c${i%4}`}>{item}</span>
+                  <span className="ht-sep">
+                    <span className="ht-sep-line"/>
+                    <span className="ht-sep-gem">◆</span>
+                    <span className="ht-sep-line"/>
+                  </span>
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Zone 3: Clock */}
+        <div className="ht-clock">
+          <ClockDisplay/>
+        </div>
+
+      </div>
 
       <style>{`
         *,*::before,*::after{box-sizing:border-box;}
         html,body{background:#00000a!important;}
-        .hp{min-height:100vh;background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),#00000a;padding-bottom:50px;overflow-x:hidden;position:relative;}
+        .hp{min-height:100vh;background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),#00000a;padding-bottom:56px;overflow-x:hidden;position:relative;}
         .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.055) 2px,rgba(0,0,0,.055) 4px);}
 
-        /* ── COUNTDOWN ─────────────────────────────────────────────────── */
         .icd{display:flex;align-items:center;justify-content:space-between;gap:.55rem;padding:.58rem .82rem;background:color-mix(in srgb,var(--ic) 8%,rgba(0,0,0,.65));border:1.5px solid color-mix(in srgb,var(--ic) 32%,transparent);border-radius:10px;position:relative;overflow:hidden;}
         .icd::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 65% 100% at 0% 50%,color-mix(in srgb,var(--ic) 12%,transparent),transparent 70%);}
         .icd-left{display:flex;flex-direction:column;gap:.2rem;}
@@ -557,24 +466,11 @@ setTickerItems(tickerEvents);
         .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
 
-        /* ── 3-COLUMN GRID ──────────────────────────────────────────────── */
-        /* Col A and Col C are same fixed width.
-           Col B is the empty center — collapsed to 0 when nothing is there. */
-        .cg{
-          display:grid;
-          grid-template-columns:370px 1fr 370px;
-          grid-template-areas:"a b c";
-          gap:.82rem;
-          padding:.88rem 1.1rem;
-          max-width:1560px;
-          margin:0 auto;
-          align-items:start;
-        }
+        .cg{display:grid;grid-template-columns:370px 1fr 370px;grid-template-areas:"a b c";gap:.82rem;padding:.88rem 1.1rem;max-width:1560px;margin:0 auto;align-items:start;}
         .cg-a{grid-area:a;display:flex;flex-direction:column;gap:.72rem;}
-        .cg-b{grid-area:b;min-height:1px;} /* empty center — add panels here later */
+        .cg-b{grid-area:b;min-height:1px;}
         .cg-c{grid-area:c;display:flex;flex-direction:column;align-self:start;}
 
-        /* ── PANELS ──────────────────────────────────────────────────────── */
         .panel{border:1.5px solid rgba(135,206,235,.1);border-radius:10px;overflow:hidden;background:linear-gradient(155deg,rgba(255,255,255,.02) 0%,rgba(0,0,0,.3) 100%);}
         .ph{display:flex;align-items:center;gap:.38rem;padding:.48rem .82rem;background:linear-gradient(90deg,rgba(255,140,0,.07) 0%,transparent 100%);border-bottom:1px solid rgba(255,140,0,.1);flex-wrap:wrap;}
         .ph-icon{font-size:13px;flex-shrink:0;}
@@ -586,7 +482,6 @@ setTickerItems(tickerEvents);
         .skel{background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));background-size:200% 100%;animation:shimmer 1.6s infinite;border-radius:4px;}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 
-        /* ── SPOTLIGHT ──────────────────────────────────────────────────── */
         .sl-panel{overflow:visible;}
         .sl-tabs{display:flex;border-bottom:1px solid rgba(255,140,0,.1);background:rgba(0,0,0,.25);}
         .sl-tab{flex:1;padding:.35rem .15rem;font-size:14px;background:transparent;border:none;border-right:1px solid rgba(255,255,255,.04);cursor:pointer;transition:all .14s;color:rgba(255,255,255,.3);line-height:1;}
@@ -600,7 +495,6 @@ setTickerItems(tickerEvents);
         .sl-prog-wrap{height:3px;background:rgba(255,255,255,.05);overflow:hidden;}
         .sl-prog{height:100%;background:linear-gradient(90deg,#FF8C00,#FFD700);animation:slp 8s linear forwards;}
         @keyframes slp{from{width:0%}to{width:100%}}
-
         .sl-row{display:flex;align-items:center;gap:.3rem;padding:.2rem .62rem;border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s;}
         .sl-row:last-child{border-bottom:none;}
         .sl-row:hover{background:rgba(255,140,0,.04);}
@@ -620,7 +514,6 @@ setTickerItems(tickerEvents);
         .sl-bar{height:100%;background:linear-gradient(90deg,rgba(255,140,0,.3),rgba(255,215,0,.2));border-radius:3px;}
         .sl-coming{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.13);letter-spacing:1px;text-align:center;padding:.4rem;}
 
-        /* ── TRANSACTIONS ──────────────────────────────────────────────── */
         .tx-body{padding:.12rem 0;}
         .tx-ph{display:flex;flex-direction:column;align-items:center;gap:.28rem;padding:.62rem .8rem;}
         .tx-ph-msg{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.14);letter-spacing:1px;text-align:center;}
@@ -632,13 +525,11 @@ setTickerItems(tickerEvents);
         .tx-player{flex:1;font-family:'VT323',monospace;font-size:16px;color:#E0E0E0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .tx-date{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.2);flex-shrink:0;}
 
-        /* ── MEDIA CLUSTER ─────────────────────────────────────────────── */
         .media-cluster{display:flex;flex-direction:column;gap:0;border:1.5px solid rgba(88,101,242,.18);border-radius:10px;overflow:hidden;}
         .media-cluster>.panel{border:none;border-radius:0;border-bottom:1px solid rgba(88,101,242,.12);}
         .media-cluster>.panel:last-child{border-bottom:none;}
         .media-cluster>.twg-panel{border-bottom:1px solid rgba(0,255,100,.1);}
 
-        /* ── DISCORD EVENTS ────────────────────────────────────────────── */
         .events{padding:.04rem 0;}
         .ev-row{display:flex;align-items:flex-start;gap:.48rem;padding:.38rem .72rem;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.03);transition:background .12s;}
         .ev-row:last-child{border-bottom:none;}
@@ -660,88 +551,196 @@ setTickerItems(tickerEvents);
         .ev-setup code{background:rgba(255,255,255,.07);padding:.05rem .18rem;border-radius:3px;}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 
-        /* ── TICKER ────────────────────────────────────────────────────── */
-        .ticker{position:fixed;bottom:0;left:0;right:0;height:44px;display:flex;align-items:stretch;background:linear-gradient(0deg,#020210 0%,#06061a 100%);border-top:2px solid #FF8C00;z-index:200;box-shadow:0 -4px 28px rgba(255,140,0,.18);}
-        .ticker-tag{display:flex;align-items:center;padding:0 1rem;background:linear-gradient(90deg,#FF8C00,#FF5F00);font-family:'Press Start 2P',monospace;font-size:12px;color:#000;letter-spacing:3px;white-space:nowrap;border-right:2px solid #FFD700;flex-shrink:0;}
-        .ticker-track{flex:1;overflow:hidden;display:flex;align-items:center;position:relative;}
-        .ticker-track::before,.ticker-track::after{content:'';position:absolute;top:0;bottom:0;width:36px;z-index:1;pointer-events:none;}
-        .ticker-track::before{left:0;background:linear-gradient(90deg,#06061a,transparent);}
-        .ticker-track::after{right:0;background:linear-gradient(-90deg,#06061a,transparent);}
-        .ticker-txt{font-family:'VT323',monospace;font-size:19px;color:rgba(255,255,255,.18);letter-spacing:4px;animation:scroll 22s linear infinite;white-space:nowrap;will-change:transform;}
-        @keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+        /* ═════════════════════════════════════════════════════════════════
+           HDTV BROADCAST TICKER
+           Design: NHL Network / ESPN bottom ticker lower-third.
+           Three distinct zones with sharp visual hierarchy.
+        ═════════════════════════════════════════════════════════════════ */
 
-        /* ── MODERN TICKER ── */
-        .ticker {
+        /* Outer shell */
+        .hdtv-ticker {
+          position: fixed;
+          bottom: 0; left: 0; right: 0;
+          height: 48px;
+          display: flex;
+          align-items: stretch;
+          z-index: 200;
+          background: #060a16;
+          /* Triple border stack: orange main, gold hairline, deep shadow */
+          border-top: 3px solid #D95E00;
+          box-shadow:
+            0 -1px 0 rgba(255,185,70,0.6),
+            0 -2px 0 rgba(0,0,0,0.9),
+            0 -10px 40px rgba(200,75,0,0.22),
+            inset 0 1px 0 rgba(255,140,50,0.1);
+          overflow: hidden;
+          font-family: 'Helvetica Neue', 'Arial', sans-serif;
+        }
+
+        /* ── Zone 1: Brand / Network bug ── */
+        .ht-brand {
+          flex-shrink: 0;
+          width: 96px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 3px;
+          /* Deeper red on left darkening to right */
+          background: linear-gradient(150deg, #B50000 0%, #6E0000 100%);
+          border-right: 2px solid rgba(0,0,0,0.5);
+          position: relative;
+          overflow: hidden;
+        }
+        /* Top-left diagonal gloss */
+        .ht-brand::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 60%; bottom: 40%;
+          background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
+          pointer-events: none;
+        }
+        /* Subtle right-edge inner shadow for depth */
+        .ht-brand::after {
+          content: '';
+          position: absolute;
+          top: 0; right: 0; bottom: 0;
+          width: 8px;
+          background: linear-gradient(-90deg, rgba(0,0,0,0.35), transparent);
+          pointer-events: none;
+        }
+        .ht-brand-top {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 9.5px;
+          font-weight: 700;
+          color: #fff;
+          letter-spacing: 1px;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+          position: relative;
+          z-index: 1;
+          line-height: 1;
+        }
+        .ht-brand-bottom {
           display: flex;
           align-items: center;
-          background: #000; /* solid black */
-          border: 2px solid #FF8C00;
-          border-radius: 6px;
-          padding: 0.3rem 0.5rem;
-          font-family: 'Arial', 'Helvetica', sans-serif;
-          font-weight: bold;
+          gap: 5px;
+          font-size: 8.5px;
+          font-weight: 800;
+          color: rgba(255,255,255,0.55);
+          letter-spacing: 3.5px;
           text-transform: uppercase;
-          overflow: hidden;
-          white-space: nowrap;
-          color: #FFA500; /* brighter orange for readability */
-          letter-spacing: 0;
+          line-height: 1;
+          position: relative;
+          z-index: 1;
         }
-        
-        .ticker-tag {
-          background: #111;
-          color: #FFA500;
-          font-weight: bold;
-          text-transform: uppercase;
-          padding: 0.15rem 0.5rem;
-          border-radius: 4px;
-          margin-right: 0.5rem;
+        .ht-live-dot {
+          width: 5px; height: 5px;
+          border-radius: 50%;
+          background: #00FF88;
+          box-shadow: 0 0 8px #00FF88, 0 0 2px #00FF88;
           flex-shrink: 0;
+          animation: livePulse 2s ease-in-out infinite;
         }
-        
-        .ticker-track {
-          display: flex;
-          flex-wrap: nowrap;
-          overflow: hidden;
+        @keyframes livePulse {
+          0%,100% { opacity:1; box-shadow:0 0 8px #00FF88, 0 0 2px #00FF88; }
+          50%      { opacity:0.35; box-shadow:0 0 2px #00FF88; }
+        }
+
+        /* ── Zone 2: Content stage ── */
+        .ht-stage {
           flex: 1;
+          position: relative;
+          overflow: hidden;
+          /* Faint horizontal rule at top for Z-depth */
+          border-top: 1px solid rgba(255,255,255,0.04);
+          /* Very subtle column rhythm — real broadcast texture */
+          background: repeating-linear-gradient(
+            90deg,
+            transparent 0, transparent 149px,
+            rgba(255,255,255,0.018) 149px, rgba(255,255,255,0.018) 150px
+          );
         }
-        
-        .ticker-txt {
-          display: flex;
-          flex-wrap: nowrap;
-          color: #FFB733;
-          gap: 1rem;
-          animation: tickerScroll 40s linear infinite; /* slower */
+        .ht-fade-l, .ht-fade-r {
+          position: absolute; top:0; bottom:0; z-index:2; pointer-events:none;
+          width: 52px;
         }
-        
-        .ticker-item {
-          display: flex;
-          align-items: center; /* ensures separator is vertically centered */
+        .ht-fade-l { left:0;  background: linear-gradient(90deg,  #060a16 20%, transparent); }
+        .ht-fade-r { right:0; background: linear-gradient(-90deg, #060a16 20%, transparent); }
+
+        .ht-rail { width:100%; overflow:hidden; }
+        .ht-belt {
+          display: inline-flex;
+          align-items: center;
           white-space: nowrap;
-          letter-spacing: 0;
+          animation: beltRoll 50s linear infinite;
+          will-change: transform;
         }
-        
-        .ticker-sep {
-          display: flex;
-          align-items: center; /* vertically center separator */
-          margin: 0 0.5rem;
-          color: #FFA500;
-          font-weight: bold;
+        @keyframes beltRoll {
+          0%   { transform: translateX(60vw); }
+          100% { transform: translateX(-100%); }
         }
-        
-        /* Smooth endless scroll */
-        @keyframes tickerScroll {
-          0%   { transform: translateX(100%); }  /* start offscreen right */
-          100% { transform: translateX(-100%); } /* end offscreen left */
-        }
-        
-        
-        
-        
 
+        .ht-story { display: inline-flex; align-items: center; }
 
-        /* ── RESPONSIVE ────────────────────────────────────────────────── */
+        .ht-text {
+          font-size: 14.5px;
+          font-weight: 600;
+          letter-spacing: 0.07em;
+          text-transform: uppercase;
+          line-height: 1;
+          padding: 0 0.5rem;
+        }
+        /* Broadcast color rhythm: white → gold → sky → dim white, repeating */
+        .ht-c0 { color: #EEF3FF; }
+        .ht-c1 { color: #FFD166; text-shadow: 0 0 12px rgba(255,200,80,0.25); }
+        .ht-c2 { color: #87CEEB; text-shadow: 0 0 12px rgba(135,206,235,0.2); }
+        .ht-c3 { color: rgba(220,230,255,0.65); }
+
+        /* Story separator: line–diamond–line */
+        .ht-sep {
+          display: inline-flex; align-items: center; gap: 5px;
+          margin: 0 0.5rem; flex-shrink:0;
+        }
+        .ht-sep-line {
+          display: inline-block; width: 20px; height: 1px;
+          background: rgba(210,95,0,0.55); flex-shrink:0;
+        }
+        .ht-sep-gem {
+          font-size: 7px;
+          color: #D95E00;
+          text-shadow: 0 0 10px rgba(217,94,0,0.9);
+          flex-shrink: 0;
+          line-height: 1;
+        }
+
+        /* ── Zone 3: Clock ── */
+        .ht-clock {
+          flex-shrink: 0;
+          width: 80px;
+          display: flex; align-items: center; justify-content: center;
+          border-left: 1.5px solid rgba(255,255,255,0.06);
+          background: rgba(255,255,255,0.022);
+          position: relative;
+        }
+        /* Thin top accent line matching brand color */
+        .ht-clock::before {
+          content:''; position:absolute; top:0; left:0; right:0;
+          height: 2px;
+          background: linear-gradient(90deg, transparent, rgba(217,94,0,0.5), transparent);
+        }
+        .ht-clock-inner { display:flex; flex-direction:column; align-items:center; gap:2px; }
+        .ht-clock-time {
+          font-size: 15px; font-weight:700;
+          color: #ECF1FF; letter-spacing:1.5px;
+          font-variant-numeric: tabular-nums; line-height:1;
+        }
+        .ht-clock-label {
+          font-size: 8px; font-weight:700;
+          color: rgba(255,255,255,0.28); letter-spacing:3px; line-height:1;
+        }
+
+        /* ── Responsive ── */
         @media(max-width:1200px){
-          /* On narrower screens: stack A above C, hide the empty B */
           .cg{grid-template-columns:370px 370px;grid-template-areas:"a c";gap:.75rem;}
           .cg-b{display:none;}
         }
@@ -752,9 +751,11 @@ setTickerItems(tickerEvents);
           .cg{padding:.6rem .7rem;gap:.6rem;}
           .icd{flex-direction:column;gap:.3rem;padding:.48rem .68rem;}
           .icd-clock{flex-wrap:wrap;gap:.2rem;}
-          .icd-unit{min-width:35px;}
-          .icd-n{font-size:24px;}
+          .icd-unit{min-width:35px;} .icd-n{font-size:24px;}
           html,body,.panel,.media-cluster{background:rgba(0,0,12,.95)!important;}
+          .ht-brand{width:72px;} .ht-brand-top{font-size:8px;}
+          .ht-clock{width:62px;} .ht-clock-time{font-size:13px;}
+          .ht-text{font-size:13px;}
         }
       `}</style>
     </div>

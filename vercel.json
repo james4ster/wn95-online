@@ -1,4 +1,9 @@
 {
+  "functions": {
+    "api/gazette-cron.js": {
+      "maxDuration": 60
+    }
+  },
   "crons": [
     {
       "path": "/api/gazette-cron",

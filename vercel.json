@@ -1,8 +1,13 @@
 {
-    "crons": [
-      {
-        "path": "/api/gazette-cron",
-        "schedule": "0 9 * * *"
-      }
-    ]
-  }
+  "functions": {
+    "api/*.js": {
+      "runtime": "@vercel/node@3.0.0"
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/gazette-cron",
+      "schedule": "0 9 * * *"
+    }
+  ]
+}

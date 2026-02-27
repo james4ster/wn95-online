@@ -1,12 +1,11 @@
-// api/gazette-cron.js  (or api/gazette-cron/route.js if using App Router)
+// api/gazette-cron.js
 export default async function handler(req, res) {
-  // Vercel automatically sets this header on cron invocations
   if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).end('Unauthorized');
+    return res.status(401).json({ error: 'Unauthorized' });
   }
 
   const response = await fetch(
-    `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/gazette-daily-cron`,
+    `${process.env.VITE_SUPABASE_URL}/functions/v1/gazette-daily-cron`,
     {
       method: 'POST',
       headers: {
@@ -18,5 +17,5 @@ export default async function handler(req, res) {
   );
 
   const data = await response.json();
-  res.status(200).json(data);
+  return res.status(200).json(data);
 }

@@ -17,6 +17,20 @@ const getFullTeamName = (teamCode, teams) => {
   return t ? t.team : teamCode;
 };
 
+// ─── Parse team row into display name parts ───────────────────────────────────
+// e.g. { team:"Barrie Dolts", coach:"Dasri" }
+//   → { city:"Barrie", nickname:"Dolts", full:"Barrie Dolts", coach:"Dasri" }
+function parseTeamData(teamRow) {
+  const fullName = teamRow?.team || '';
+  const coach    = teamRow?.coach || '';
+  if (!fullName) return { city: '', nickname: '', full: '', coach };
+  const parts = fullName.trim().split(' ');
+  if (parts.length === 1) return { city: parts[0], nickname: parts[0], full: fullName, coach };
+  const city     = parts[0];
+  const nickname = parts.slice(1).join(' ');
+  return { city, nickname, full: fullName, coach };
+}
+
 function useLeagueCountdown(season) {
   const [tick, setTick] = useState(null);
   useEffect(() => {
@@ -209,23 +223,749 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   LEAGUE GAZETTE — Daily AI-Generated Newspaper
+═══════════════════════════════════════════════════════════════ */
+
+const GAZETTE_CACHE_KEY = 'league_gazette_v5';
+function todayStamp() { return new Date().toISOString().slice(0, 10); }
+
+const STORY_META = {
+  hot_streak:    { color: '#FF4500', tag: 'ON FIRE'         },
+  win_streak:    { color: '#00C853', tag: 'WIN STREAK'      },
+  cold_streak:   { color: '#448AFF', tag: 'COLD SPELL'      },
+  loss_streak:   { color: '#448AFF', tag: 'LOSING SKID'     },
+  big_win:       { color: '#FFD600', tag: 'BIG WIN'         },
+  elimination:   { color: '#D50000', tag: 'ELIMINATED'      },
+  playoff_push:  { color: '#00BFA5', tag: 'PLAYOFF PUSH'    },
+  milestone:     { color: '#FFD600', tag: 'MILESTONE'       },
+  comeback:      { color: '#FF6D00', tag: 'COMEBACK'        },
+  idle:          { color: '#78909C', tag: 'QUIET NIGHT'     },
+  rivalry:       { color: '#E040FB', tag: 'RIVALRY WATCH'   },
+};
+const getMeta = t => STORY_META[t] || STORY_META.hot_streak;
+
+/* ─────────────────────────────────────────────────────────────
+   Fetch from Supabase edge fn
+   Now receives: teamNameMap (abr→{city,nickname,full}) + topScorers
+───────────────────────────────────────────────────────────── */
+async function fetchGazetteEdition({
+  leagueLabel, recentForm, winStreaks, lossStreaks,
+  currentSeason, teamNameMap, topScorers
+}) {
+  const today = todayStamp();
+
+  // ── 1. Check DB cache first ───────────────────────────────
+  const { data: cached } = await supabase
+    .from('gazette_cache')
+    .select('data, date')
+    .eq('league', leagueLabel)
+    .single();
+
+  if (cached?.date === today && cached?.data) {
+    return cached.data; // ⚡ instant, zero Cohere call
+  }
+
+  // ── 2. Fallback: generate live (cron missed or first deploy) ──
+  // ... your existing full fetchGazetteEdition logic here ...
+  // At the end, also write back to DB so next user gets it cached:
+  const data = await generateLive({ leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason, teamNameMap, topScorers });
+
+  await supabase.from('gazette_cache').upsert({
+    league: leagueLabel,
+    date:   today,
+    data,
+  });
+
+  return data;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Skeleton loader
+───────────────────────────────────────────────────────────── */
+function GazetteSkeleton() {
+  return (
+    <div className="si-skel">
+      <div className="si-skel-cover">
+        <div className="si-skel-b" style={{height:12,width:'30%',marginBottom:8}}/>
+        <div className="si-skel-b" style={{height:22,width:'68%',marginBottom:6}}/>
+        <div className="si-skel-b" style={{height:14,width:'55%'}}/>
+      </div>
+      <div className="si-skel-grid">
+        <div className="si-skel-col">
+          {[1,2,3].map(i=>(
+            <div key={i} style={{marginBottom:16}}>
+              <div className="si-skel-b" style={{height:8,width:'40%',marginBottom:6}}/>
+              <div className="si-skel-b" style={{height:14,width:'92%',marginBottom:4}}/>
+              <div className="si-skel-b" style={{height:11,width:'72%'}}/>
+            </div>
+          ))}
+        </div>
+        <div className="si-skel-b si-skel-hero"/>
+        <div className="si-skel-col">
+          <div className="si-skel-b" style={{height:72,borderRadius:6,marginBottom:14}}/>
+          {[88,75,60,50].map((w,i)=>(
+            <div key={i} className="si-skel-b" style={{height:10,width:`${w}%`,marginBottom:7}}/>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Main LeagueGazette component
+   New props: teamNameMap, topScorers
+───────────────────────────────────────────────────────────── */
+function LeagueGazette({
+  leagueLabel, recentForm, winStreaks, lossStreaks,
+  currentSeason, loading: dataLoading,
+  teamNameMap, topScorers
+}) {
+  const [edition,    setEdition]    = useState(null);
+  const [loading,    setLoading]    = useState(false);
+  const [error,      setError]      = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (force = false) => {
+    const today = todayStamp();
+    if (!force) {
+      try {
+        const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
+        if (c.date === today && c.league === leagueLabel && c.data) {
+          setEdition(c.data); return;
+        }
+      } catch {}
+    }
+    setLoading(true); setError(null);
+    try {
+      const data = await fetchGazetteEdition({
+        leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
+        teamNameMap, topScorers
+      });
+      localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ date: today, league: leagueLabel, data }));
+      setEdition(data);
+    } catch(e) {
+      console.error('[Gazette]', e);
+      setError(true);
+    } finally {
+      setLoading(false); setRefreshing(false);
+    }
+  }, [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason, teamNameMap, topScorers]);
+
+  useEffect(() => {
+    if (!dataLoading && recentForm.hot.length > 0) load();
+  }, [dataLoading, leagueLabel]);
+
+  const handleRefresh = () => { setRefreshing(true); load(true); };
+
+  const team    = edition?.featured_team || '';
+  const meta    = getMeta(edition?.story_type);
+  const lgKey   = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
+  const dateStr = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+
+  const featWin  = winStreaks.find(s => s.team === team);
+  const featLoss = lossStreaks.find(s => s.team === team);
+  const featForm = recentForm.hot.find(t => t.team === team)
+                || recentForm.cold.find(t => t.team === team);
+
+  // Full name for the hero footer (show full name if available, fallback to code)
+  const featFullName = teamNameMap[team]?.full || team;
+
+  return (
+    <div className="si-wrap" style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}>
+
+      {/* ══ MASTHEAD ══════════════════════════════════════════ */}
+      <header className="si-mast">
+        <div className="si-mast-left">
+          <img src={`/assets/leagueLogos/${lgKey}.png`} alt={leagueLabel}
+            className="si-league-logo"
+            onError={e=>{ e.currentTarget.style.display='none'; }}/>
+          <div>
+            <div className="si-mast-name">{leagueLabel}</div>
+            <div className="si-mast-sub">MAGAZINE</div>
+          </div>
+        </div>
+        <div className="si-mast-mid">
+          <hr className="si-hr"/>
+          <span className="si-mast-date">{dateStr}</span>
+          <hr className="si-hr"/>
+        </div>
+        <div className="si-mast-right">
+          {edition?.edition && <span className="si-issue">{edition.edition}</span>}
+          <button className="si-refresh" onClick={handleRefresh} disabled={loading || refreshing}>
+            <span style={{ display:'inline-block', animation: refreshing ? 'siSpin .7s linear infinite' : 'none' }}>↻</span>
+          </button>
+        </div>
+      </header>
+
+      <div className="si-accent-rule"/>
+
+      {/* ══ BODY ══════════════════════════════════════════════ */}
+      {(loading && !edition)
+        ? <GazetteSkeleton />
+        : error
+        ? (
+          <div className="si-error">
+            <span>📡</span>
+            <div>
+              <div className="si-err-title">PRESS ROOM DOWN</div>
+              <div className="si-err-body">Edge function unavailable.</div>
+            </div>
+            <button className="si-refresh" onClick={handleRefresh}>↻ RETRY</button>
+          </div>
+        )
+        : edition
+        ? (
+          <div className={refreshing ? 'si-content si-fading' : 'si-content si-fadein'}>
+
+            {/* ── COVER STRIP ─────────────────────────────── */}
+            <div className="si-cover-strip">
+              <span className="si-story-pill" style={{ background: meta.color }}>{meta.tag}</span>
+              <h1 className="si-cover-line">{edition.cover_line}</h1>
+              <p className="si-cover-sub">{edition.cover_sub}</p>
+            </div>
+
+            {/* ── THREE COLUMN ────────────────────────────── */}
+            <div className="si-cols">
+
+              {/* LEFT — story blurbs */}
+              <aside className="si-col-left">
+                {[edition.blurb_1, edition.blurb_2, edition.blurb_3].filter(Boolean).map((b,i) => (
+                  <div key={i} className="si-blurb">
+                    <div className="si-blurb-bar"/>
+                    <div className="si-blurb-tag">{b.tag}</div>
+                    <div className="si-blurb-hed">{b.headline}</div>
+                    <div className="si-blurb-dek">{b.detail}</div>
+                  </div>
+                ))}
+              </aside>
+
+              {/* CENTER — team hero */}
+              <div className="si-col-center">
+                <div className="si-hero">
+                  <div className="si-hero-bg">
+                    <img
+                      src={`/assets/banners/${team}.png`}
+                      alt="" className="si-hero-banner"
+                      onError={e=>{ e.currentTarget.style.display='none'; }}
+                    />
+                    <div className="si-hero-vignette"/>
+                  </div>
+                  <div className="si-hero-body">
+                    <img
+                      src={`/assets/teamLogos/${team}.png`}
+                      alt={team} className="si-hero-logo"
+                      onError={e=>{ e.currentTarget.style.opacity='0'; }}
+                    />
+                  </div>
+                  <div className="si-hero-foot">
+                    {/* Show full team name in hero footer */}
+                    <div className="si-hero-name-wrap">
+                      <span className="si-hero-team">{featFullName}</span>
+                      <span className="si-hero-code">{team}</span>
+                    </div>
+                    <div className="si-hero-badges">
+                      {featWin && (
+                        <span className="si-badge si-badge-w">W{featWin.count}</span>
+                      )}
+                      {featLoss && (
+                        <span className="si-badge si-badge-l">L{featLoss.count}</span>
+                      )}
+                      {featForm && (
+                        <span className="si-badge si-badge-form">
+                          {featForm.w}–{featForm.l} <span className="si-badge-l10">L10</span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT — quote + live tables */}
+              <aside className="si-col-right">
+
+                <div className="si-quote">
+                  <div className="si-quote-open">"</div>
+                  <p className="si-quote-text">{edition.pull_quote}</p>
+                  <div className="si-quote-attr">{edition.quote_attr}</div>
+                </div>
+
+                {/* Recent scorers callout — if we have any */}
+                {topScorers.length > 0 && (
+                  <div className="si-table">
+                    <div className="si-table-hd">
+                      <span className="si-table-dot" style={{background:'#FFD600'}}/>
+                      LAST NIGHT
+                    </div>
+                    {topScorers.slice(0,5).map((s,i) => (
+                      <div key={i} className="si-table-row">
+                        <img src={`/assets/teamLogos/${s.g_team}.png`} alt=""
+                          className="si-table-logo"
+                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
+                        <span className="si-table-team si-table-player">{s.goal_player_name}</span>
+                        <div className="si-scorer-right">
+                          {s.fourGoalGame && <span className="si-achieve si-achieve-4g" title="4-Goal Game">🔥</span>}
+                          {!s.fourGoalGame && s.hatTrick && <span className="si-achieve si-achieve-hat" title="Hat Trick">🎩</span>}
+                          {!s.fourGoalGame && !s.hatTrick && s.bigNight && <span className="si-achieve si-achieve-big" title="Big Night">⭐</span>}
+                          <span className="si-table-val si-val-scorer">
+                            {s.goals}G {s.assists}A
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* On fire */}
+                {winStreaks.length > 0 && (
+                  <div className="si-table">
+                    <div className="si-table-hd">
+                      <span className="si-table-dot" style={{background:'#FF4500'}}/>
+                      ON FIRE
+                    </div>
+                    {winStreaks.slice(0,4).map(s => (
+                      <div key={s.team} className="si-table-row">
+                        <img src={`/assets/teamLogos/${s.team}.png`} alt=""
+                          className="si-table-logo"
+                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
+                        <span className="si-table-team">{teamNameMap[s.team]?.city || s.team}</span>
+                        <span className="si-table-val si-val-w">W{s.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Ice cold */}
+                {lossStreaks.length > 0 && (
+                  <div className="si-table">
+                    <div className="si-table-hd">
+                      <span className="si-table-dot" style={{background:'#448AFF'}}/>
+                      ICE COLD
+                    </div>
+                    {lossStreaks.slice(0,4).map(s => (
+                      <div key={s.team} className="si-table-row">
+                        <img src={`/assets/teamLogos/${s.team}.png`} alt=""
+                          className="si-table-logo"
+                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
+                        <span className="si-table-team">{teamNameMap[s.team]?.city || s.team}</span>
+                        <span className="si-table-val si-val-l">L{s.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              </aside>
+            </div>
+
+            {/* ── BOTTOM LINE ─────────────────────────────── */}
+            <div className="si-footer">
+              <hr className="si-hr si-hr-short"/>
+              <span className="si-footer-label">BOTTOM LINE</span>
+              <span className="si-footer-text">{edition.bottom_line}</span>
+              <hr className="si-hr si-hr-short"/>
+            </div>
+
+          </div>
+        )
+        : null
+      }
+
+      <style>{`
+        .si-wrap {
+          --si-bg:      #09090e;
+          --si-bg-card: #0d0d14;
+          --si-border:  rgba(255,255,255,.07);
+          --si-text:    rgba(225,220,210,.85);
+          --si-muted:   rgba(180,175,160,.42);
+          --si-serif:   'Georgia', 'Times New Roman', serif;
+          font-family: 'VT323', monospace;
+          background: var(--si-bg);
+          border: 1px solid var(--si-border);
+          border-radius: 10px;
+          overflow: hidden;
+          position: relative;
+        }
+        .si-wrap::before {
+          content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='250' height='250' filter='url(%23g)' opacity='0.025'/%3E%3C/svg%3E");
+          opacity:.7;
+        }
+        .si-wrap > * { position:relative; z-index:1; }
+
+        .si-mast {
+          display: flex; align-items: center; gap: .8rem;
+          padding: .6rem .95rem .5rem;
+          border-bottom: 1px solid var(--si-border);
+          background: var(--si-bg);
+        }
+        .si-mast-left { display:flex; align-items:center; gap:.4rem; flex-shrink:0; }
+        .si-league-logo {
+          width:28px; height:28px; object-fit:contain;
+          filter:drop-shadow(0 0 5px rgba(255,255,255,.15));
+        }
+        .si-mast-name {
+          font-family:'Press Start 2P',monospace; font-size:11px;
+          color:#fff; letter-spacing:2px; line-height:1;
+        }
+        .si-mast-sub {
+          font-family:'Press Start 2P',monospace; font-size:6px;
+          color:rgba(255,255,255,.75); letter-spacing:4px; line-height:1; margin-top:2px;
+        }
+        .si-mast-mid {
+          flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:0;
+        }
+        .si-hr { width:100%; border:none; border-top:1px solid var(--si-border); margin:0; }
+        .si-hr-short { flex:1; }
+        .si-mast-date {
+          font-family:'VT323',monospace; font-size:14px;
+          color:rgba(255,255,255,.82); letter-spacing:1px; white-space:nowrap;
+        }
+        .si-mast-right { display:flex; align-items:center; gap:.5rem; flex-shrink:0; }
+        .si-issue {
+          font-family:'VT323',monospace; font-size:13px;
+          color:rgba(255,255,255,.72); letter-spacing:.5px; white-space:nowrap;
+        }
+        .si-refresh {
+          font-family:'Press Start 2P',monospace; font-size:9px;
+          color:rgba(255,255,255,.3); background:rgba(255,255,255,.035);
+          border:1px solid rgba(255,255,255,.07); border-radius:4px;
+          padding:.2rem .45rem; cursor:pointer; transition:all .15s; line-height:1;
+          white-space:nowrap;
+        }
+        .si-refresh:hover:not(:disabled) {
+          color:rgba(255,255,255,.65); border-color:rgba(255,255,255,.18);
+          background:rgba(255,255,255,.06);
+        }
+        .si-refresh:disabled { opacity:.3; cursor:not-allowed; }
+        @keyframes siSpin { to{transform:rotate(360deg);} }
+
+        .si-accent-rule {
+          height:3px;
+          background:linear-gradient(90deg, transparent 0%, var(--acc) 20%, color-mix(in srgb,var(--acc) 60%,#fff) 50%, var(--acc) 80%, transparent 100%);
+          box-shadow:0 0 14px color-mix(in srgb,var(--acc) 45%,transparent);
+        }
+
+        .si-cover-strip {
+          padding: .65rem .95rem .5rem;
+          border-bottom: 1px solid var(--si-border);
+          display:flex; flex-direction:column; gap:.28rem;
+        }
+        .si-story-pill {
+          display:inline-block;
+          font-family:'Press Start 2P',monospace; font-size:7px;
+          color:#fff; letter-spacing:2.5px; padding:.18rem .5rem;
+          border-radius:2px; line-height:1; align-self:flex-start;
+        }
+        .si-cover-line {
+          font-family:'Press Start 2P',monospace;
+          font-size:clamp(12px,1.45vw,17px);
+          color:#fff; letter-spacing:1.5px; margin:0;
+          line-height:1.55; text-transform:uppercase;
+        }
+        .si-cover-sub {
+          font-family:'VT323',monospace; font-size:18px;
+          color:var(--si-muted); margin:0; line-height:1.35;
+          font-style:italic; letter-spacing:.4px; max-width:66ch;
+        }
+
+        .si-cols {
+          display:grid;
+          grid-template-columns: 1fr 1.5fr 1fr;
+          min-height:270px;
+        }
+
+        .si-col-left {
+          display:flex; flex-direction:column; justify-content:space-evenly;
+          padding:.7rem .75rem .7rem .9rem;
+          border-right:1px solid var(--si-border);
+          gap:.05rem;
+        }
+        .si-blurb {
+          padding:.4rem 0 .5rem;
+          border-bottom:1px solid rgba(255,255,255,.04);
+        }
+        .si-blurb:last-child { border-bottom:none; }
+        .si-blurb-bar {
+          width:18px; height:2px;
+          background:var(--acc);
+          box-shadow:0 0 6px color-mix(in srgb,var(--acc) 55%,transparent);
+          border-radius:1px; margin-bottom:.26rem;
+        }
+        .si-blurb-tag {
+          font-family:'Press Start 2P',monospace; font-size:6.5px;
+          color:var(--acc); letter-spacing:2px; margin-bottom:.2rem;
+          text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
+        }
+        .si-blurb-hed {
+          font-family:'VT323',monospace; font-size:17px;
+          color:rgba(228,222,205,.82); line-height:1.3; margin-bottom:.1rem;
+          letter-spacing:.3px;
+        }
+        .si-blurb-dek {
+          font-family:'VT323',monospace; font-size:14px;
+          color:var(--si-muted); line-height:1.3;
+        }
+
+        .si-col-center { display:flex; align-items:stretch; }
+        .si-hero {
+          flex:1; position:relative; overflow:hidden; min-height:270px;
+          display:flex; flex-direction:column;
+        }
+        .si-hero-bg {
+          position:absolute; inset:0;
+          background:linear-gradient(150deg,
+            color-mix(in srgb,var(--acc) 20%,#060610) 0%,
+            #060610 60%
+          );
+        }
+        .si-hero-banner {
+          position:absolute; inset:0; width:100%; height:100%;
+          object-fit:cover; opacity:.13;
+          filter:saturate(1.8) blur(3px);
+        }
+        .si-hero-vignette {
+          position:absolute; inset:0;
+          background:
+            radial-gradient(ellipse 75% 55% at 50% 35%,
+              color-mix(in srgb,var(--acc) 14%,transparent) 0%,
+              transparent 70%
+            ),
+            linear-gradient(180deg, transparent 35%, rgba(4,4,10,.96) 100%);
+        }
+        .si-hero-body {
+          position:relative; z-index:2;
+          flex:1; display:flex; align-items:center; justify-content:center;
+          padding:1.1rem .8rem .4rem;
+        }
+        .si-hero-logo {
+          width:78%; max-width:145px; height:auto; object-fit:contain;
+          filter:
+            drop-shadow(0 0 22px color-mix(in srgb,var(--acc) 55%,transparent))
+            drop-shadow(0 0 55px color-mix(in srgb,var(--acc) 22%,transparent))
+            drop-shadow(0 5px 18px rgba(0,0,0,.65));
+          animation:siFloat 5s ease-in-out infinite;
+        }
+        @keyframes siFloat {
+          0%,100%{transform:translateY(0);}
+          50%{transform:translateY(-5px);}
+        }
+        .si-hero-foot {
+          position:relative; z-index:2;
+          display:flex; align-items:center; justify-content:space-between;
+          padding:.35rem .75rem .4rem;
+          background:linear-gradient(0deg,rgba(4,4,10,.92) 0%,transparent 100%);
+        }
+        .si-hero-name-wrap {
+          display:flex; flex-direction:column; gap:2px;
+        }
+        .si-hero-team {
+          font-family:'Press Start 2P',monospace; font-size:7.5px;
+          color:rgba(255,255,255,.65); letter-spacing:1px; line-height:1;
+        }
+        .si-hero-code {
+          font-family:'VT323',monospace; font-size:12px;
+          color:rgba(255,255,255,.25); letter-spacing:2px; line-height:1;
+        }
+        .si-hero-badges { display:flex; align-items:center; gap:.28rem; }
+        .si-badge {
+          font-family:'Press Start 2P',monospace; font-size:7.5px;
+          padding:.15rem .32rem; border-radius:3px; line-height:1;
+        }
+        .si-badge-w {
+          background:rgba(0,200,83,.12); color:#00C853;
+          border:1px solid rgba(0,200,83,.28);
+        }
+        .si-badge-l {
+          background:rgba(68,138,255,.12); color:#448AFF;
+          border:1px solid rgba(68,138,255,.28);
+        }
+        .si-badge-form {
+          background:rgba(255,255,255,.05); color:rgba(255,255,255,.38);
+          border:1px solid rgba(255,255,255,.09);
+          font-size:6.5px; letter-spacing:.5px;
+        }
+        .si-badge-l10 { opacity:.55; margin-left:2px; }
+
+        .si-col-right {
+          display:flex; flex-direction:column; justify-content:flex-start;
+          gap:.6rem; padding:.7rem .9rem .7rem .75rem;
+          border-left:1px solid var(--si-border);
+        }
+        .si-quote {
+          position:relative;
+          padding:.55rem .65rem .5rem .75rem;
+          background:rgba(255,255,255,.022);
+          border-left:2.5px solid var(--acc);
+          border-radius:0 5px 5px 0;
+        }
+        .si-quote-open {
+          position:absolute; top:-10px; left:7px;
+          font-family:var(--si-serif); font-size:52px;
+          color:color-mix(in srgb,var(--acc) 22%,transparent);
+          line-height:1; pointer-events:none;
+        }
+        .si-quote-text {
+          font-family:'VT323',monospace; font-size:16px;
+          color:rgba(230,222,205,.68); font-style:italic;
+          margin:0 0 .22rem; line-height:1.4; letter-spacing:.3px;
+        }
+        .si-quote-attr {
+          font-family:'Press Start 2P',monospace; font-size:6px;
+          color:var(--si-muted); letter-spacing:.8px; line-height:1.5;
+        }
+        .si-table { display:flex; flex-direction:column; gap:.15rem; }
+        .si-table-hd {
+          display:flex; align-items:center; gap:.28rem;
+          font-family:'Press Start 2P',monospace; font-size:6.5px;
+          color:rgba(255,255,255,.22); letter-spacing:2px;
+          margin-bottom:.05rem; text-transform:uppercase;
+        }
+        .si-table-dot {
+          width:5px; height:5px; border-radius:50%; flex-shrink:0;
+          box-shadow:0 0 4px currentColor;
+        }
+        .si-table-row {
+          display:flex; align-items:center; gap:.28rem;
+          padding:.16rem .22rem; border-radius:4px; transition:background .1s;
+        }
+        .si-table-row:hover { background:rgba(255,255,255,.03); }
+        .si-table-logo {
+          width:17px; height:17px; object-fit:contain; flex-shrink:0;
+          filter:drop-shadow(0 0 2px rgba(255,255,255,.1));
+        }
+        .si-table-team {
+          flex:1; font-family:'Press Start 2P',monospace; font-size:7px;
+          color:rgba(210,205,190,.45); letter-spacing:.5px;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        /* Player names in VT323 for readability */
+        .si-table-player {
+          font-family:'VT323',monospace !important; font-size:14px !important;
+          color:rgba(220,215,200,.6) !important; letter-spacing:.3px !important;
+        }
+        .si-table-val {
+          font-family:'Press Start 2P',monospace; font-size:7.5px; flex-shrink:0;
+        }
+        .si-val-w { color:#00C853; text-shadow:0 0 5px rgba(0,200,83,.4); }
+        .si-val-l { color:#448AFF; text-shadow:0 0 5px rgba(68,138,255,.35); }
+        .si-val-scorer { color:#FFD600; text-shadow:0 0 5px rgba(255,214,0,.35); font-size:6.5px; }
+        .si-scorer-right { display:flex; align-items:center; gap:.2rem; flex-shrink:0; }
+        .si-achieve { font-size:12px; line-height:1; flex-shrink:0; }
+        .si-achieve-4g  { filter:drop-shadow(0 0 4px rgba(255,100,0,.8)); animation:achPulse 1.8s ease-in-out infinite; }
+        .si-achieve-hat { filter:drop-shadow(0 0 4px rgba(255,215,0,.6)); }
+        .si-achieve-big { filter:drop-shadow(0 0 3px rgba(255,215,0,.4)); }
+        @keyframes achPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+        .si-footer {
+          display:flex; align-items:center; gap:.55rem;
+          padding:.38rem .9rem .42rem;
+          border-top:1px solid var(--si-border);
+          background:rgba(255,255,255,.012);
+        }
+        .si-footer-label {
+          font-family:'Press Start 2P',monospace; font-size:6.5px;
+          color:var(--acc); letter-spacing:2px; flex-shrink:0;
+          text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
+        }
+        .si-footer-text {
+          font-family:'VT323',monospace; font-size:16px;
+          color:var(--si-muted); letter-spacing:.4px; font-style:italic;
+          flex-shrink:0;
+        }
+
+        .si-skel { padding:.7rem .9rem .8rem; }
+        .si-skel-cover {
+          display:flex; flex-direction:column; align-items:center;
+          padding-bottom:.65rem; margin-bottom:.6rem;
+          border-bottom:1px solid rgba(255,255,255,.05);
+        }
+        .si-skel-grid {
+          display:grid; grid-template-columns:1fr 1.5fr 1fr;
+          gap:.55rem; min-height:210px;
+        }
+        .si-skel-col { display:flex; flex-direction:column; justify-content:center; }
+        .si-skel-hero { border-radius:7px; height:100%; min-height:200px; }
+        .si-skel-b {
+          background:linear-gradient(90deg,
+            rgba(255,255,255,.025),
+            rgba(255,255,255,.055),
+            rgba(255,255,255,.025)
+          );
+          background-size:200% 100%;
+          animation:shimmer 1.9s infinite;
+          border-radius:3px;
+        }
+
+        .si-error {
+          display:flex; align-items:center; gap:.7rem;
+          padding:1.2rem 1rem; font-size:18px;
+        }
+        .si-err-title {
+          font-family:'Press Start 2P',monospace; font-size:8px;
+          color:rgba(255,255,255,.28); letter-spacing:1px; margin-bottom:.2rem;
+        }
+        .si-err-body {
+          font-family:'VT323',monospace; font-size:14px; color:var(--si-muted);
+        }
+
+        .si-fadein { animation:siFadeIn .35s ease; }
+        .si-fading { opacity:.4; transition:opacity .25s; }
+        @keyframes siFadeIn {
+          from{opacity:0;transform:translateY(3px);}
+          to{opacity:1;transform:translateY(0);}
+        }
+
+        @media(max-width:920px){
+          .si-cols { grid-template-columns:1fr 1fr; grid-template-rows:auto auto; }
+          .si-col-center { grid-column:1/3; grid-row:1; }
+          .si-col-left   { grid-column:1; grid-row:2; border-right:none; border-top:1px solid var(--si-border); }
+          .si-col-right  { grid-column:2; grid-row:2; border-top:1px solid var(--si-border); }
+          .si-hero { min-height:230px; }
+          .si-skel-grid { grid-template-columns:1fr 1fr; }
+          .si-skel-hero { grid-column:1/3; min-height:160px; }
+        }
+        @media(max-width:560px){
+          .si-cols { grid-template-columns:1fr; }
+          .si-col-center,.si-col-left,.si-col-right { grid-column:1; grid-row:auto; }
+          .si-col-left,.si-col-right { border-top:1px solid var(--si-border); border-left:none; }
+          .si-hero { min-height:200px; }
+          .si-cover-line { font-size:11px; }
+          .si-skel-grid { grid-template-columns:1fr; }
+          .si-skel-hero { min-height:130px; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME PAGE
+═══════════════════════════════════════════════════════════════ */
 export default function Home() {
   const { selectedLeague } = useLeague();
   const cfg = leagueCfg(selectedLeague);
 
-  const [currentSeason,setCurrentSeason]=useState(null);
-  const [winStreaks,setWinStreaks]=useState([]);
-  const [lossStreaks,setLossStreaks]=useState([]);
-  const [recentForm,setRecentForm]=useState({hot:[],cold:[]});
-  const [discordEvents,setDiscordEvents]=useState([]);
-  const [recentTrades,setRecentTrades]=useState([]);
-  const [loading,setLoading]=useState(true);
-  const [evtLoading,setEvtLoading]=useState(true);
-  const [tickerItems,setTickerItems]=useState([]);
-  const [teams,setTeams]=useState([]);
+  const [currentSeason,  setCurrentSeason]  = useState(null);
+  const [winStreaks,      setWinStreaks]      = useState([]);
+  const [lossStreaks,     setLossStreaks]     = useState([]);
+  const [recentForm,      setRecentForm]      = useState({hot:[],cold:[]});
+  const [discordEvents,   setDiscordEvents]   = useState([]);
+  const [recentTrades,    setRecentTrades]    = useState([]);
+  const [loading,         setLoading]         = useState(true);
+  const [evtLoading,      setEvtLoading]      = useState(true);
+  const [tickerItems,     setTickerItems]     = useState([]);
+  const [teams,           setTeams]           = useState([]);
+
+  // ── NEW: team name map (abr → { city, nickname, full }) ──────────────────
+  const [teamNameMap,     setTeamNameMap]     = useState({});
+
+  // ── NEW: top scorers from most recent game(s) in this season ─────────────
+  const [topScorers,      setTopScorers]      = useState([]);
 
   const tick = useLeagueCountdown(currentSeason);
 
+  // Fetch all teams once for the ticker helper (code → team name)
   useEffect(()=>{
     supabase.from('teams').select('code,team').then(({data})=>{ if(data) setTeams(data); });
   },[]);
@@ -233,19 +973,40 @@ export default function Home() {
   const loadLeagueData = useCallback(async(prefix)=>{
     if(!prefix) return;
     setLoading(true);
-    setCurrentSeason(null); setWinStreaks([]); setLossStreaks([]); setRecentForm({hot:[],cold:[]});
+    setCurrentSeason(null);
+    setWinStreaks([]);
+    setLossStreaks([]);
+    setRecentForm({hot:[],cold:[]});
+    setTeamNameMap({});
+    setTopScorers([]);
 
+    // ── Seasons ──────────────────────────────────────────────────────────
     const {data:seasons}=await supabase.from('seasons').select('*').order('year',{ascending:false}).limit(20);
     const ps=(seasons||[]).filter(s=>lgPrefix(s.lg)===prefix);
     if(!ps.length){setLoading(false);return;}
     const latest=ps.reduce((b,s)=>new Date(s.end_date)>new Date(b.end_date)?s:b);
     setCurrentSeason(latest);
 
+    // ── Teams for this season → build name map (includes coach) ──────────
+    // teams table uses `abr` as the team code that matches games.home/away
+    const {data:seasonTeams} = await supabase
+      .from('teams')
+      .select('abr,team,coach')
+      .eq('lg', latest.lg);
+
+    const nameMap = {};
+    (seasonTeams || []).forEach(t => {
+      nameMap[t.abr] = parseTeamData(t);
+    });
+    setTeamNameMap(nameMap);
+
+    // ── Games ─────────────────────────────────────────────────────────────
     const {data:allGames}=await supabase.from('games')
-      .select('lg,legacy_game_id,home,away,result_home,result_away')
+      .select('id,lg,legacy_game_id,home,away,result_home,result_away')
       .eq('lg',latest.lg).order('legacy_game_id',{ascending:false});
     const games=allGames||[];
 
+    // ── Win/loss streaks ──────────────────────────────────────────────────
     const teamHist={};
     games.forEach(g=>{
       const hW=['W','OTW'].includes((g.result_home||'').toUpperCase());
@@ -262,9 +1023,12 @@ export default function Home() {
       for(const h of hist){if(h.win===first)count++;else break;}
       if(first) wins.push({team,count}); else losses.push({team,count});
     });
-    wins.sort((a,b)=>b.count-a.count); losses.sort((a,b)=>b.count-a.count);
-    setWinStreaks(wins.slice(0,5)); setLossStreaks(losses.slice(0,5));
+    wins.sort((a,b)=>b.count-a.count);
+    losses.sort((a,b)=>b.count-a.count);
+    setWinStreaks(wins.slice(0,5));
+    setLossStreaks(losses.slice(0,5));
 
+    // ── Recent form (last 10) ─────────────────────────────────────────────
     const last10={};
     games.forEach(g=>{
       const hW=['W','OTW'].includes((g.result_home||'').toUpperCase());
@@ -282,7 +1046,97 @@ export default function Home() {
     setRecentForm({hot:form.slice(0,5),cold:[...form].sort((a,b)=>a.pct-b.pct).slice(0,5)});
     setLoading(false);
 
-    // Ticker items
+    // ── Top scorers from the most recent legacy_game_id ───────────────────
+    // Find the highest legacy_game_id (most recent batch of games)
+    if(games.length > 0) {
+      const maxGameId = games[0].legacy_game_id; // already sorted desc
+      // Get all game IDs that share this legacy_game_id
+      const recentGameIds = games
+        .filter(g => g.legacy_game_id === maxGameId)
+        .map(g => g.id);
+
+      if(recentGameIds.length > 0) {
+        const {data: scoringData} = await supabase
+          .from('game_raw_scoring')
+          .select('game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team')
+          .in('game_id', recentGameIds);
+
+        if(scoringData && scoringData.length > 0) {
+          // Track per-player, per-game stats to detect hat tricks & big nights
+          // Structure: { playerName: { g_team, totalGoals, totalAssists, gameBreakdown: {gameId: {g,a}} } }
+          const playerMap = {};
+
+          const ensurePlayer = (name, team, gameId) => {
+            if(!name) return;
+            if(!playerMap[name]) playerMap[name] = { goal_player_name: name, g_team: team, totalGoals: 0, totalAssists: 0, gameBreakdown: {} };
+            if(!playerMap[name].gameBreakdown[gameId]) playerMap[name].gameBreakdown[gameId] = { g: 0, a: 0 };
+          };
+
+          scoringData.forEach(play => {
+            // Goals
+            if(play.goal_player_name) {
+              ensurePlayer(play.goal_player_name, play.g_team, play.game_id);
+              playerMap[play.goal_player_name].totalGoals++;
+              playerMap[play.goal_player_name].gameBreakdown[play.game_id].g++;
+              // Keep the scorer's own team (not the assister's team)
+              playerMap[play.goal_player_name].g_team = play.g_team;
+            }
+            // Primary assist — team attributed to g_team of the goal (same game)
+            if(play.assist_primary_name) {
+              ensurePlayer(play.assist_primary_name, play.g_team, play.game_id);
+              playerMap[play.assist_primary_name].totalAssists++;
+              playerMap[play.assist_primary_name].gameBreakdown[play.game_id].a++;
+            }
+            // Secondary assist
+            if(play.assist_secondary_name) {
+              ensurePlayer(play.assist_secondary_name, play.g_team, play.game_id);
+              playerMap[play.assist_secondary_name].totalAssists++;
+              playerMap[play.assist_secondary_name].gameBreakdown[play.game_id].a++;
+            }
+          });
+
+          // Build final scorer list with achievement flags
+          const scorerList = Object.values(playerMap)
+            .filter(p => p.totalGoals > 0 || p.totalAssists > 0)
+            .map(p => {
+              const points = p.totalGoals + p.totalAssists;
+              // Check for hat trick (3+ goals in a single game)
+              const hatTrick = Object.values(p.gameBreakdown).some(gb => gb.g >= 3);
+              // Check for big night (5+ points across all games in this batch)
+              const bigNight = points >= 5;
+              // Check for 4-goal game
+              const fourGoalGame = Object.values(p.gameBreakdown).some(gb => gb.g >= 4);
+              // Best single-game line (most points)
+              const bestGame = Object.values(p.gameBreakdown).reduce((best, gb) => {
+                const pts = gb.g + gb.a;
+                return pts > (best.g + best.a) ? gb : best;
+              }, { g:0, a:0 });
+
+              return {
+                goal_player_name: p.goal_player_name,
+                g_team: p.g_team,
+                goals: p.totalGoals,
+                assists: p.totalAssists,
+                points,
+                hatTrick,
+                fourGoalGame,
+                bigNight,
+                bestGame, // { g, a } in single game
+              };
+            })
+            .sort((a,b) => {
+              // Prioritize hat tricks and big nights to the top
+              const aScore = (a.fourGoalGame ? 100 : 0) + (a.hatTrick ? 50 : 0) + (a.bigNight ? 20 : 0) + a.points;
+              const bScore = (b.fourGoalGame ? 100 : 0) + (b.hatTrick ? 50 : 0) + (b.bigNight ? 20 : 0) + b.points;
+              return bScore - aScore;
+            });
+
+          setTopScorers(scorerList.slice(0,8));
+        }
+      }
+    }
+
+    // ── Ticker items ──────────────────────────────────────────────────────
     const lastGames=games.slice(0,15).reverse();
     const tickerEvents=[]; const teamStk={}; const evSet=new Set();
     lastGames.forEach(g=>{
@@ -308,6 +1162,7 @@ export default function Home() {
       if(!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
     });
     setTickerItems(tickerEvents);
+
   },[]);
 
   useEffect(()=>{loadLeagueData(selectedLeague);},[selectedLeague,loadLeagueData]);
@@ -334,6 +1189,8 @@ export default function Home() {
       <div className="scanlines" aria-hidden />
 
       <div className="cg">
+
+        {/* ── LEFT COLUMN ── */}
         <div className="cg-a">
           <InlineCountdown cfg={cfg} tick={tick}/>
           <Spotlight recentForm={recentForm} winStreaks={winStreaks} lossStreaks={lossStreaks} loading={loading}/>
@@ -356,8 +1213,21 @@ export default function Home() {
           </section>
         </div>
 
-        <div className="cg-b"/>
+        {/* ── CENTER COLUMN — GAZETTE ── */}
+        <div className="cg-b">
+          <LeagueGazette
+            leagueLabel={cfg.label}
+            recentForm={recentForm}
+            winStreaks={winStreaks}
+            lossStreaks={lossStreaks}
+            currentSeason={currentSeason}
+            loading={loading}
+            teamNameMap={teamNameMap}
+            topScorers={topScorers}
+          />
+        </div>
 
+        {/* ── RIGHT COLUMN ── */}
         <div className="cg-c">
           <div className="media-cluster">
             <section className="panel twg-panel"><TwitchLiveWidget/></section>
@@ -398,15 +1268,11 @@ export default function Home() {
             </section>
           </div>
         </div>
+
       </div>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          HDTV BROADCAST TICKER — NHL Network / ESPN Lower Third style
-          3 zones: brand bug | scrolling belt | live clock
-      ═══════════════════════════════════════════════════════════════════ */}
+      {/* HDTV TICKER */}
       <div className="hdtv-ticker">
-
-        {/* Zone 1: Brand bug */}
         <div className="ht-brand">
           <div className="ht-brand-top">{cfg.label}</div>
           <div className="ht-brand-bottom">
@@ -414,8 +1280,6 @@ export default function Home() {
             <span>LIVE</span>
           </div>
         </div>
-
-        {/* Zone 2: Scrolling content belt */}
         <div className="ht-stage">
           <div className="ht-fade-l"/>
           <div className="ht-fade-r"/>
@@ -434,20 +1298,39 @@ export default function Home() {
             </div>
           </div>
         </div>
-
-        {/* Zone 3: Clock */}
         <div className="ht-clock">
           <ClockDisplay/>
         </div>
-
       </div>
 
       <style>{`
         *,*::before,*::after{box-sizing:border-box;}
         html,body{background:#00000a!important;}
-        .hp{min-height:100vh;background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),#00000a;padding-bottom:56px;overflow-x:hidden;position:relative;}
+
+        .hp {
+          min-height:100vh;
+          background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),#00000a;
+          padding-bottom:56px;
+          overflow-x:hidden;
+          position:relative;
+        }
         .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.055) 2px,rgba(0,0,0,.055) 4px);}
 
+        .cg {
+          display: grid;
+          grid-template-columns: 360px 1fr 360px;
+          grid-template-areas: "a b c";
+          gap: .75rem;
+          padding: .75rem 14px;
+          max-width: 100%;
+          margin: 0 auto;
+          align-items: start;
+        }
+        .cg-a { grid-area:a; display:flex; flex-direction:column; gap:.72rem; }
+        .cg-b { grid-area:b; min-width:0; }
+        .cg-c { grid-area:c; display:flex; flex-direction:column; align-self:start; }
+
+        /* ── Countdown ── */
         .icd{display:flex;align-items:center;justify-content:space-between;gap:.55rem;padding:.58rem .82rem;background:color-mix(in srgb,var(--ic) 8%,rgba(0,0,0,.65));border:1.5px solid color-mix(in srgb,var(--ic) 32%,transparent);border-radius:10px;position:relative;overflow:hidden;}
         .icd::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 65% 100% at 0% 50%,color-mix(in srgb,var(--ic) 12%,transparent),transparent 70%);}
         .icd-left{display:flex;flex-direction:column;gap:.2rem;}
@@ -466,11 +1349,7 @@ export default function Home() {
         .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
 
-        .cg{display:grid;grid-template-columns:370px 1fr 370px;grid-template-areas:"a b c";gap:.82rem;padding:.88rem 1.1rem;max-width:1560px;margin:0 auto;align-items:start;}
-        .cg-a{grid-area:a;display:flex;flex-direction:column;gap:.72rem;}
-        .cg-b{grid-area:b;min-height:1px;}
-        .cg-c{grid-area:c;display:flex;flex-direction:column;align-self:start;}
-
+        /* ── Panels ── */
         .panel{border:1.5px solid rgba(135,206,235,.1);border-radius:10px;overflow:hidden;background:linear-gradient(155deg,rgba(255,255,255,.02) 0%,rgba(0,0,0,.3) 100%);}
         .ph{display:flex;align-items:center;gap:.38rem;padding:.48rem .82rem;background:linear-gradient(90deg,rgba(255,140,0,.07) 0%,transparent 100%);border-bottom:1px solid rgba(255,140,0,.1);flex-wrap:wrap;}
         .ph-icon{font-size:13px;flex-shrink:0;}
@@ -482,6 +1361,7 @@ export default function Home() {
         .skel{background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));background-size:200% 100%;animation:shimmer 1.6s infinite;border-radius:4px;}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 
+        /* ── Spotlight ── */
         .sl-panel{overflow:visible;}
         .sl-tabs{display:flex;border-bottom:1px solid rgba(255,140,0,.1);background:rgba(0,0,0,.25);}
         .sl-tab{flex:1;padding:.35rem .15rem;font-size:14px;background:transparent;border:none;border-right:1px solid rgba(255,255,255,.04);cursor:pointer;transition:all .14s;color:rgba(255,255,255,.3);line-height:1;}
@@ -514,6 +1394,7 @@ export default function Home() {
         .sl-bar{height:100%;background:linear-gradient(90deg,rgba(255,140,0,.3),rgba(255,215,0,.2));border-radius:3px;}
         .sl-coming{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.13);letter-spacing:1px;text-align:center;padding:.4rem;}
 
+        /* ── Transactions ── */
         .tx-body{padding:.12rem 0;}
         .tx-ph{display:flex;flex-direction:column;align-items:center;gap:.28rem;padding:.62rem .8rem;}
         .tx-ph-msg{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.14);letter-spacing:1px;text-align:center;}
@@ -525,11 +1406,11 @@ export default function Home() {
         .tx-player{flex:1;font-family:'VT323',monospace;font-size:16px;color:#E0E0E0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .tx-date{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.2);flex-shrink:0;}
 
+        /* ── Right cluster ── */
         .media-cluster{display:flex;flex-direction:column;gap:0;border:1.5px solid rgba(88,101,242,.18);border-radius:10px;overflow:hidden;}
         .media-cluster>.panel{border:none;border-radius:0;border-bottom:1px solid rgba(88,101,242,.12);}
         .media-cluster>.panel:last-child{border-bottom:none;}
         .media-cluster>.twg-panel{border-bottom:1px solid rgba(0,255,100,.1);}
-
         .events{padding:.04rem 0;}
         .ev-row{display:flex;align-items:flex-start;gap:.48rem;padding:.38rem .72rem;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.03);transition:background .12s;}
         .ev-row:last-child{border-bottom:none;}
@@ -551,211 +1432,64 @@ export default function Home() {
         .ev-setup code{background:rgba(255,255,255,.07);padding:.05rem .18rem;border-radius:3px;}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 
-        /* ═════════════════════════════════════════════════════════════════
-           HDTV BROADCAST TICKER
-           Design: NHL Network / ESPN bottom ticker lower-third.
-           Three distinct zones with sharp visual hierarchy.
-        ═════════════════════════════════════════════════════════════════ */
-
-        /* Outer shell */
+        /* ── HDTV Ticker ── */
         .hdtv-ticker {
-          position: fixed;
-          bottom: 0; left: 0; right: 0;
-          height: 48px;
-          display: flex;
-          align-items: stretch;
-          z-index: 200;
-          background: #060a16;
-          /* Triple border stack: orange main, gold hairline, deep shadow */
-          border-top: 3px solid #D95E00;
-          box-shadow:
-            0 -1px 0 rgba(255,185,70,0.6),
-            0 -2px 0 rgba(0,0,0,0.9),
-            0 -10px 40px rgba(200,75,0,0.22),
-            inset 0 1px 0 rgba(255,140,50,0.1);
-          overflow: hidden;
-          font-family: 'Helvetica Neue', 'Arial', sans-serif;
+          position:fixed; bottom:0; left:0; right:0; height:48px;
+          display:flex; align-items:stretch; z-index:200;
+          background:#060a16;
+          border-top:3px solid #D95E00;
+          box-shadow:0 -1px 0 rgba(255,185,70,0.6),0 -2px 0 rgba(0,0,0,0.9),0 -10px 40px rgba(200,75,0,0.22),inset 0 1px 0 rgba(255,140,50,0.1);
+          overflow:hidden;
+          font-family:'Helvetica Neue','Arial',sans-serif;
         }
-
-        /* ── Zone 1: Brand / Network bug ── */
         .ht-brand {
-          flex-shrink: 0;
-          width: 96px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 3px;
-          /* Deeper red on left darkening to right */
-          background: linear-gradient(150deg, #B50000 0%, #6E0000 100%);
-          border-right: 2px solid rgba(0,0,0,0.5);
-          position: relative;
-          overflow: hidden;
+          flex-shrink:0; width:96px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+          background:linear-gradient(150deg,#B50000 0%,#6E0000 100%);
+          border-right:2px solid rgba(0,0,0,0.5);
+          position:relative; overflow:hidden;
         }
-        /* Top-left diagonal gloss */
-        .ht-brand::before {
-          content: '';
-          position: absolute;
-          top: 0; left: 0; right: 60%; bottom: 40%;
-          background: linear-gradient(135deg, rgba(255,255,255,0.12), transparent);
-          pointer-events: none;
-        }
-        /* Subtle right-edge inner shadow for depth */
-        .ht-brand::after {
-          content: '';
-          position: absolute;
-          top: 0; right: 0; bottom: 0;
-          width: 8px;
-          background: linear-gradient(-90deg, rgba(0,0,0,0.35), transparent);
-          pointer-events: none;
-        }
-        .ht-brand-top {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 9.5px;
-          font-weight: 700;
-          color: #fff;
-          letter-spacing: 1px;
-          text-shadow: 0 1px 4px rgba(0,0,0,0.9);
-          position: relative;
-          z-index: 1;
-          line-height: 1;
-        }
-        .ht-brand-bottom {
-          display: flex;
-          align-items: center;
-          gap: 5px;
-          font-size: 8.5px;
-          font-weight: 800;
-          color: rgba(255,255,255,0.55);
-          letter-spacing: 3.5px;
-          text-transform: uppercase;
-          line-height: 1;
-          position: relative;
-          z-index: 1;
-        }
-        .ht-live-dot {
-          width: 5px; height: 5px;
-          border-radius: 50%;
-          background: #00FF88;
-          box-shadow: 0 0 8px #00FF88, 0 0 2px #00FF88;
-          flex-shrink: 0;
-          animation: livePulse 2s ease-in-out infinite;
-        }
-        @keyframes livePulse {
-          0%,100% { opacity:1; box-shadow:0 0 8px #00FF88, 0 0 2px #00FF88; }
-          50%      { opacity:0.35; box-shadow:0 0 2px #00FF88; }
-        }
-
-        /* ── Zone 2: Content stage ── */
-        .ht-stage {
-          flex: 1;
-          position: relative;
-          overflow: hidden;
-          /* Faint horizontal rule at top for Z-depth */
-          border-top: 1px solid rgba(255,255,255,0.04);
-          /* Very subtle column rhythm — real broadcast texture */
-          background: repeating-linear-gradient(
-            90deg,
-            transparent 0, transparent 149px,
-            rgba(255,255,255,0.018) 149px, rgba(255,255,255,0.018) 150px
-          );
-        }
-        .ht-fade-l, .ht-fade-r {
-          position: absolute; top:0; bottom:0; z-index:2; pointer-events:none;
-          width: 52px;
-        }
-        .ht-fade-l { left:0;  background: linear-gradient(90deg,  #060a16 20%, transparent); }
-        .ht-fade-r { right:0; background: linear-gradient(-90deg, #060a16 20%, transparent); }
-
+        .ht-brand::before { content:''; position:absolute; top:0; left:0; right:60%; bottom:40%; background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent); pointer-events:none; }
+        .ht-brand::after  { content:''; position:absolute; top:0; right:0; bottom:0; width:8px; background:linear-gradient(-90deg,rgba(0,0,0,0.35),transparent); pointer-events:none; }
+        .ht-brand-top { font-family:'Press Start 2P',monospace; font-size:9.5px; font-weight:700; color:#fff; letter-spacing:1px; text-shadow:0 1px 4px rgba(0,0,0,0.9); position:relative; z-index:1; line-height:1; }
+        .ht-brand-bottom { display:flex; align-items:center; gap:5px; font-size:8.5px; font-weight:800; color:rgba(255,255,255,0.55); letter-spacing:3.5px; text-transform:uppercase; line-height:1; position:relative; z-index:1; }
+        .ht-live-dot { width:5px; height:5px; border-radius:50%; background:#00FF88; box-shadow:0 0 8px #00FF88,0 0 2px #00FF88; flex-shrink:0; animation:livePulse 2s ease-in-out infinite; }
+        @keyframes livePulse { 0%,100%{opacity:1;box-shadow:0 0 8px #00FF88,0 0 2px #00FF88} 50%{opacity:0.35;box-shadow:0 0 2px #00FF88} }
+        .ht-stage { flex:1; position:relative; overflow:hidden; border-top:1px solid rgba(255,255,255,0.04); background:repeating-linear-gradient(90deg,transparent 0,transparent 149px,rgba(255,255,255,0.018) 149px,rgba(255,255,255,0.018) 150px); }
+        .ht-fade-l,.ht-fade-r { position:absolute; top:0; bottom:0; z-index:2; pointer-events:none; width:52px; }
+        .ht-fade-l { left:0; background:linear-gradient(90deg,#060a16 20%,transparent); }
+        .ht-fade-r { right:0; background:linear-gradient(-90deg,#060a16 20%,transparent); }
         .ht-rail { width:100%; overflow:hidden; }
-        .ht-belt {
-          display: inline-flex;
-          align-items: center;
-          white-space: nowrap;
-          animation: beltRoll 50s linear infinite;
-          will-change: transform;
-        }
-        @keyframes beltRoll {
-          0%   { transform: translateX(60vw); }
-          100% { transform: translateX(-100%); }
-        }
-
-        .ht-story { display: inline-flex; align-items: center; }
-
-        .ht-text {
-          font-size: 14.5px;
-          font-weight: 600;
-          letter-spacing: 0.07em;
-          text-transform: uppercase;
-          line-height: 1;
-          padding: 0 0.5rem;
-        }
-        /* Broadcast color rhythm: white → gold → sky → dim white, repeating */
-        .ht-c0 { color: #EEF3FF; }
-        .ht-c1 { color: #FFD166; text-shadow: 0 0 12px rgba(255,200,80,0.25); }
-        .ht-c2 { color: #87CEEB; text-shadow: 0 0 12px rgba(135,206,235,0.2); }
-        .ht-c3 { color: rgba(220,230,255,0.65); }
-
-        /* Story separator: line–diamond–line */
-        .ht-sep {
-          display: inline-flex; align-items: center; gap: 5px;
-          margin: 0 0.5rem; flex-shrink:0;
-        }
-        .ht-sep-line {
-          display: inline-block; width: 20px; height: 1px;
-          background: rgba(210,95,0,0.55); flex-shrink:0;
-        }
-        .ht-sep-gem {
-          font-size: 7px;
-          color: #D95E00;
-          text-shadow: 0 0 10px rgba(217,94,0,0.9);
-          flex-shrink: 0;
-          line-height: 1;
-        }
-
-        /* ── Zone 3: Clock ── */
-        .ht-clock {
-          flex-shrink: 0;
-          width: 80px;
-          display: flex; align-items: center; justify-content: center;
-          border-left: 1.5px solid rgba(255,255,255,0.06);
-          background: rgba(255,255,255,0.022);
-          position: relative;
-        }
-        /* Thin top accent line matching brand color */
-        .ht-clock::before {
-          content:''; position:absolute; top:0; left:0; right:0;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, rgba(217,94,0,0.5), transparent);
-        }
+        .ht-belt { display:inline-flex; align-items:center; white-space:nowrap; animation:beltRoll 50s linear infinite; will-change:transform; }
+        @keyframes beltRoll { 0%{transform:translateX(60vw)} 100%{transform:translateX(-100%)} }
+        .ht-story { display:inline-flex; align-items:center; }
+        .ht-text { font-size:14.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; line-height:1; padding:0 0.5rem; }
+        .ht-c0{color:#EEF3FF;}
+        .ht-c1{color:#FFD166;text-shadow:0 0 12px rgba(255,200,80,0.25);}
+        .ht-c2{color:#87CEEB;text-shadow:0 0 12px rgba(135,206,235,0.2);}
+        .ht-c3{color:rgba(220,230,255,0.65);}
+        .ht-sep { display:inline-flex; align-items:center; gap:5px; margin:0 0.5rem; flex-shrink:0; }
+        .ht-sep-line { display:inline-block; width:20px; height:1px; background:rgba(210,95,0,0.55); flex-shrink:0; }
+        .ht-sep-gem { font-size:7px; color:#D95E00; text-shadow:0 0 10px rgba(217,94,0,0.9); flex-shrink:0; line-height:1; }
+        .ht-clock { flex-shrink:0; width:80px; display:flex; align-items:center; justify-content:center; border-left:1.5px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.022); position:relative; }
+        .ht-clock::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(217,94,0,0.5),transparent); }
         .ht-clock-inner { display:flex; flex-direction:column; align-items:center; gap:2px; }
-        .ht-clock-time {
-          font-size: 15px; font-weight:700;
-          color: #ECF1FF; letter-spacing:1.5px;
-          font-variant-numeric: tabular-nums; line-height:1;
-        }
-        .ht-clock-label {
-          font-size: 8px; font-weight:700;
-          color: rgba(255,255,255,0.28); letter-spacing:3px; line-height:1;
-        }
+        .ht-clock-time { font-size:15px; font-weight:700; color:#ECF1FF; letter-spacing:1.5px; font-variant-numeric:tabular-nums; line-height:1; }
+        .ht-clock-label { font-size:8px; font-weight:700; color:rgba(255,255,255,0.28); letter-spacing:3px; line-height:1; }
 
         /* ── Responsive ── */
         @media(max-width:1200px){
-          .cg{grid-template-columns:370px 370px;grid-template-areas:"a c";gap:.75rem;}
-          .cg-b{display:none;}
+          .cg { grid-template-columns: 340px 1fr; grid-template-areas: "a b"; }
+          .cg-c { display: none; }
         }
         @media(max-width:820px){
-          .cg{grid-template-columns:1fr;grid-template-areas:"a" "c";}
+          .cg { grid-template-columns: 1fr; grid-template-areas: "a" "b"; }
         }
         @media(max-width:600px){
-          .cg{padding:.6rem .7rem;gap:.6rem;}
-          .icd{flex-direction:column;gap:.3rem;padding:.48rem .68rem;}
-          .icd-clock{flex-wrap:wrap;gap:.2rem;}
-          .icd-unit{min-width:35px;} .icd-n{font-size:24px;}
-          html,body,.panel,.media-cluster{background:rgba(0,0,12,.95)!important;}
-          .ht-brand{width:72px;} .ht-brand-top{font-size:8px;}
-          .ht-clock{width:62px;} .ht-clock-time{font-size:13px;}
-          .ht-text{font-size:13px;}
+          .cg { padding: .6rem 8px; gap: .6rem; }
+          .ht-brand { width:72px; } .ht-brand-top { font-size:8px; }
+          .ht-clock { width:62px; } .ht-clock-time { font-size:13px; }
+          .ht-text { font-size:13px; }
         }
       `}</style>
     </div>

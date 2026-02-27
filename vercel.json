@@ -1,0 +1,8 @@
+{
+    "crons": [
+      {
+        "path": "/api/gazette-cron",
+        "schedule": "0 9 * * *"
+      }
+    ]
+  }

@@ -4,9 +4,6 @@ export default async function handler(req, res) {
   }
 
   const url = 'https://gwaiwtgwdqadxmimiskf.supabase.co/functions/v1/gazette-daily-cron';
-  console.log('Calling URL:', url);
-  console.log('Anon key set:', !!process.env.SUPABASE_ANON_KEY);
-  console.log('Anon key prefix:', process.env.SUPABASE_ANON_KEY?.slice(0, 20));
 
   try {
     const response = await fetch(url, {
@@ -19,17 +16,10 @@ export default async function handler(req, res) {
       body: JSON.stringify({}),
     });
 
-    console.log('Response status:', response.status);
-    const text = await response.text();
-    console.log('Raw response:', text.slice(0, 200));
+    const data = await response.json();
+    return res.status(200).json(data);
 
-    try {
-      return res.status(200).json(JSON.parse(text));
-    } catch {
-      return res.status(200).json({ raw: text.slice(0, 200) });
-    }
   } catch(e) {
-    console.log('Fetch error:', e.message);
     return res.status(500).json({ error: e.message });
   }
 }

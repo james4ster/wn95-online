@@ -95,16 +95,19 @@ export default function Standings() {
     })();
   }, [selectedSeason]);
 
-  // ── Playoff games (for bracket scores) ───────────────────────────────────────
+  // ── Playoff games — from playoff_games table ────────────────────────────────
+  // Schema: idx, lg, round, series_number, game_number,
+  //         team_code_a, team_code_b, team_a_score, team_b_score, game_date
   useEffect(() => {
     if (!selectedSeason) { setPlayoffGames([]); return; }
     (async () => {
       const { data, error } = await supabase
-        .from('games')
-        .select('id,home,away,score_home,score_away,ot,result_home,result_away')
+        .from('playoff_games')
+        .select('lg,round,series_number,game_number,team_code_a,team_code_b,team_a_score,team_b_score,game_date,seed_a,seed_b')
         .eq('lg', selectedSeason)
-        .eq('mode', 'Playoffs');
-      if (error) console.error('Error fetching playoff games:', error);
+        .order('game_number', { ascending: true });
+        console.log({data, error })
+      if (error) console.error('Error fetching playoff_games:', error);
       setPlayoffGames(data || []);
     })();
   }, [selectedSeason]);
@@ -124,13 +127,12 @@ export default function Standings() {
   }, [selectedSeason]);
 
   // ── Bracket seed generation ───────────────────────────────────────────────────
-  const bracketSeeds = (() => {
-    if (!playoffTeams || sortedStandings.length < playoffTeams) return null;
-    return sortedStandings
-      .slice()
-      .sort((a, b) => (a.season_rank || 0) - (b.season_rank || 0))
-      .slice(0, playoffTeams);
-  })();
+  const bracketSeeds = playoffGames.length > 0 ? playoffGames : null;
+
+  // DEBUG LOG
+console.log('Standings.jsx playoffGames:', playoffGames);
+console.log('Standings.jsx bracketSeeds:', bracketSeeds);
+console.log('playoffTeams:', playoffTeams);
 
   // ── Grouped standings ─────────────────────────────────────────────────────────
   const hasConferences = divisionMap.some(d => d.conference != null);
@@ -260,19 +262,19 @@ export default function Standings() {
         <div className="no-data"><div className="no-data-text">SELECT A LEAGUE FROM THE MENU</div></div>
       ) : standings.length === 0 ? (
         <div className="no-data"><div className="no-data-text">SELECT A SEASON</div></div>
-      ) : activeView === 'playoffs' ? (
-        bracketSeeds ? (
-          <PlayoffBracket
-            seeds={bracketSeeds}
-            playoffGames={playoffGames}
-            seasonGames={seasonGames}
-            selectedSeason={selectedSeason}
-            playoffTeams={playoffTeams}
-            selectedLeague={selectedLeague}
-          />
-        ) : (
-          <div className="no-data"><div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div></div>
-        )
+        ) : activeView === 'playoffs' ? (
+          playoffGames?.length ? (
+            <PlayoffBracket
+              playoffGames={playoffGames}
+              seasonGames={seasonGames}
+              selectedSeason={selectedSeason}
+              selectedLeague={selectedLeague}
+            />
+          ) : (
+            <div className="no-data">
+              <div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div>
+            </div>
+          )
       ) : (
         <div className="table-container">
           {groupedStandings.map((group, groupIdx) => (
@@ -398,11 +400,11 @@ export default function Standings() {
         @keyframes shimmer { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)} 100%{transform:translateX(100%) translateY(100%) rotate(45deg)} }
         .led-text {
           font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
-          text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700; position:relative;
+          text-shadow:0 0 10px #FFD700,0 0 20px #FFD700,0 0 30px #FFD700; position:relative;
         }
         .control-panel { display:flex; gap:2rem; justify-content:center; margin-bottom:1.5rem; flex-wrap:wrap; }
         .control-group { display:flex; flex-direction:column; gap:.5rem; }
-        .control-group label { font-family:'Press Start 2P',monospace; font-size:.7rem; color:#FF8C00; letter-spacing:2px; }
+        .control-group label { font-family:'Press Start 2P',monospace; font-size:.7rem; color:#FFD700; letter-spacing:2px; }
         .view-tabs-container { display:flex; justify-content:center; margin-bottom:2rem; margin-top:1rem; }
         .view-tabs {
           display:inline-flex; gap:1rem;
@@ -443,7 +445,7 @@ export default function Standings() {
         .group-header { display:flex; justify-content:center; margin-bottom:1rem; }
         .group-title {
           font-family:'Press Start 2P',monospace; font-size:1.3rem; color:#FFD700; letter-spacing:4px;
-          text-shadow:0 0 10px #FFD700,0 0 20px #FFD700,0 0 30px #FF8C00;
+          text-shadow:0 0 10px #FFD700,0 0 20px #FFD700,0 0 30px #FFD700;
           padding:.75rem 2rem; background:linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%);
           border:3px solid #FFD700; border-radius:8px;
           box-shadow:0 0 20px rgba(255,215,0,.5),inset 0 0 20px rgba(255,215,0,.2);
@@ -459,7 +461,7 @@ export default function Standings() {
           box-shadow:0 0 10px rgba(135,206,235,.3),inset 0 0 10px rgba(135,206,235,.1);
           transition:all .3s ease; letter-spacing:1px;
         }
-        .arcade-select:hover:not(:disabled) { border-color:#FF8C00; color:#FF8C00; transform:translateY(-2px); }
+        .arcade-select:hover:not(:disabled) { border-color:#FFD700; color:#FFD700; transform:translateY(-2px); }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }
         .arcade-select option { background:#1a1a2e; color:#87CEEB; }
         .table-container { overflow-x:auto; border-radius:12px; }
@@ -470,7 +472,7 @@ export default function Standings() {
         }
         .arcade-table { width:100%; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
         .arcade-table td,.arcade-table th { box-sizing:border-box; }
-        .arcade-table thead { background:linear-gradient(180deg,#FF8C00 0%,#FF6347 100%); }
+        .arcade-table thead { background:linear-gradient(180deg,#FFD700 0%,#FF6347 100%); }
         .arcade-table th {
           padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem;
           color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease;
@@ -486,9 +488,9 @@ export default function Standings() {
         }
         .arcade-table th:last-child { border-right:none; }
         .arcade-table th:hover:not(.rank-column) {
-          background:linear-gradient(180deg,#FFD700 0%,#FF8C00 100%); transform:translateY(-2px);
+          background:linear-gradient(180deg,#FF8C00 0%,#FF8C00 100%); transform:translateY(-2px);
         }
-        .arcade-table th.sorted-column { background:linear-gradient(180deg,#FFD700 0%,#FFA500 100%); }
+        .arcade-table th.sorted-column { background:linear-gradient(180deg,#FF8C00 0%,#FFA500 100%); }
         .arcade-table th.rank-column { cursor:default; }
         .th-content { display:flex; align-items:center; justify-content:center; gap:.3rem; }
         .sort-indicator { font-size:.5rem; animation:bounce .5s ease; }
@@ -545,7 +547,7 @@ export default function Standings() {
           text-shadow:0 0 5px #FFD700,0 0 10px #FFD700,0 0 20px #FFA500; white-space:nowrap;
           animation:text-glow 2s ease-in-out infinite;
         }
-        @keyframes text-glow { 0%,100%{text-shadow:0 0 5px #FFD700,0 0 10px #FFD700,0 0 20px #FFA500} 50%{text-shadow:0 0 10px #FFD700,0 0 20px #FFD700,0 0 30px #FFA500,0 0 40px #FF8C00} }
+        @keyframes text-glow { 0%,100%{text-shadow:0 0 5px #FFD700,0 0 10px #FFD700,0 0 20px #FFA500} 50%{text-shadow:0 0 10px #FFD700,0 0 20px #FFD700,0 0 30px #FFA500,0 0 40px ##FFD700} }
         .cutoff-particles { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
         .particle { position:absolute; width:3px; height:3px; background:#FFD700; border-radius:50%; box-shadow:0 0 8px #FFD700; opacity:0; }
         .particle-1{left:10%;animation:particle-float 3s ease-in-out infinite}
@@ -579,12 +581,12 @@ export default function Standings() {
         .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }
         .arcade-table td:not(.sorted-cell) { background:transparent; }
         .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:2rem; }
-        .loading-spinner { width:60px; height:60px; border:6px solid rgba(255,140,0,.2); border-top:6px solid #FF8C00; border-radius:50%; animation:spin 1s linear infinite; }
+        .loading-spinner { width:60px; height:60px; border:6px solid rgba(255,140,0,.2); border-top:6px solid ##FFD700; border-radius:50%; animation:spin 1s linear infinite; }
         @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
         .loading-text { font-family:'Press Start 2P',monospace; font-size:1rem; color:#87CEEB; letter-spacing:2px; animation:pulse 1.5s ease-in-out infinite; }
         @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
         .no-data { display:flex; justify-content:center; align-items:center; min-height:400px; }
-        .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FF8C00; text-shadow:0 0 10px #FF8C00; letter-spacing:3px; }
+        .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FFD700; text-shadow:0 0 10px ##FFD700; letter-spacing:3px; }
         @media(max-width:768px){
           .led-text{font-size:1.2rem;letter-spacing:3px}
           .view-tabs{flex-direction:column;gap:.5rem;padding:.5rem}

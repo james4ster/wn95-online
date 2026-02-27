@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // Temporary debug — remove after testing
   console.log('SUPABASE_URL:', process.env.SUPABASE_URL);
   console.log('CRON_SECRET set:', !!process.env.CRON_SECRET);
 
@@ -12,7 +11,10 @@ export default async function handler(req, res) {
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+        // Supabase gateway needs the anon key as Authorization
+        'Authorization': `Bearer ${process.env.SUPABASE_ANON_KEY}`,
+        // Pass cron secret separately so your function can verify it
+        'x-cron-secret': process.env.CRON_SECRET,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({}),

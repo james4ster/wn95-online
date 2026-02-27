@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { Analytics } from "@vercel/analytics/react";
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LeagueProvider } from './components/LeagueContext';
 import MainNavigation from './components/MainNavigation';
@@ -58,9 +59,11 @@ function App() {
             <Route path="/league/:leagueCode/teams" element={<Teams />} />
             <Route path="/league/:leagueCode/scores" element={<Scores />} />
           </Routes>
+          <Analytics />
         </div>
       </Router>
     </LeagueProvider>
+   
   );
 }
 

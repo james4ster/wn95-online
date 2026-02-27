@@ -1,5 +1,4 @@
 import React from 'react';
-import { Analytics } from "@vercel/analytics/react";
 
 export default function Layout({ children, setPage }) {
   return (
@@ -62,8 +61,7 @@ export default function Layout({ children, setPage }) {
         &copy; {new Date().getFullYear()} Retro Hockey League
       </footer>
 
-      {/* Vercel Analytics */}
-      <Analytics />
+    
     </div>
   );
 }

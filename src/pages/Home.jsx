@@ -260,11 +260,13 @@ async function fetchGazetteEdition({
     const { data: cached } = await supabase
       .from('gazette_cache')
       .select('data, date')
-      .eq('league', leagueLabel)
+      // .eq('league', leagueLabel) // uncomment if you ever want league-specific editions
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
-
+  
     if (cached?.date === today && cached?.data) {
-      console.log(`[Gazette] ✅ Serving from DB cache`);
+      console.log('[Gazette] ✅ Serving from DB cache');
       return cached.data;
     }
   } catch(e) {

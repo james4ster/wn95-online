@@ -400,7 +400,8 @@ console.log('playoffTeams:', playoffTeams);
         @keyframes shimmer { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)} 100%{transform:translateX(100%) translateY(100%) rotate(45deg)} }
         .led-text {
           font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
-          text-shadow:0 0 10px #FFD700,0 0 20px #FFD700,0 0 30px #FFD700; position:relative;
+          text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
+          filter:contrast(1.3) brightness(1.2); position:relative;
         }
         .control-panel { display:flex; gap:2rem; justify-content:center; margin-bottom:1.5rem; flex-wrap:wrap; }
         .control-group { display:flex; flex-direction:column; gap:.5rem; }

@@ -526,9 +526,10 @@ export default function Scores() {
           100%{ transform:translateX(100%)  translateY(100%)  rotate(45deg) }
         }
         .sp-led {
-          font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
-          text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700; position:relative; z-index:1;
-        }
+            font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
+            text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
+            filter:contrast(1.3) brightness(1.2); position:relative; z-index:1;
+          }
 
         /* ── FILTERS ────────────────────────────────────────────────────── */
         .sp-fx { display:flex; gap:1.5rem; justify-content:center; flex-wrap:wrap; margin-bottom:1.25rem; }

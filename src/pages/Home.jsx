@@ -256,26 +256,116 @@ async function fetchGazetteEdition({
   const today = todayStamp();
 
   // ── 1. Check DB cache first ───────────────────────────────
-  const { data: cached } = await supabase
-    .from('gazette_cache')
-    .select('data, date')
-    .eq('league', leagueLabel)
-    .single();
+  try {
+    const { data: cached } = await supabase
+      .from('gazette_cache')
+      .select('data, date')
+      .eq('league', leagueLabel)
+      .single();
 
-  if (cached?.date === today && cached?.data) {
-    return cached.data; // ⚡ instant, zero Cohere call
+    if (cached?.date === today && cached?.data) {
+      console.log(`[Gazette] ✅ Serving from DB cache`);
+      return cached.data;
+    }
+  } catch(e) {
+    console.log('[Gazette] No DB cache found, generating live');
   }
 
-  // ── 2. Fallback: generate live (cron missed or first deploy) ──
-  // ... your existing full fetchGazetteEdition logic here ...
-  // At the end, also write back to DB so next user gets it cached:
-  const data = await generateLive({ leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason, teamNameMap, topScorers });
+  // ── 2. Fallback: generate live ────────────────────────────
+  console.log(`[Gazette] ⚠️ Cache miss — calling AI`);
+  const season = currentSeason?.lg || leagueLabel;
+  const tn = code => teamNameMap[code] || { city: code, nickname: code, full: code };
 
-  await supabase.from('gazette_cache').upsert({
-    league: leagueLabel,
-    date:   today,
-    data,
+  const hotLines  = recentForm.hot.slice(0,5).map(t => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`).join(' | ');
+  const coldLines = recentForm.cold.slice(0,5).map(t => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`).join(' | ');
+  const winLines  = winStreaks.slice(0,5).map(s => `${tn(s.team).full} [${s.team}]: W${s.count}`).join(' | ');
+  const lossLines = lossStreaks.slice(0,5).map(s => `${tn(s.team).full} [${s.team}]: L${s.count}`).join(' | ');
+  const scorerLines = topScorers.slice(0,6).map(s => {
+    const n = tn(s.g_team);
+    const ach = s.fourGoalGame ? ' 🔥 4-GOAL GAME' : s.hatTrick ? ' 🎩 HAT TRICK' : s.bigNight ? ' ⭐ BIG NIGHT' : '';
+    const best = s.bestGame && (s.bestGame.g + s.bestGame.a) > 0 ? ` (best game: ${s.bestGame.g}G ${s.bestGame.a}A)` : '';
+    return `${s.goal_player_name} (${n.full} / ${s.g_team}): ${s.goals}G ${s.assists}A${best}${ach}`;
+  }).join(' | ');
+
+  const allCodes = [...new Set([
+    ...recentForm.hot.map(t=>t.team),
+    ...recentForm.cold.map(t=>t.team),
+    ...winStreaks.map(s=>s.team),
+    ...lossStreaks.map(s=>s.team),
+  ])];
+  const nameRef = allCodes.map(code => {
+    const n = tn(code);
+    return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${n.coach ? `, coach: ${n.coach}` : ''})`;
+  }).join('\n');
+
+  const angles = ['hot_streak','win_streak','cold_streak','loss_streak','big_win','playoff_push','milestone','comeback','rivalry'];
+  const angleHint = angles[new Date().getDate() % angles.length];
+
+  const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
+Today's story angle: "${angleHint}".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEAM NAME REFERENCE
+Use the city name OR the nickname in all written text — never the raw code.
+${nameRef}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE LEAGUE DATA
+Hot teams (last 10): ${hotLines || 'none'}
+Cold teams (last 10): ${coldLines || 'none'}
+Active win streaks: ${winLines || 'none'}
+Active loss streaks: ${lossLines || 'none'}
+${scorerLines ? `Recent game top scorers: ${scorerLines}` : ''}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WRITING RULES
+- Use city OR nickname in all written text — never raw codes. Mix it up naturally.
+- When a coach is listed, you MAY quote them by name. Use coach name in quote_attr when it makes sense.
+- If a scorer has 🎩 HAT TRICK or 🔥 4-GOAL GAME, that IS the story — lead the cover with it.
+- If a scorer has ⭐ BIG NIGHT, mention them prominently in a blurb.
+- Pull quote: if a hat trick or 4-goal game happened, quote that player or their coach.
+- Be dramatic and hyperbolic — this is a sports magazine.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Respond ONLY with valid JSON, zero other text:
+{
+  "featured_team": "ONE team code from the reference list above — use exact code",
+  "story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
+  "cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
+  "cover_sub": "12-18 words. Punchy supporting line.",
+  "blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "blurb_2": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "pull_quote": "12-20 words. Dramatic fake quote.",
+  "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
+  "bottom_line": "7-11 words. One punchy verdict on the league.",
+  "edition": "Vol. ${Math.floor(Math.random()*30)+1} · Issue ${Math.floor(Math.random()*80)+1}"
+}`;
+
+  const result = await supabase.functions.invoke('gazette-generate', {
+    body: { messages: [{ role: 'user', content: prompt }] },
   });
+
+  if (result.error) throw new Error(result.error.message);
+
+  const raw = result.data?.text
+           || result.data?.message?.content?.[0]?.text
+           || '';
+  const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON found in response');
+  const data = JSON.parse(match[0]);
+
+  // ── 3. Write back to DB so next user gets it from cache ───
+  try {
+    await supabase.from('gazette_cache').upsert({
+      league: leagueLabel,
+      date:   today,
+      data,
+    });
+    console.log('[Gazette] ✅ Written to DB cache');
+  } catch(e) {
+    console.warn('[Gazette] Failed to write to DB cache:', e);
+  }
 
   return data;
 }

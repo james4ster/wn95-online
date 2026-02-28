@@ -14,144 +14,96 @@ export default function Schedule() {
   const [h2hRecords, setH2hRecords] = useState({});
   const [seasonStats, setSeasonStats] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('remaining');
 
-  // ==============================
-  // Fetch seasons
-  // ==============================
   useEffect(() => {
     if (!selectedLeague) { setSeasons([]); setSelectedSeason(''); return; }
-    const go = async () => {
+    (async () => {
       const { data, error } = await supabase.from('seasons').select('lg, year').order('year', { ascending: false });
       if (error) return;
       const filtered = data.filter(s => s.lg.startsWith(selectedLeague));
       setSeasons(filtered);
       if (filtered.length > 0) setSelectedSeason(filtered[0].lg);
-    };
-    go();
+    })();
   }, [selectedLeague]);
 
-  // ==============================
-  // Fetch teams
-  // ==============================
   useEffect(() => {
     if (!selectedSeason) { setTeams([]); setSelectedTeamAbr(''); return; }
-    const go = async () => {
+    (async () => {
       const { data, error } = await supabase
         .from('teams').select('team, abr').eq('lg', selectedSeason).order('team', { ascending: true });
       if (error || !data || data.length === 0) { setTeams([]); setSelectedTeamAbr(''); return; }
       setTeams(data);
       setSelectedTeamAbr(data[0].abr);
-    };
-    go();
+    })();
   }, [selectedSeason]);
 
-  // ==============================
-  // Fetch everything when team/season changes
-  // ==============================
   useEffect(() => {
     if (!selectedSeason || !selectedTeamAbr) {
       setCompletedGames([]); setRemainingOpponents([]); setH2hRecords({}); setSeasonStats(null); return;
     }
-
-    const fetchAll = async () => {
+    (async () => {
       setLoading(true);
 
-      // 1. Season stats from standings
       const { data: standingsData } = await supabase
         .from('standings').select('*')
         .eq('season', selectedSeason).ilike('team', selectedTeamAbr).single();
       setSeasonStats(standingsData || null);
 
-      // 2. Completed games for this team this season (games that exist in the table)
       const [homeRes, awayRes] = await Promise.all([
         supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('home', selectedTeamAbr),
         supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('away', selectedTeamAbr),
       ]);
-      const played = [
-        ...(homeRes.data || []),
-        ...(awayRes.data || []),
-      ].sort((a, b) => a.game - b.game);
+      const played = [...(homeRes.data || []), ...(awayRes.data || [])].sort((a, b) => a.game - b.game);
       setCompletedGames(played);
 
-      // 3. Derive remaining opponents:
-      //    All teams in this season EXCEPT the selected team,
-      //    minus those who already appear in played games
       const playedOpponentAbrs = new Set(
-        played.map(g =>
-          g.home.toLowerCase() === selectedTeamAbr.toLowerCase()
-            ? g.away.toLowerCase()
-            : g.home.toLowerCase()
-        )
+        played.map(g => g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away.toLowerCase() : g.home.toLowerCase())
       );
 
-      // Get all season teams (already fetched in `teams` state, but fetch fresh here
-      // so this effect doesn't depend on the teams state timing)
-      const { data: allTeamsData } = await supabase
-        .from('teams').select('team, abr').eq('lg', selectedSeason);
-
+      const { data: allTeamsData } = await supabase.from('teams').select('team, abr').eq('lg', selectedSeason);
       const remaining = (allTeamsData || []).filter(t =>
-        t.abr.toLowerCase() !== selectedTeamAbr.toLowerCase() &&
-        !playedOpponentAbrs.has(t.abr.toLowerCase())
-      );
-
+        t.abr.toLowerCase() !== selectedTeamAbr.toLowerCase() && !playedOpponentAbrs.has(t.abr.toLowerCase())
+      ).sort((a, b) => a.abr.localeCompare(b.abr));
       setRemainingOpponents(remaining);
 
-      console.log('Played opponents:', [...playedOpponentAbrs]);
-      console.log('Remaining opponents:', remaining.map(t => t.abr));
-
-      // 4. All-time H2H — pull all season games involving this team across all seasons
       const [allHome, allAway] = await Promise.all([
-        supabase.from('games').select('home,away,score_home,score_away,result_home,result_away,ot')
-          .eq('mode', 'Season').ilike('home', selectedTeamAbr),
-        supabase.from('games').select('home,away,score_home,score_away,result_home,result_away,ot')
-          .eq('mode', 'Season').ilike('away', selectedTeamAbr),
+        supabase.from('games').select('home,away,score_home,score_away,result_home,result_away,ot').eq('mode', 'Season').ilike('home', selectedTeamAbr),
+        supabase.from('games').select('home,away,score_home,score_away,result_home,result_away,ot').eq('mode', 'Season').ilike('away', selectedTeamAbr),
       ]);
       const allGames = [...(allHome.data || []), ...(allAway.data || [])];
 
-      // Build H2H for every opponent — both played and remaining
-      const allOpponentAbrs = [
-        ...new Set([
-          ...played.map(g =>
-            g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away : g.home
-          ),
-          ...remaining.map(t => t.abr),
-        ])
-      ];
+      const allOpponentAbrs = [...new Set([
+        ...played.map(g => g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away : g.home),
+        ...remaining.map(t => t.abr),
+      ])];
 
       const records = {};
       allOpponentAbrs.forEach(opp => {
         const oppLower = opp.toLowerCase();
-        const h2h = allGames.filter(g =>
-          g.home.toLowerCase() === oppLower || g.away.toLowerCase() === oppLower
-        );
+        const h2h = allGames.filter(g => g.home.toLowerCase() === oppLower || g.away.toLowerCase() === oppLower);
         let w = 0, l = 0, t = 0, otl = 0, gf = 0, ga = 0;
         h2h.forEach(g => {
           const isHome = g.home.toLowerCase() === selectedTeamAbr.toLowerCase();
           const result = isHome ? g.result_home : g.result_away;
-          const myScore    = isHome ? g.score_home  : g.score_away;
-          const theirScore = isHome ? g.score_away  : g.score_home;
-          if (myScore    != null) gf += myScore;
+          const myScore = isHome ? g.score_home : g.score_away;
+          const theirScore = isHome ? g.score_away : g.score_home;
+          if (myScore != null) gf += myScore;
           if (theirScore != null) ga += theirScore;
           if (!result) return;
           const r = result.toUpperCase();
           if (r === 'W' || r === 'OTW') w++;
-          else if (r === 'L')   l++;
+          else if (r === 'L') l++;
           else if (r === 'OTL') otl++;
-          else if (r === 'T')   t++;
+          else if (r === 'T') t++;
         });
         records[oppLower] = { w, l, t, otl, gf, ga, gd: gf - ga, gp: h2h.length };
       });
-
       setH2hRecords(records);
       setLoading(false);
-    };
-
-    fetchAll();
+    })();
   }, [selectedSeason, selectedTeamAbr]);
 
-  // ==============================
-  // Helpers
-  // ==============================
   const getResult = (game) => {
     const isHome = game.home.toLowerCase() === selectedTeamAbr.toLowerCase();
     return (isHome ? game.result_home : game.result_away) || null;
@@ -168,7 +120,6 @@ export default function Schedule() {
     return { cls: '', label: result };
   };
 
-  // Group completed games by opponent abr
   const groupCompletedByOpponent = () => {
     const map = {};
     completedGames.forEach(g => {
@@ -177,170 +128,65 @@ export default function Schedule() {
       if (!map[key]) map[key] = { opp, games: [] };
       map[key].games.push(g);
     });
-    return Object.values(map);
+    return Object.values(map).sort((a, b) => a.opp.localeCompare(b.opp));
   };
 
   const completedGroups = groupCompletedByOpponent();
 
-  // ==============================
-  // SUB-COMPONENTS
-  // ==============================
+  const seasonRecord = completedGames.reduce((acc, g) => {
+    const result = getResult(g);
+    if (!result) return acc;
+    const r = result.toUpperCase();
+    if (r === 'W' || r === 'OTW') acc.w++;
+    else if (r === 'L') acc.l++;
+    else if (r === 'OTL') acc.otl++;
+    else if (r === 'T') acc.t++;
+    return acc;
+  }, { w: 0, l: 0, otl: 0, t: 0 });
 
-  const StatHero = ({ stats }) => {
-    if (!stats) return null;
-    const gd   = (stats.gf || 0) - (stats.ga || 0);
-    const gfPG = stats.gp > 0 ? (stats.gf / stats.gp).toFixed(2) : '—';
-    const gaPG = stats.gp > 0 ? (stats.ga / stats.gp).toFixed(2) : '—';
-
-    const statItems = [
-      { label: 'RANK', value: `#${stats.season_rank || '—'}`, cls: 'hero-rank' },
-      { label: 'GP',   value: stats.gp   ?? '—', cls: '' },
-      { label: 'W',    value: stats.w    ?? '—', cls: 'hero-w' },
-      { label: 'L',    value: stats.l    ?? '—', cls: 'hero-l' },
-      { label: 'T',    value: stats.t    ?? '—', cls: '' },
-      { label: 'OTL',  value: stats.otl  ?? '—', cls: 'hero-otl' },
-      { label: 'PTS',  value: stats.pts  ?? '—', cls: 'hero-pts' },
-      { label: 'GF',   value: stats.gf   ?? '—', cls: '' },
-      { label: 'GA',   value: stats.ga   ?? '—', cls: '' },
-      { label: 'GD',   value: gd > 0 ? `+${gd}` : gd, cls: gd > 0 ? 'hero-pos' : gd < 0 ? 'hero-neg' : '' },
-      { label: 'GF/G', value: gfPG, cls: 'hero-sub' },
-      { label: 'GA/G', value: gaPG, cls: 'hero-sub' },
+  // ── H2H stat block (always shown inline) ──
+  const H2HStats = ({ h2h }) => {
+    if (!h2h || h2h.gp === 0) {
+      return <span className="first-meeting">FIRST MEETING</span>;
+    }
+    const gd = h2h.gf - h2h.ga;
+    const stats = [
+      { val: h2h.w,   lbl: 'W',   cls: 'sv-w'   },
+      { val: h2h.l,   lbl: 'L',   cls: 'sv-l'   },
+      { val: h2h.t,   lbl: 'T',   cls: ''        },
+      { val: h2h.otl, lbl: 'OTL', cls: 'sv-otl' },
+      { val: h2h.gf,  lbl: 'GF',  cls: 'sv-gf'  },
+      { val: h2h.ga,  lbl: 'GA',  cls: ''        },
+      { val: gd > 0 ? `+${gd}` : gd, lbl: 'GD', cls: gd > 0 ? 'sv-pos' : gd < 0 ? 'sv-neg' : '' },
+      { val: h2h.gp,  lbl: 'GP',  cls: ''        },
     ];
-
     return (
-      <div className="hero-strip">
-        <div className="hero-banner-bg">
-          <img src={`/assets/banners/${selectedTeamAbr}.png`} alt="" className="hero-banner-img"
-            onError={e => { e.target.style.display = 'none'; }} />
-        </div>
-        <div className="hero-logo-col">
-          <img src={`/assets/teamLogos/${selectedTeamAbr}.png`} alt={selectedTeamAbr} className="hero-logo"
-            onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-          <div className="hero-logo-fallback" style={{ display: 'none' }}>{selectedTeamAbr}</div>
-        </div>
-        <div className="hero-stats-row">
-          {statItems.map(s => (
-            <div key={s.label} className="hero-stat">
-              <div className={`hero-val ${s.cls}`}>{s.value}</div>
-              <div className="hero-lbl">{s.label}</div>
-            </div>
-          ))}
-        </div>
+      <div className="h2h-inline">
+        {stats.map((s, i) => (
+          <div key={i} className="sv">
+            <span className={`sv-val ${s.cls}`}>{s.val}</span>
+            <span className="sv-lbl">{s.lbl}</span>
+          </div>
+        ))}
       </div>
     );
   };
-
-  // H2H boxes — always show all 7, always 0 if missing
-  const OppHeader = ({ opp }) => {
-    const h2h = h2hRecords[opp.toLowerCase()] || { w:0, l:0, t:0, otl:0, gf:0, ga:0, gd:0, gp:0 };
-    const gd  = h2h.gf - h2h.ga;
-    const statBoxes = [
-      { val: h2h.w,   lbl: 'W',   cls: 'h2h-w'   },
-      { val: h2h.l,   lbl: 'L',   cls: 'h2h-l'   },
-      { val: h2h.t,   lbl: 'T',   cls: 'h2h-t'   },
-      { val: h2h.otl, lbl: 'OTL', cls: 'h2h-otl' },
-      { val: h2h.gf,  lbl: 'GF',  cls: 'h2h-gf'  },
-      { val: h2h.ga,  lbl: 'GA',  cls: 'h2h-ga'  },
-      { val: gd > 0 ? `+${gd}` : gd, lbl: 'GD', cls: gd > 0 ? 'h2h-gd-pos' : gd < 0 ? 'h2h-gd-neg' : 'h2h-ga' },
-    ];
-
-    return (
-      <div className="opp-header">
-        <div className="opp-banner-bg">
-          <img src={`/assets/banners/${opp}.png`} alt="" className="opp-banner-img"
-            onError={e => { e.target.style.display = 'none'; }} />
-        </div>
-        <div className="opp-logo-wrap">
-          <img src={`/assets/teamLogos/${opp}.png`} alt={opp} className="opp-logo"
-            onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
-          <div className="opp-fallback" style={{ display: 'none' }}>{opp}</div>
-        </div>
-        <div className="opp-h2h">
-          <div className="opp-h2h-label">ALL TIME</div>
-          {h2h.gp > 0 ? (
-            <div className="opp-h2h-stats">
-              {statBoxes.map((s, i) => (
-                <div key={i} className="h2h-stat-item">
-                  <span className={`h2h-stat-val ${s.cls}`}>{s.val}</span>
-                  <span className="h2h-stat-lbl">{s.lbl}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="h2h-first">FIRST MEETING</div>
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const GameRow = ({ game }) => {
-    const isHome = game.home.toLowerCase() === selectedTeamAbr.toLowerCase();
-    const result = getResult(game);
-    const { cls, label } = getResultMeta(result);
-    const myScore    = isHome ? game.score_home : game.score_away;
-    const theirScore = isHome ? game.score_away : game.score_home;
-    return (
-      <div className={`game-row ${cls}`}>
-        <div className={`venue-pip ${isHome ? 'pip-home' : 'pip-away'}`} />
-        <div className="venue-tag">{isHome ? 'H' : 'A'}</div>
-        <div className={`game-score ${cls}`}>
-          <span className="gs-mine">{myScore}</span>
-          <span className="gs-dash">–</span>
-          <span className="gs-theirs">{theirScore}</span>
-          {game.ot ? <span className="gs-ot">OT</span> : null}
-        </div>
-        <div className={`game-result-badge ${cls}`}>{label}</div>
-      </div>
-    );
-  };
-
-  // Completed section — grouped by opponent with games underneath
-  const CompletedOpponentBlock = ({ group }) => (
-    <div className="opp-block">
-      <OppHeader opp={group.opp} />
-      <div className="opp-games">
-        {group.games.map(g => <GameRow key={g.game} game={g} />)}
-      </div>
-    </div>
-  );
-
-  // Remaining section — one block per opponent, no game rows (just H2H)
-  const RemainingOpponentBlock = ({ team }) => (
-    <div className="opp-block">
-      <OppHeader opp={team.abr} />
-    </div>
-  );
-
-  const SectionPanel = ({ title, accentColor, count, children }) => (
-    <div className="section-panel">
-      <div className="section-panel-header" style={{ '--accent': accentColor }}>
-        <span className="sp-title">{title}</span>
-        <span className="sp-count">{count} {count === 1 ? 'OPPONENT' : 'OPPONENTS'}</span>
-      </div>
-      {count === 0 ? (
-        <div className="section-empty">NONE</div>
-      ) : (
-        <div className="opp-list">{children}</div>
-      )}
-    </div>
-  );
 
   return (
     <div className="schedule-page">
 
       {/* HEADER */}
-      <div className="scoreboard-header-container">
-        <div className="scoreboard-header">
-          <div className="led-text">LEAGUE SCHEDULE</div>
+      <div className="page-header">
+        <div className="header-box">
+          <div className="led-text">SCHEDULE</div>
         </div>
       </div>
 
       {/* CONTROLS */}
-      <div className="control-panel">
+      <div className="controls">
         <div className="control-group">
           <label>SEASON</label>
-          <select className="arcade-select" value={selectedSeason}
+          <select className="sel" value={selectedSeason}
             onChange={e => setSelectedSeason(e.target.value)}
             disabled={!selectedLeague || seasons.length === 0}>
             <option value="">SELECT SEASON</option>
@@ -349,7 +195,7 @@ export default function Schedule() {
         </div>
         <div className="control-group">
           <label>TEAM</label>
-          <select className="arcade-select" value={selectedTeamAbr}
+          <select className="sel" value={selectedTeamAbr}
             onChange={e => setSelectedTeamAbr(e.target.value)}
             disabled={teams.length === 0}>
             <option value="">SELECT TEAM</option>
@@ -358,286 +204,413 @@ export default function Schedule() {
         </div>
       </div>
 
-      {/* BODY */}
       {loading ? (
         <div className="loading-screen">
           <div className="loading-spinner" />
           <div className="loading-text">LOADING...</div>
         </div>
-      ) : completedGames.length === 0 && remainingOpponents.length === 0 && !seasonStats ? (
-        <div className="no-data"><div className="no-data-text">NO DATA</div></div>
       ) : (
         <div className="page-body">
 
-          {seasonStats && <StatHero stats={seasonStats} />}
+          {/* COMPACT HERO */}
+          {seasonStats && (
+            <div className="hero">
+              <div className="hero-left">
+                <div className="hero-logo-wrap">
+                  <img src={`/assets/teamLogos/${selectedTeamAbr}.png`} alt={selectedTeamAbr}
+                    className="hero-logo" onError={e => { e.target.style.opacity = '0'; }} />
+                </div>
+                <div className="hero-team-info">
+                  <div className="hero-abr">{selectedTeamAbr}</div>
+                  <div className="hero-rank">#{seasonStats.season_rank || '—'}</div>
+                </div>
+              </div>
+              <div className="hero-record">
+                <span className="rec-w">{seasonRecord.w}<span className="rec-lbl">W</span></span>
+                <span className="rec-sep">–</span>
+                <span className="rec-l">{seasonRecord.l}<span className="rec-lbl">L</span></span>
+                {seasonRecord.t > 0 && <><span className="rec-sep">–</span><span className="rec-t">{seasonRecord.t}<span className="rec-lbl">T</span></span></>}
+                {seasonRecord.otl > 0 && <><span className="rec-sep">–</span><span className="rec-otl">{seasonRecord.otl}<span className="rec-lbl">OTL</span></span></>}
+              </div>
+              <div className="hero-stats">
+                {[
+                  { l: 'GP',   v: seasonStats.gp  ?? '—' },
+                  { l: 'PTS',  v: seasonStats.pts ?? '—', hi: true },
+                  { l: 'GF',   v: seasonStats.gf  ?? '—' },
+                  { l: 'GA',   v: seasonStats.ga  ?? '—' },
+                  { l: 'GD',   v: seasonStats.gd > 0 ? `+${seasonStats.gd}` : seasonStats.gd ?? '—',
+                    pos: seasonStats.gd > 0, neg: seasonStats.gd < 0 },
+                  { l: 'GF/G', v: seasonStats.gp > 0 ? (seasonStats.gf / seasonStats.gp).toFixed(2) : '—', sm: true },
+                  { l: 'GA/G', v: seasonStats.gp > 0 ? (seasonStats.ga / seasonStats.gp).toFixed(2) : '—', sm: true },
+                ].map(s => (
+                  <div key={s.l} className="hs">
+                    <div className={`hs-v${s.hi ? ' hi' : s.pos ? ' pos' : s.neg ? ' neg' : s.sm ? ' sm' : ''}`}>{s.v}</div>
+                    <div className="hs-l">{s.l}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
-          <div className="split-layout">
+          {/* TABS */}
+          <div className="tabs">
+            <button className={`tab${activeTab === 'remaining' ? ' tab-active' : ''}`}
+              onClick={() => setActiveTab('remaining')}>
+              🕐 REMAINING
+              <span className="tab-count">{remainingOpponents.length}</span>
+            </button>
+            <button className={`tab${activeTab === 'completed' ? ' tab-active' : ''}`}
+              onClick={() => setActiveTab('completed')}>
+              ✅ COMPLETED
+              <span className="tab-count">{completedGroups.length}</span>
+            </button>
+          </div>
 
-            <SectionPanel title="REMAINING" accentColor="#87CEEB" count={remainingOpponents.length}>
-              {remainingOpponents.map(t => (
-                <RemainingOpponentBlock key={t.abr} team={t} />
-              ))}
-            </SectionPanel>
+          {/* TABLE */}
+          <div className="opp-table">
 
-            <SectionPanel title="COMPLETED" accentColor="#FFD700" count={completedGroups.length}>
-              {completedGroups.map(g => (
-                <CompletedOpponentBlock key={g.opp} group={g} />
-              ))}
-            </SectionPanel>
+            {/* Column headers */}
+            <div className="table-head">
+              <div className="th th-opp">OPPONENT</div>
+              <div className="th th-season">THIS SEASON</div>
+              <div className="th-divider-head" />
+              <div className="th th-h2h">ALL-TIME</div>
+            </div>
+
+            {activeTab === 'completed' && (
+              completedGroups.length === 0
+                ? <div className="empty">NO COMPLETED GAMES</div>
+                : completedGroups.map(group => {
+                    const key = group.opp.toLowerCase();
+                    const h2h = h2hRecords[key] || { w:0, l:0, t:0, otl:0, gf:0, ga:0, gd:0, gp:0 };
+                    return (
+                      <div key={key} className="opp-row">
+                        {/* Logo + name */}
+                        <div className="cell-opp">
+                          <div className="opp-logo-wrap">
+                            <img src={`/assets/teamLogos/${group.opp}.png`} alt={group.opp}
+                              className="opp-logo" onError={e => { e.target.style.opacity='0'; }} />
+                          </div>
+                          <span className="opp-abr">{group.opp}</span>
+                        </div>
+
+                        {/* This season chips */}
+                        <div className="cell-season">
+                          <div className="game-chips">
+                            {group.games.map(g => {
+                              const isHome = g.home.toLowerCase() === selectedTeamAbr.toLowerCase();
+                              const result = isHome ? g.result_home : g.result_away;
+                              const { cls, label } = getResultMeta(result);
+                              // Always display as away–home regardless of who selected team is
+                              const awayScore = g.score_away;
+                              const homeScore = g.score_home;
+                              return (
+                                <div key={g.game || g.id} className={`game-chip game-chip-${cls}`}>
+                                  <span className="chip-score">{awayScore}–{homeScore}</span>
+                                  <span className="chip-result">{label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Visual divider */}
+                        <div className="cell-divider" />
+
+                        {/* All-time inline stats */}
+                        <div className="cell-h2h">
+                          <H2HStats h2h={h2h} />
+                        </div>
+                      </div>
+                    );
+                  })
+            )}
+
+            {activeTab === 'remaining' && (
+              remainingOpponents.length === 0
+                ? <div className="empty">NO REMAINING GAMES — SEASON COMPLETE!</div>
+                : remainingOpponents.map(team => {
+                    const key = team.abr.toLowerCase();
+                    const h2h = h2hRecords[key] || { w:0, l:0, t:0, otl:0, gf:0, ga:0, gd:0, gp:0 };
+                    return (
+                      <div key={key} className="opp-row">
+                        <div className="cell-opp">
+                          <div className="opp-logo-wrap">
+                            <img src={`/assets/teamLogos/${team.abr}.png`} alt={team.abr}
+                              className="opp-logo" onError={e => { e.target.style.opacity='0'; }} />
+                          </div>
+                          <span className="opp-abr">{team.abr}</span>
+                        </div>
+
+                        <div className="cell-season">
+                          <span className="unplayed">NOT YET PLAYED</span>
+                        </div>
+
+                        <div className="cell-divider" />
+
+                        <div className="cell-h2h">
+                          <H2HStats h2h={h2h} />
+                        </div>
+                      </div>
+                    );
+                  })
+            )}
 
           </div>
         </div>
       )}
 
       <style>{`
-        /* ===========================  PAGE  =========================== */
         .schedule-page {
-          padding: 1rem 2rem;
+          padding: 1rem 1.5rem;
           min-height: 100vh;
-          background: radial-gradient(ellipse at top, #0a0a15 0%, #000000 100%);
+          background: radial-gradient(ellipse at top, #0a0a15 0%, #000 100%);
         }
 
-        /* ===========================  HEADER  =========================== */
-        .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
-        .scoreboard-header {
+        /* ── HEADER ── */
+        .page-header { display:flex; justify-content:center; margin-bottom:1rem; }
+        .header-box {
           background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem;
-          box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,0.8),0 8px 16px rgba(0,0,0,0.5),0 0 40px rgba(255,215,0,0.3);
+          box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3);
           position:relative; overflow:hidden;
         }
-        .scoreboard-header::before {
+        .header-box::before {
           content:''; position:absolute; inset:0;
-          background:
-            repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,0.03) 2px,rgba(255,215,0,0.03) 4px),
-            repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,0.03) 2px,rgba(255,215,0,0.03) 4px);
+          background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),
+            repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px);
           pointer-events:none;
         }
-        .scoreboard-header::after {
+        .header-box::after {
           content:''; position:absolute; top:-50%; left:-50%; width:200%; height:200%;
-          background:linear-gradient(45deg,transparent 30%,rgba(255,215,0,0.1) 50%,transparent 70%);
-          animation:shimmer 3s infinite;
+          background:linear-gradient(45deg,transparent 30%,rgba(255,215,0,.1) 50%,transparent 70%);
+          animation:shimmer 3s infinite; pointer-events:none;
         }
-        @keyframes shimmer {
-          0%  { transform:translateX(-100%) translateY(-100%) rotate(45deg); }
-          100%{ transform:translateX(100%)  translateY(100%)  rotate(45deg); }
-        }
+        @keyframes shimmer { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)} 100%{transform:translateX(100%) translateY(100%) rotate(45deg)} }
         .led-text {
           font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
           text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
-          filter:contrast(1.3) brightness(1.2); position:relative;
+          filter:contrast(1.3) brightness(1.2); position:relative; z-index:1;
         }
 
-        /* ===========================  CONTROLS  =========================== */
-        .control-panel { display:flex; gap:2rem; justify-content:center; margin-bottom:1.5rem; flex-wrap:wrap; }
-        .control-group { display:flex; flex-direction:column; gap:0.5rem; }
-        .control-group label {
-          font-family:'Press Start 2P',monospace; font-size:0.7rem; color:#FF8C00; letter-spacing:2px; text-shadow:0 0 5px #FF8C00;
-        }
-        .arcade-select {
-          background:linear-gradient(180deg,#1a1a2e 0%,#0a0a15 100%); color:#87CEEB;
-          border:3px solid #87CEEB; padding:0.75rem 1rem;
+        /* ── CONTROLS ── */
+        .controls { display:flex; gap:1.5rem; justify-content:center; margin-bottom:1.25rem; flex-wrap:wrap; }
+        .control-group { display:flex; flex-direction:column; gap:.4rem; }
+        .control-group label { font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FF8C00; letter-spacing:2px; }
+        .sel {
+          background:linear-gradient(180deg,#1a1a2e,#0a0a15); color:#87CEEB;
+          border:3px solid #87CEEB; padding:.55rem .9rem;
           font-family:'VT323',monospace; font-size:1.2rem; cursor:pointer; border-radius:8px;
-          box-shadow:0 0 10px rgba(135,206,235,0.3),inset 0 0 10px rgba(135,206,235,0.1);
-          transition:all 0.3s ease; letter-spacing:1px;
+          transition:all .2s; min-width:200px;
         }
-        .arcade-select:hover:not(:disabled) {
-          border-color:#FF8C00; color:#FF8C00;
-          box-shadow:0 0 15px rgba(255,140,0,0.5),inset 0 0 15px rgba(255,140,0,0.1); transform:translateY(-2px);
-        }
-        .arcade-select:disabled { opacity:0.4; cursor:not-allowed; }
+        .sel:hover:not(:disabled) { border-color:#FFD700; color:#FFD700; }
+        .sel:disabled { opacity:.4; cursor:not-allowed; }
 
-        /* ===========================  LOADING / NO DATA  =========================== */
-        .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:2rem; }
-        .loading-spinner {
-          width:60px; height:60px; border:6px solid rgba(255,140,0,0.2); border-top:6px solid #FF8C00;
-          border-radius:50%; animation:spin 1s linear infinite; box-shadow:0 0 20px rgba(255,140,0,0.5);
-        }
-        @keyframes spin { to { transform:rotate(360deg); } }
-        .loading-text { font-family:'Press Start 2P',monospace; font-size:1rem; color:#87CEEB; letter-spacing:2px; animation:pulse 1.5s ease-in-out infinite; }
-        @keyframes pulse { 0%,100%{opacity:0.5} 50%{opacity:1;text-shadow:0 0 20px #FF8C00} }
-        .no-data { display:flex; justify-content:center; align-items:center; min-height:400px; }
-        .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FF8C00; text-shadow:0 0 10px #FF8C00; letter-spacing:3px; }
+        /* ── LOADING ── */
+        .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:300px; gap:1.5rem; }
+        .loading-spinner { width:50px; height:50px; border:5px solid rgba(255,140,0,.2); border-top:5px solid #FF8C00; border-radius:50%; animation:spin 1s linear infinite; }
+        @keyframes spin { to{transform:rotate(360deg)} }
+        .loading-text { font-family:'Press Start 2P',monospace; font-size:.8rem; color:#87CEEB; animation:blink 1.5s ease-in-out infinite; }
+        @keyframes blink { 0%,100%{opacity:.5} 50%{opacity:1} }
 
-        /* ===========================  HERO STRIP  =========================== */
-        .page-body { max-width:1400px; margin:0 auto; }
-        .hero-strip {
-          position:relative; display:flex; align-items:center; gap:2rem;
-          background:linear-gradient(135deg,#0d0d1a 0%,#111125 50%,#0a0a15 100%);
-          border:3px solid rgba(255,140,0,0.5); border-radius:20px;
-          padding:1.75rem 2rem; margin-bottom:2rem; overflow:hidden;
-          box-shadow:0 0 40px rgba(255,140,0,0.15),inset 0 0 40px rgba(255,140,0,0.04);
+        /* ── PAGE BODY ── */
+        .page-body { max-width:1200px; margin:0 auto; }
+
+        /* ── COMPACT HERO ── */
+        .hero {
+          display:flex; align-items:center; gap:1rem; flex-wrap:wrap;
+          background:linear-gradient(135deg,#0d0d1a,#111125);
+          border:2px solid rgba(255,140,0,.4); border-radius:14px;
+          padding:1rem 1.25rem; margin-bottom:1rem; position:relative; overflow:hidden;
         }
-        .hero-strip::before {
-          content:''; position:absolute; top:0; left:0; right:0; height:3px;
+        .hero::before {
+          content:''; position:absolute; top:0; left:0; right:0; height:2px;
           background:linear-gradient(90deg,transparent,#FF8C00,#FFD700,#FF8C00,transparent);
-          box-shadow:0 0 12px #FF8C00;
         }
-        .hero-banner-bg { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-        .hero-banner-img {
-          position:absolute; right:-30px; top:50%; transform:translateY(-50%);
-          height:180%; opacity:0.08; filter:blur(2px) brightness(1.5);
-          mask-image:linear-gradient(to left,rgba(0,0,0,0.9) 0%,transparent 65%);
-          -webkit-mask-image:linear-gradient(to left,rgba(0,0,0,0.9) 0%,transparent 65%);
-        }
-        .hero-logo-col {
-          position:relative; z-index:2; flex-shrink:0;
-          width:110px; height:110px;
-          background:rgba(0,0,0,0.6); border-radius:20px; padding:10px;
-          border:2px solid rgba(255,140,0,0.6);
-          box-shadow:0 0 30px rgba(255,140,0,0.4);
+        .hero-left { display:flex; align-items:center; gap:.75rem; flex-shrink:0; }
+        .hero-logo-wrap {
+          width:60px; height:60px; background:rgba(0,0,0,.5); border-radius:10px; padding:5px;
+          border:2px solid rgba(255,140,0,.5); box-shadow:0 0 20px rgba(255,140,0,.3);
           display:flex; align-items:center; justify-content:center;
         }
         .hero-logo { width:100%; height:100%; object-fit:contain; }
-        .hero-logo-fallback {
-          display:flex; align-items:center; justify-content:center;
-          font-family:'Press Start 2P',monospace; font-size:0.65rem; color:#FF8C00; text-align:center;
-        }
-        .hero-stats-row { position:relative; z-index:2; display:flex; flex-wrap:wrap; flex:1; align-items:flex-start; }
-        .hero-stat {
-          display:flex; flex-direction:column; align-items:center; justify-content:flex-start;
-          width:80px; padding:0.4rem 0;
-          border-right:1px solid rgba(255,140,0,0.18);
-        }
-        .hero-stat:last-child { border-right:none; }
-        .hero-val {
-          font-family:'VT323',monospace; font-size:2.2rem; line-height:1; color:#E0E0E0; letter-spacing:1px;
-          height:2.4rem; display:flex; align-items:center; justify-content:center;
-        }
-        .hero-lbl {
-          font-family:'Press Start 2P',monospace; font-size:0.52rem;
-          color:rgba(255,140,0,0.85); letter-spacing:1px; margin-top:6px; white-space:nowrap;
-        }
-        .hero-rank { color:#FFD700; text-shadow:0 0 15px #FFD700; font-size:2.4rem; }
-        .hero-pts  { color:#FFD700; text-shadow:0 0 15px #FFD700; font-size:2.4rem; }
-        .hero-w    { color:#00FF64; text-shadow:0 0 10px #00FF64; }
-        .hero-l    { color:#FF3C3C; text-shadow:0 0 10px #FF3C3C; }
-        .hero-otl  { color:#FFA500; text-shadow:0 0 10px #FFA500; }
-        .hero-pos  { color:#00FF64; text-shadow:0 0 10px #00FF64; }
-        .hero-neg  { color:#FF3C3C; text-shadow:0 0 10px #FF3C3C; }
-        .hero-sub  { color:#87CEEB; font-size:1.9rem !important; }
+        .hero-team-info { display:flex; flex-direction:column; }
+        .hero-abr { font-family:'Press Start 2P',monospace; font-size:.8rem; color:#FFD700; }
+        .hero-rank { font-family:'VT323',monospace; font-size:1.4rem; color:rgba(255,215,0,.5); }
+        .hero-record { display:flex; align-items:baseline; gap:.4rem; flex-shrink:0; }
+        .hero-record > span { font-family:'VT323',monospace; font-size:2.2rem; display:flex; align-items:baseline; gap:.15rem; }
+        .rec-lbl { font-family:'Press Start 2P',monospace; font-size:.42rem; opacity:.7; margin-left:1px; }
+        .rec-w { color:#00FF64 !important; }
+        .rec-l { color:#FF3C3C !important; }
+        .rec-t { color:#87CEEB !important; }
+        .rec-otl { color:#FFA500 !important; }
+        .rec-sep { color:rgba(255,255,255,.2) !important; font-size:1.6rem !important; }
+        .hero-stats { display:flex; flex-wrap:wrap; gap:0; flex:1; }
+        .hs { display:flex; flex-direction:column; align-items:center; padding:.2rem .6rem; border-right:1px solid rgba(255,140,0,.15); }
+        .hs:last-child { border-right:none; }
+        .hs-v { font-family:'VT323',monospace; font-size:1.8rem; line-height:1; color:#E0E0E0; }
+        .hs-v.hi  { color:#FFD700; text-shadow:0 0 10px #FFD700; }
+        .hs-v.pos { color:#00FF64; }
+        .hs-v.neg { color:#FF3C3C; }
+        .hs-v.sm  { font-size:1.5rem; color:#87CEEB; }
+        .hs-l { font-family:'Press Start 2P',monospace; font-size:.38rem; color:rgba(255,140,0,.7); margin-top:2px; }
 
-        /* ===========================  SPLIT LAYOUT  =========================== */
-        .split-layout { display:grid; grid-template-columns:1fr 1fr; gap:1.5rem; align-items:start; }
+        /* ── TABS ── */
+        .tabs { display:flex; gap:.5rem; margin-bottom:.75rem; }
+        .tab {
+          flex:1; display:flex; align-items:center; justify-content:center; gap:.5rem;
+          padding:.65rem 1rem; background:rgba(0,0,0,.5); border:2px solid rgba(255,255,255,.1);
+          border-radius:8px; color:rgba(255,255,255,.4); cursor:pointer;
+          font-family:'Press Start 2P',monospace; font-size:.52rem; letter-spacing:1px;
+          transition:all .2s;
+        }
+        .tab:hover { border-color:rgba(255,140,0,.4); color:rgba(255,255,255,.7); }
+        .tab-active { background:rgba(255,140,0,.1); border-color:#FF8C00; color:#FF8C00; text-shadow:0 0 10px rgba(255,140,0,.5); }
+        .tab-count {
+          background:rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.15);
+          border-radius:10px; padding:.1rem .45rem;
+          font-family:'VT323',monospace; font-size:1rem; color:rgba(255,255,255,.5);
+        }
+        .tab-active .tab-count { border-color:rgba(255,140,0,.4); color:#FF8C00; }
 
-        /* ===========================  SECTION PANEL  =========================== */
-        .section-panel {
-          background:linear-gradient(180deg,#0d0d1a 0%,#080812 100%);
-          border:2px solid rgba(255,140,0,0.2); border-radius:14px; overflow:hidden;
-        }
-        .section-panel-header {
-          display:flex; align-items:center; justify-content:space-between;
-          padding:0.85rem 1.25rem;
-          background:linear-gradient(90deg,rgba(0,0,0,0.6),rgba(255,140,0,0.05));
-          border-bottom:2px solid var(--accent,#FF8C00);
-        }
-        .sp-title {
-          font-family:'Press Start 2P',monospace; font-size:0.75rem;
-          color:var(--accent,#FF8C00); letter-spacing:3px; text-shadow:0 0 10px var(--accent,#FF8C00);
-        }
-        .sp-count { font-family:'VT323',monospace; font-size:1.1rem; color:rgba(255,255,255,0.3); letter-spacing:1px; }
-        .section-empty {
-          padding:2.5rem; text-align:center;
-          font-family:'Press Start 2P',monospace; font-size:0.55rem; color:rgba(255,255,255,0.2); letter-spacing:2px;
+        /* ── TABLE ── */
+        .opp-table {
+          background:linear-gradient(180deg,#0a0a15,#080810);
+          border:2px solid rgba(255,140,0,.2); border-radius:12px; overflow:hidden;
         }
 
-        /* ===========================  OPPONENT BLOCKS  =========================== */
-        .opp-list { padding:0.6rem; display:flex; flex-direction:column; gap:0.6rem; }
-        .opp-block { border-radius:10px; overflow:hidden; border:1px solid rgba(255,140,0,0.15); transition:border-color 0.2s ease; }
-        .opp-block:hover { border-color:rgba(255,140,0,0.45); }
+        /* Grid: logo+name | season chips | divider | all-time stats */
+        .table-head {
+          display:grid;
+          grid-template-columns: 130px minmax(180px,1fr) 2px minmax(360px,1.6fr);
+          gap: .5rem;
+          padding: .6rem 1rem;
+          background: rgba(255,140,0,.1);
+          border-bottom: 2px solid rgba(255,140,0,.3);
+          align-items: center;
+        }
+        .th {
+          font-family:'Press Start 2P',monospace; font-size:.58rem;
+          color:#FFD700; letter-spacing:2px;
+          text-shadow:0 0 8px rgba(255,200,0,.4);
+        }
+        .th-divider-head { /* no label, just spacing */ }
 
-        .opp-header {
-          position:relative; display:flex; align-items:center; gap:0.9rem; padding:0.75rem 1rem;
-          background:linear-gradient(135deg,rgba(0,0,0,0.85) 0%,rgba(20,20,35,0.9) 100%);
-          border-bottom:1px solid rgba(255,140,0,0.12); overflow:hidden; min-height:68px;
+        .opp-row {
+          display:grid;
+          grid-template-columns: 130px minmax(180px,1fr) 2px minmax(360px,1.6fr);
+          gap: .5rem;
+          padding: .65rem 1rem;
+          align-items: center;
+          border-bottom: 1px solid rgba(255,255,255,.05);
+          transition: background .15s;
         }
-        .opp-banner-bg { position:absolute; inset:0; z-index:0; overflow:hidden; pointer-events:none; }
-        .opp-banner-img {
-          position:absolute; right:-10px; top:50%; transform:translateY(-50%);
-          height:160%; opacity:0.15; filter:blur(0.5px) brightness(1.3);
-          mask-image:linear-gradient(to left,rgba(0,0,0,0.95) 0%,rgba(0,0,0,0.4) 40%,transparent 100%);
-          -webkit-mask-image:linear-gradient(to left,rgba(0,0,0,0.95) 0%,rgba(0,0,0,0.4) 40%,transparent 100%);
-        }
+        .opp-row:last-child { border-bottom: none; }
+        .opp-row:hover { background: rgba(255,140,0,.04); }
+
+        /* ── CELLS ── */
+        .cell-opp { display:flex; align-items:center; gap:.6rem; }
         .opp-logo-wrap {
-          position:relative; z-index:2; flex-shrink:0;
-          width:46px; height:46px; background:rgba(0,0,0,0.5); border-radius:9px; padding:4px;
-          border:1.5px solid rgba(135,206,235,0.3); box-shadow:0 0 10px rgba(135,206,235,0.1);
-          display:flex; align-items:center; justify-content:center; transition:all 0.3s ease;
+          width:38px; height:38px; background:rgba(0,0,0,.4); border-radius:7px; padding:3px;
+          border:1px solid rgba(135,206,235,.25); display:flex; align-items:center; justify-content:center; flex-shrink:0;
         }
-        .opp-block:hover .opp-logo-wrap { border-color:rgba(255,140,0,0.6); box-shadow:0 0 15px rgba(255,140,0,0.3); }
-        .opp-logo { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 0 4px rgba(135,206,235,0.3)); transition:all 0.3s ease; }
-        .opp-block:hover .opp-logo { filter:drop-shadow(0 0 10px rgba(255,140,0,0.8)); transform:scale(1.1); }
-        .opp-fallback { font-family:'Press Start 2P',monospace; font-size:0.4rem; color:#87CEEB; text-align:center; }
+        .opp-logo { width:100%; height:100%; object-fit:contain; }
+        .opp-abr { font-family:'Press Start 2P',monospace; font-size:.62rem; color:#E0E0E0; letter-spacing:1px; }
 
-        .opp-h2h { position:relative; z-index:2; flex:1; }
-        .opp-h2h-label {
-          font-family:'Press Start 2P',monospace; font-size:0.38rem;
-          color:rgba(255,140,0,0.5); letter-spacing:2px; margin-bottom:0.45rem;
+        /* vertical rule divider */
+        .cell-divider {
+          width: 1px;
+          align-self: stretch;
+          background: linear-gradient(180deg, transparent, rgba(255,140,0,.35) 20%, rgba(255,140,0,.35) 80%, transparent);
         }
-        .opp-h2h-stats { display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center; }
-        .h2h-stat-item {
+
+        .cell-season { display:flex; align-items:center; }
+        .game-chips { display:flex; flex-wrap:wrap; gap:.35rem; }
+        .game-chip {
+          display:flex; align-items:center; gap:.3rem;
+          padding:.28rem .55rem; border-radius:6px; border:1px solid rgba(255,255,255,.1);
+          background:rgba(0,0,0,.3);
+        }
+        .game-chip-win  { border-color:rgba(0,255,100,.35);  background:rgba(0,255,100,.08); }
+        .game-chip-loss { border-color:rgba(255,60,60,.35);   background:rgba(255,60,60,.08); }
+        .game-chip-otl  { border-color:rgba(255,165,0,.35);   background:rgba(255,165,0,.08); }
+        .game-chip-tie  { border-color:rgba(135,206,235,.35); background:rgba(135,206,235,.08); }
+        .chip-venue { font-family:'Press Start 2P',monospace; font-size:.38rem; color:rgba(255,255,255,.35); }
+        .chip-score { font-family:'VT323',monospace; font-size:1.45rem; line-height:1; color:#E0E0E0; }
+        .game-chip-win  .chip-score { color:#00FF64; }
+        .game-chip-loss .chip-score { color:#FF3C3C; }
+        .game-chip-otl  .chip-score { color:#FFA500; }
+        .chip-result { font-family:'Press Start 2P',monospace; font-size:.38rem; }
+        .game-chip-win  .chip-result { color:#00FF64; }
+        .game-chip-loss .chip-result { color:#FF3C3C; }
+        .game-chip-otl  .chip-result { color:#FFA500; }
+        .game-chip-tie  .chip-result { color:#87CEEB; }
+        .unplayed { font-family:'Press Start 2P',monospace; font-size:.42rem; color:rgba(255,255,255,.2); letter-spacing:1px; }
+
+        /* ── ALL-TIME INLINE STATS ── */
+        .cell-h2h { display:flex; align-items:center; min-width:0; }
+        .h2h-inline { display:flex; flex-wrap:nowrap; gap:.25rem; align-items:center; }
+
+        .sv {
           display:flex; flex-direction:column; align-items:center;
-          background:rgba(0,0,0,0.4); border:1px solid rgba(255,140,0,0.18);
-          border-radius:7px; padding:0.22rem 0.6rem; min-width:38px;
+          background:rgba(0,0,0,.35); border:1px solid rgba(255,140,0,.18);
+          border-radius:6px; padding:.2rem .45rem; min-width:36px; flex-shrink:0;
         }
-        .h2h-stat-val { font-family:'VT323',monospace; font-size:1.55rem; line-height:1; letter-spacing:1px; }
-        .h2h-stat-lbl { font-family:'Press Start 2P',monospace; font-size:0.34rem; color:rgba(255,255,255,0.35); letter-spacing:1px; margin-top:2px; }
-        .h2h-w      { color:#00FF64; text-shadow:0 0 8px #00FF64; }
-        .h2h-l      { color:#FF3C3C; text-shadow:0 0 8px #FF3C3C; }
-        .h2h-t      { color:#87CEEB; text-shadow:0 0 8px #87CEEB; }
-        .h2h-otl    { color:#FFA500; text-shadow:0 0 8px #FFA500; }
-        .h2h-gf     { color:#FFD700; }
-        .h2h-ga     { color:rgba(255,255,255,0.45); }
-        .h2h-gd-pos { color:#00FF64; text-shadow:0 0 8px #00FF64; }
-        .h2h-gd-neg { color:#FF3C3C; text-shadow:0 0 8px #FF3C3C; }
-        .h2h-first  { font-family:'Press Start 2P',monospace; font-size:0.4rem; color:rgba(135,206,235,0.4); letter-spacing:1px; }
-
-        /* ===========================  GAME ROWS  =========================== */
-        .opp-games { background:rgba(0,0,0,0.3); }
-        .game-row {
-          display:flex; align-items:center; gap:0.65rem;
-          padding:0.5rem 1rem 0.5rem 0.75rem;
-          border-bottom:1px solid rgba(255,255,255,0.04); transition:background 0.2s ease;
+        .sv-val {
+          font-family:'VT323',monospace; font-size:1.45rem; line-height:1;
+          color:rgba(255,255,255,.75);
         }
-        .game-row:last-child { border-bottom:none; }
-        .game-row:hover      { background:rgba(255,140,0,0.07); }
-        .game-row.win        { background:rgba(0,255,100,0.04); }
-        .game-row.win:hover  { background:rgba(0,255,100,0.09); }
-        .game-row.loss       { background:rgba(255,60,60,0.04); }
-        .game-row.loss:hover { background:rgba(255,60,60,0.09); }
-        .game-row.otl        { background:rgba(255,165,0,0.04); }
-
-        .venue-pip { width:3px; height:30px; border-radius:3px; flex-shrink:0; }
-        .pip-home  { background:linear-gradient(180deg,#00C864,#007A3D); box-shadow:0 0 6px #00C864; }
-        .pip-away  { background:linear-gradient(180deg,#87CEEB,#4682B4); box-shadow:0 0 6px #87CEEB; }
-        .venue-tag { font-family:'Press Start 2P',monospace; font-size:0.42rem; color:rgba(255,255,255,0.3); letter-spacing:1px; width:12px; flex-shrink:0; }
-        .game-score { display:flex; align-items:center; gap:0.3rem; font-family:'VT323',monospace; font-size:1.5rem; letter-spacing:1px; flex:1; }
-        .game-score.win  .gs-mine { color:#00FF64; text-shadow:0 0 10px #00FF64; }
-        .game-score.loss .gs-mine { color:#FF3C3C; text-shadow:0 0 10px #FF3C3C; }
-        .game-score.otl  .gs-mine { color:#FFA500; text-shadow:0 0 10px #FFA500; }
-        .game-score.tie  .gs-mine { color:#87CEEB; }
-        .gs-mine   { color:#FFD700; font-weight:bold; }
-        .gs-dash   { color:rgba(255,255,255,0.25); }
-        .gs-theirs { color:rgba(255,255,255,0.55); }
-        .gs-ot {
-          font-family:'Press Start 2P',monospace; font-size:0.38rem; color:#87CEEB;
-          background:rgba(135,206,235,0.1); border:1px solid rgba(135,206,235,0.3);
-          border-radius:3px; padding:1px 4px; margin-left:2px; letter-spacing:1px;
+        .sv-lbl {
+          font-family:'Press Start 2P',monospace; font-size:.36rem;
+          color:rgba(255,190,0,.75); letter-spacing:1px; margin-top:1px;
         }
-        .game-result-badge { font-family:'Press Start 2P',monospace; font-size:0.48rem; letter-spacing:1px; padding:3px 7px; border-radius:5px; flex-shrink:0; }
-        .game-result-badge.win  { color:#00FF64; background:rgba(0,255,100,0.1);   border:1px solid rgba(0,255,100,0.3);   text-shadow:0 0 6px #00FF64; }
-        .game-result-badge.loss { color:#FF3C3C; background:rgba(255,60,60,0.1);   border:1px solid rgba(255,60,60,0.3);   text-shadow:0 0 6px #FF3C3C; }
-        .game-result-badge.otl  { color:#FFA500; background:rgba(255,165,0,0.1);   border:1px solid rgba(255,165,0,0.3);   text-shadow:0 0 6px #FFA500; }
-        .game-result-badge.tie  { color:#87CEEB; background:rgba(135,206,235,0.1); border:1px solid rgba(135,206,235,0.3); }
+        /* value colors */
+        .sv-w   { color:#00FF64; text-shadow:0 0 8px rgba(0,255,100,.5); }
+        .sv-l   { color:#FF3C3C; text-shadow:0 0 8px rgba(255,60,60,.5); }
+        .sv-otl { color:#FFA500; }
+        .sv-gf  { color:#FFD700; }
+        .sv-pos { color:#00FF64; text-shadow:0 0 8px rgba(0,255,100,.5); }
+        .sv-neg { color:#FF3C3C; text-shadow:0 0 8px rgba(255,60,60,.5); }
 
-        /* ===========================  RESPONSIVE  =========================== */
-        @media (max-width:1100px) { .split-layout { grid-template-columns:1fr; } }
-        @media (max-width:768px) {
-          .led-text { font-size:1.2rem; letter-spacing:3px; }
-          .scoreboard-header { padding:1rem 1.5rem; }
-          .control-panel { flex-direction:column; gap:1rem; }
-          .hero-stat { width:64px; }
-          .hero-val { font-size:1.8rem; }
-          .hero-lbl { font-size:0.44rem; }
-          .hero-logo-col { width:80px; height:80px; }
+        .first-meeting { font-family:'Press Start 2P',monospace; font-size:.42rem; color:rgba(135,206,235,.45); letter-spacing:1px; }
+
+        .empty {
+          padding:2.5rem; text-align:center;
+          font-family:'Press Start 2P',monospace; font-size:.55rem;
+          color:rgba(255,255,255,.2); letter-spacing:2px;
+        }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width:800px) {
+          /* stack season + all-time vertically on smaller screens */
+          .table-head {
+            grid-template-columns: 110px 1fr;
+            grid-template-rows: auto auto;
+          }
+          .th-divider-head { display:none; }
+          .th-h2h { grid-column:2; }
+
+          .opp-row {
+            grid-template-columns: 110px 1fr;
+            grid-template-rows: auto auto;
+            gap: .4rem .5rem;
+          }
+          .cell-opp  { grid-column:1; grid-row:1 / 3; }
+          .cell-season { grid-column:2; grid-row:1; }
+          .cell-divider { display:none; }
+          .cell-h2h  { grid-column:2; grid-row:2; padding-top:.3rem; border-top:1px solid rgba(255,140,0,.12); }
+        }
+        @media (max-width:640px) {
+          .schedule-page { padding:.75rem; }
+          .led-text { font-size:1.3rem; letter-spacing:3px; }
+          .hero { padding:.75rem; gap:.75rem; }
+          .hs { padding:.2rem .4rem; }
+          .hs-v { font-size:1.5rem; }
+          .opp-abr { font-size:.5rem; }
+          .opp-logo-wrap { width:32px; height:32px; }
+          .chip-score { font-size:1.2rem; }
+          .sv-val { font-size:1.35rem; }
+          .tab { font-size:.42rem; padding:.55rem .65rem; }
+          .hero-record > span { font-size:1.8rem; }
         }
       `}</style>
     </div>

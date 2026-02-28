@@ -7,7 +7,7 @@
   "crons": [
     {
       "path": "/api/gazette-cron",
-      "schedule": "0 9 * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }

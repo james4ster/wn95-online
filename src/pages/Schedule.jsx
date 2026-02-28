@@ -249,6 +249,23 @@ export default function Schedule() {
                   </div>
                 ))}
               </div>
+
+              {/* Mobile-only: 3 key stats below the record */}
+              <div className="hero-stats-mobile">
+                {[
+                  { l: 'PTS', v: seasonStats.pts ?? '—', cls: 'hi' },
+                  { l: 'GF',  v: seasonStats.gf  ?? '—', cls: '' },
+                  { l: 'GA',  v: seasonStats.ga  ?? '—', cls: '' },
+                  { l: 'GD',  v: seasonStats.gd > 0 ? `+${seasonStats.gd}` : seasonStats.gd ?? '—',
+                    cls: seasonStats.gd > 0 ? 'pos' : seasonStats.gd < 0 ? 'neg' : '' },
+                  { l: 'GP',  v: seasonStats.gp  ?? '—', cls: '' },
+                ].map(s => (
+                  <div key={s.l} className="hsm">
+                    <div className={`hsm-v${s.cls ? ' ' + s.cls : ''}`}>{s.v}</div>
+                    <div className="hsm-l">{s.l}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -454,6 +471,9 @@ export default function Schedule() {
         .hs-v.sm  { font-size:1.5rem; color:#87CEEB; }
         .hs-l { font-family:'Press Start 2P',monospace; font-size:.38rem; color:rgba(255,140,0,.7); margin-top:2px; }
 
+        /* mobile hero stats — hidden on desktop */
+        .hero-stats-mobile { display:none; }
+
         /* ── TABS ── */
         .tabs { display:flex; gap:.5rem; margin-bottom:.75rem; }
         .tab {
@@ -580,37 +600,81 @@ export default function Schedule() {
         }
 
         /* ── RESPONSIVE ── */
-        @media (max-width:800px) {
-          /* stack season + all-time vertically on smaller screens */
-          .table-head {
-            grid-template-columns: 110px 1fr;
-            grid-template-rows: auto auto;
+        @media (max-width:768px) {
+          .schedule-page { padding:.65rem; }
+          .led-text { font-size:1.2rem; letter-spacing:3px; }
+
+          /* HERO: compact stacked layout */
+          .hero { flex-direction:column; align-items:stretch; gap:.65rem; padding:.85rem; }
+          .hero-left { justify-content:flex-start; }
+          .hero-record { justify-content:flex-start; }
+          .hero-record > span { font-size:2rem; }
+          .rec-lbl { font-size:.45rem; }
+
+          /* hide full stat grid, show mobile 3-stat row */
+          .hero-stats { display:none; }
+          .hero-stats-mobile {
+            display:flex; gap:0;
+            border-top:1px solid rgba(255,140,0,.2); padding-top:.6rem;
           }
-          .th-divider-head { display:none; }
-          .th-h2h { grid-column:2; }
+          .hsm {
+            display:flex; flex-direction:column; align-items:center; flex:1;
+            border-right:1px solid rgba(255,140,0,.15);
+          }
+          .hsm:last-child { border-right:none; }
+          .hsm-v { font-family:'VT323',monospace; font-size:2rem; line-height:1; color:#E0E0E0; }
+          .hsm-v.hi  { color:#FFD700; text-shadow:0 0 10px #FFD700; }
+          .hsm-v.pos { color:#00FF64; }
+          .hsm-v.neg { color:#FF3C3C; }
+          .hsm-l { font-family:'Press Start 2P',monospace; font-size:.4rem; color:rgba(255,140,0,.7); margin-top:3px; }
+
+          /* TABS */
+          .tab { font-size:.45rem; padding:.6rem .5rem; }
+
+          /* TABLE: hide column headers, switch to stacked cards */
+          .table-head { display:none; }
 
           .opp-row {
-            grid-template-columns: 110px 1fr;
-            grid-template-rows: auto auto;
-            gap: .4rem .5rem;
+            display:flex; flex-direction:column; gap:0;
+            padding:0; border-bottom:2px solid rgba(255,140,0,.12);
           }
-          .cell-opp  { grid-column:1; grid-row:1 / 3; }
-          .cell-season { grid-column:2; grid-row:1; }
-          .cell-divider { display:none; }
-          .cell-h2h  { grid-column:2; grid-row:2; padding-top:.3rem; border-top:1px solid rgba(255,140,0,.12); }
-        }
-        @media (max-width:640px) {
-          .schedule-page { padding:.75rem; }
-          .led-text { font-size:1.3rem; letter-spacing:3px; }
-          .hero { padding:.75rem; gap:.75rem; }
-          .hs { padding:.2rem .4rem; }
-          .hs-v { font-size:1.5rem; }
-          .opp-abr { font-size:.5rem; }
-          .opp-logo-wrap { width:32px; height:32px; }
-          .chip-score { font-size:1.2rem; }
-          .sv-val { font-size:1.35rem; }
-          .tab { font-size:.42rem; padding:.55rem .65rem; }
-          .hero-record > span { font-size:1.8rem; }
+          .opp-row:last-child { border-bottom:none; }
+
+          /* Card row 1: logo + team name */
+          .cell-opp {
+            display:flex; align-items:center; gap:.65rem;
+            padding:.7rem .85rem .35rem;
+          }
+          .opp-logo-wrap { width:44px; height:44px; }
+          .opp-abr { font-size:.7rem; }
+
+          /* Card row 2: season chips */
+          .cell-season { display:flex; padding:.1rem .85rem .45rem; }
+          .game-chips { gap:.35rem; }
+          .chip-score { font-size:1.3rem; }
+          .chip-result { font-size:.4rem; }
+          .game-chip { padding:.25rem .5rem; }
+
+          /* Horizontal rule divider */
+          .cell-divider {
+            width:auto; height:1px; align-self:auto;
+            margin:0 .85rem;
+            background:linear-gradient(90deg,transparent,rgba(255,140,0,.3) 20%,rgba(255,140,0,.3) 80%,transparent);
+          }
+
+          /* Card row 3: all-time stats (scrollable if needed) */
+          .cell-h2h {
+            padding:.45rem .85rem .75rem;
+            overflow-x:auto;
+            -webkit-overflow-scrolling:touch;
+          }
+          .h2h-inline { flex-wrap:nowrap; gap:.28rem; }
+          .sv { min-width:33px; padding:.18rem .36rem; border-radius:5px; }
+          .sv-val { font-size:1.25rem; }
+          .sv-lbl { font-size:.33rem; }
+
+          .first-meeting { font-size:.4rem; }
+          .unplayed { font-size:.4rem; padding:.5rem 0; }
         }
       `}</style>
     </div>

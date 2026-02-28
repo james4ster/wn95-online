@@ -210,10 +210,9 @@ function GoalRow({ play, awayTeam, runningAway, runningHome }) {
 
       {/* Middle: logo + scorer + assists */}
       <div className="gr-body">
-        <div className="gr-logo-wrap">
-          <Logo team={play.g_team} size={34} />
-          <span className="gr-siren">🚨</span>
-        </div>
+      <div className="gr-logo-wrap">
+            <Logo team={play.g_team} size={36} />
+            </div>
         <div className="gr-text">
           <div className="gr-scorer">{play.goal_player_name}</div>
           <div className="gr-assists">
@@ -785,11 +784,10 @@ export default function Scores() {
 
         /* Logo + text */
         .gr-body { display:flex; align-items:center; gap:.6rem; min-width:0; }
-        .gr-logo-wrap { position:relative; flex-shrink:0; }
-        .gr-siren {
-          position:absolute; top:-4px; right:-4px; font-size:.75rem; line-height:1;
-          filter:drop-shadow(0 0 4px rgba(255,80,0,.7));
-        }
+        .gr-logo-wrap { flex-shrink:0; display:flex; align-items:center; justify-content:center; width:44px; height:44px; background:rgba(0,0,0,.3); border-radius:8px; padding:3px; border:1px solid rgba(255,255,255,.08); }
+        .gr-logo-wrap img { filter:drop-shadow(0 0 6px rgba(255,255,255,.15)); }
+        .gr-away .gr-logo-wrap { border-color:rgba(135,206,235,.25); box-shadow:0 0 10px rgba(135,206,235,.12); }
+        .gr-home .gr-logo-wrap { border-color:rgba(255,140,0,.25); box-shadow:0 0 10px rgba(255,140,0,.12); }
         .gr-text { display:flex; flex-direction:column; gap:.25rem; min-width:0; }
 
         .gr-scorer {

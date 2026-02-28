@@ -2,41 +2,6 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useLeague } from './LeagueContext';
 
-/**
- * PURE CSS STICKY CASCADE — zero JavaScript, zero scroll listeners, zero lag
- * ────────────────────────────────────────────────────────────────────────────
- *
- * How the full sticky stack works:
- *
- *   ┌─────────────────────────────────┐
- *   │  ScoresBar                      │  position: sticky; top: 0; z-index: 1100
- *   │  height: 80px + 2px border      │  → locks at top of viewport on scroll
- *   ├─────────────────────────────────┤
- *   │  MainNavigation                 │  position: sticky; top: 82px; z-index: 1000
- *   │  height: 72px + 4px border      │  → locks flush under ScoresBar on scroll
- *   ├─────────────────────────────────┤
- *   │  LeagueSubNav  ← THIS FILE      │  position: sticky; top: 158px; z-index: 990
- *   │                                 │  → locks flush under MainNav on scroll
- *   ├─────────────────────────────────┤
- *   │  Page content                   │  scrolls freely beneath all three bars
- *   └─────────────────────────────────┘
- *
- * The key insight:
- *   Both elements use `position: sticky`. The browser compositor handles this
- *   at the GPU layer — no JavaScript runs during scroll at all.
- *   There is no frame delay, no state update, no re-render, no jump.
- *
- *   top: 72px = exact height of MainNav (desktop)
- *   top: 60px = exact height of MainNav (mobile, per MainNavigation CSS)
- *
- *   These are hardcoded because MainNav height never changes dynamically.
- *   Hardcoding is more reliable than measuring — no mount flash, no mismatch.
- *
- * REQUIREMENT: For `position: sticky` to work, NO ancestor element can have
- *   `overflow: hidden`, `overflow: auto`, or `overflow: scroll` set.
- *   Check `.app`, `body`, `html` if sticking breaks.
- */
-
 export default function LeagueSubNav() {
   const { selectedLeague } = useLeague();
 
@@ -92,16 +57,9 @@ export default function LeagueSubNav() {
           <span className="sni">👔</span>
           <span className="snt">MANAGERS</span>
         </NavLink>
-
-                
       </div>
 
       <style>{`
-        /* ── Sticky bar ─────────────────────────────────────────────────────────
-         * top: 76px = MainNav height (72px) + its 4px border-bottom.
-         * This places the SubNav flush against the bottom edge of the MainNav.
-         * z-index 990 sits below MainNav (1000) so dropdown menus overlap SubNav.
-         * ─────────────────────────────────────────────────────────────────────── */
         .league-subnav {
           position: sticky;
           top: 76px;   /* MainNav: 72px height + 4px border-bottom */
@@ -112,27 +70,30 @@ export default function LeagueSubNav() {
           box-shadow:
             0 3px 16px rgba(135, 206, 235, 0.22),
             inset 0 -1px 8px rgba(135, 206, 235, 0.08);
-          /* Promote to GPU compositing layer — eliminates sub-pixel jitter */
           transform: translateZ(0);
         }
 
-        /* ── Tab strip ─────────────────────────────────────────────────────────── */
+        /*
+         * subnav-inner uses the same padding (14px) and max-width structure
+         * as both nav-container and .cg, so the tab strip is visually centered
+         * between the same left/right edges as the page content below.
+         */
         .subnav-inner {
           display: flex;
           align-items: stretch;
+          justify-content: center;   /* center the 6 tabs across the full width */
+          padding: 0 14px;           /* matches home .cg and nav-container */
           overflow-x: auto;
-          max-width: 1400px;
-          margin: 0 auto;
           scrollbar-width: none;
         }
         .subnav-inner::-webkit-scrollbar { display: none; }
 
-        /* ── Individual tab link ────────────────────────────────────────────────── */
+        /* ── Individual tab link ── */
         .snl {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          padding: 0 1.4rem;
+          padding: 0 1.6rem;        /* slightly wider than before for better spread */
           height: 48px;
           color: rgba(135, 206, 235, 0.65);
           font-family: 'VT323', monospace;
@@ -143,7 +104,6 @@ export default function LeagueSubNav() {
           flex-shrink: 0;
           position: relative;
           transition: color 0.15s, background 0.15s;
-          /* Bottom active indicator */
           border-bottom: 3px solid transparent;
           margin-bottom: -3px;
         }
@@ -188,12 +148,8 @@ export default function LeagueSubNav() {
           letter-spacing: 2px;
         }
 
-        /* ── Mobile ──────────────────────────────────────────────────────────────
-         * MainNavigation switches to height: 60px at max-width: 768px.
-         * Adjust top accordingly: 60px + 4px border = 64px.
-         * ─────────────────────────────────────────────────────────────────────── */
         @media (max-width: 768px) {
-          .league-subnav { top: 64px; } /* MainNav mobile: 60px + 4px border */
+          .league-subnav { top: 64px; }
           .snl { padding: 0 0.85rem; }
           .snt { display: none; }
         }

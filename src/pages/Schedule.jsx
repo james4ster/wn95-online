@@ -50,6 +50,7 @@ export default function Schedule() {
         .eq('season', selectedSeason).ilike('team', selectedTeamAbr).single();
       setSeasonStats(standingsData || null);
 
+      // Season games — still by team abr (correct for this season series)
       const [homeRes, awayRes] = await Promise.all([
         supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('home', selectedTeamAbr),
         supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('away', selectedTeamAbr),
@@ -61,30 +62,65 @@ export default function Schedule() {
         played.map(g => g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away.toLowerCase() : g.home.toLowerCase())
       );
 
-      const { data: allTeamsData } = await supabase.from('teams').select('team, abr').eq('lg', selectedSeason);
+      // Current season teams — to build opponent list and get coach names
+      const { data: allTeamsData } = await supabase
+        .from('teams').select('team, abr, coach').eq('lg', selectedSeason);
+
       const remaining = (allTeamsData || []).filter(t =>
         t.abr.toLowerCase() !== selectedTeamAbr.toLowerCase() && !playedOpponentAbrs.has(t.abr.toLowerCase())
       ).sort((a, b) => a.abr.localeCompare(b.abr));
       setRemainingOpponents(remaining);
 
+      // Get selected team's coach name — stable identifier across rebrands
+      const selectedTeamRow = (allTeamsData || []).find(t => t.abr.toLowerCase() === selectedTeamAbr.toLowerCase());
+      const selectedCoach = selectedTeamRow?.coach;
+
+      // All-time games: query by coach_home / coach_away — works across rebrands
+      // Scoped to same league prefix (e.g. 'W%') so we don't mix leagues
+      const leaguePrefix = selectedLeague + '%';
       const [allHome, allAway] = await Promise.all([
-        supabase.from('games').select('home,away,score_home,score_away,result_home,result_away,ot').eq('mode', 'Season').ilike('home', selectedTeamAbr),
-        supabase.from('games').select('home,away,score_home,score_away,result_home,result_away,ot').eq('mode', 'Season').ilike('away', selectedTeamAbr),
+        supabase.from('games').select('home,away,coach_home,coach_away,score_home,score_away,result_home,result_away,ot')
+          .eq('mode', 'Season').like('lg', leaguePrefix).ilike('coach_home', selectedCoach),
+        supabase.from('games').select('home,away,coach_home,coach_away,score_home,score_away,result_home,result_away,ot')
+          .eq('mode', 'Season').like('lg', leaguePrefix).ilike('coach_away', selectedCoach),
       ]);
       const allGames = [...(allHome.data || []), ...(allAway.data || [])];
 
+      // Build map: coach name -> current abr (from this season) for keying records
+      const coachToCurrentAbr = {};
+      (allTeamsData || []).forEach(t => {
+        if (t.coach) coachToCurrentAbr[t.coach.toLowerCase()] = t.abr.toLowerCase();
+      });
+
+      // For each opponent in the current season, compute all-time H2H by coach name
       const allOpponentAbrs = [...new Set([
         ...played.map(g => g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away : g.home),
         ...remaining.map(t => t.abr),
       ])];
 
+      // Build reverse map: current abr -> coach (for this season)
+      const abrToCoach = {};
+      (allTeamsData || []).forEach(t => {
+        if (t.coach) abrToCoach[t.abr.toLowerCase()] = t.coach.toLowerCase();
+      });
+
       const records = {};
       allOpponentAbrs.forEach(opp => {
         const oppLower = opp.toLowerCase();
-        const h2h = allGames.filter(g => g.home.toLowerCase() === oppLower || g.away.toLowerCase() === oppLower);
+        const oppCoach = abrToCoach[oppLower];
+
+        // Filter all-time games to those involving this opponent's coach
+        const h2h = oppCoach
+          ? allGames.filter(g =>
+              g.coach_home?.toLowerCase() === oppCoach || g.coach_away?.toLowerCase() === oppCoach
+            )
+          : allGames.filter(g =>
+              g.home.toLowerCase() === oppLower || g.away.toLowerCase() === oppLower
+            );
+
         let w = 0, l = 0, t = 0, otl = 0, gf = 0, ga = 0;
         h2h.forEach(g => {
-          const isHome = g.home.toLowerCase() === selectedTeamAbr.toLowerCase();
+          const isHome = g.coach_home?.toLowerCase() === selectedCoach?.toLowerCase();
           const result = isHome ? g.result_home : g.result_away;
           const myScore = isHome ? g.score_home : g.score_away;
           const theirScore = isHome ? g.score_away : g.score_home;

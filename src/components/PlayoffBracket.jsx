@@ -425,7 +425,7 @@ function MatchupCard({ slot, seasonGames, cardRef, flipped = false }) {
       <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,140,0,.18),transparent)' }} />
       {games.length > 0
         ? <ScoreGrid games={games} topTeam={topTeam} botTeam={botTeam}
-            flipped={flipped} seriesLength={seriesLength} />
+            flipped={false} seriesLength={seriesLength} />
         : <div style={{
             textAlign: 'center', padding: '3px 0', color: 'rgba(135,206,235,.2)',
             fontFamily: "'Press Start 2P',monospace", fontSize: '.38rem', letterSpacing: 3,

@@ -464,4 +464,7 @@ nav.hero-nav a:hover {
   header.hero-bar img.logo {
     height: 35px; /* slightly smaller on mobile */
   }
+  html {
+    overflow-y: scroll; /* always reserve scrollbar space */
+  }
 }

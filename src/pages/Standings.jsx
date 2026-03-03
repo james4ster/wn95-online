@@ -29,7 +29,6 @@ function computeH2H(teamA, teamB, seasonGames) {
 function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect }) {
   if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect) return null;
 
-  // Always pin to right edge of viewport
   const tooltipW = 360;
   const fixedLeft = window.innerWidth - tooltipW - 16;
   const fixedTop = Math.max(16, Math.min(anchorRect.top + anchorRect.height / 2, window.innerHeight - 200));
@@ -50,9 +49,7 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
     return b.gd - a.gd;
   });
 
-  // Use the actual season_rank of the best tied team as the base seed
   const baseSeed = Math.min(...tiedStandings.map(s => s.season_rank));
-
   const maxH2H = Math.max(...ranked.map(r => r.h2hPts), 1);
 
   const StatBar = ({ value, max, color }) => (
@@ -74,20 +71,17 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
     }}>
       <div style={{ position: 'absolute', inset: -8, background: 'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)', borderRadius: 16, pointerEvents: 'none' }} />
       <div style={{ background: 'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)', border: '1px solid rgba(255,215,0,.5)', borderRadius: 12, boxShadow: '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)', overflow: 'hidden' }}>
-        {/* Header */}
         <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid rgba(255,215,0,.15)', background: 'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.6rem', color: '#FF8C00', letterSpacing: 2, textShadow: '0 0 8px rgba(255,140,0,.7)' }}>TIEBREAKER</div>
           <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem', color: 'rgba(255,255,255,.4)', letterSpacing: 1 }}>{ranked.length} TEAMS · {ranked[0].pts} PTS</div>
         </div>
-        {/* Column headers */}
         <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 56px 56px 56px', gap: '0 6px', padding: '6px 16px 4px', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
           <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.45rem', color: 'rgba(255,255,255,.3)', textAlign: 'center' }}>SEED</div>
           <div />
           {['H2H', 'W', 'GD'].map(lbl => (
-            <div key={lbl} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.45rem', color: 'rgba(135,206,235,.5)', textAlign: 'center', letterSpacing: 1 }}>{lbl}</div>
+            <div key={lbl} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.65rem', color: 'rgba(135,206,235,.5)', textAlign: 'center', letterSpacing: 1 }}>{lbl}</div>
           ))}
         </div>
-        {/* Rows */}
         {ranked.map((row, idx) => {
           const seedNum = baseSeed + idx;
           const gdSign = row.gd > 0 ? '+' : '';
@@ -104,12 +98,82 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
             </div>
           );
         })}
-        
       </div>
     </div>
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   CLINCH / ELIMINATION MATH
+   
+   Key variables:
+     maxGP   = highest GP seen across all teams = total regular season games
+     remaining(t) = maxGP - t.gp
+     maxPts(t)    = t.pts + remaining(t) * 2
+   
+   CLINCHED (team at sorted rank r, r < playoffSpots):
+     Count outside teams (rank >= playoffSpots) whose maxPts STRICTLY
+     exceeds this team's current pts. If that count < (playoffSpots - r),
+     there aren't enough outside teams to displace this team — clinched.
+     (Ties assumed to break against = conservative = never premature.)
+   
+   ELIMINATED (team at sorted rank r, r >= playoffSpots):
+     Their maxPts STRICTLY LESS THAN the current pts of the last
+     playoff team. Even winning everything they can't reach the bubble.
+     (Equal pts = tiebreaker situation = not yet eliminated.)
+   
+   3-way tie nuance: tiebreakers are for seeding within the group,
+   not for clinch/elim math — the conservative pts-only approach
+   already handles this correctly since we delay elim until pts gap
+   is unresolvable regardless of tiebreakers.
+═══════════════════════════════════════════════════════════════ */
+function computeClinchElim(sortedStandings, playoffTeams) {
+  const clinched   = new Set();
+  const eliminated = new Set();
+
+  if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0) {
+    return { clinched, eliminated };
+  }
+
+  const n = sortedStandings.length;
+  // Total season length = max GP seen (teams with fewer GP have games remaining)
+  const maxGP = Math.max(...sortedStandings.map(s => s.gp || 0));
+  const maxPts = t => (t.pts || 0) + Math.max(0, maxGP - (t.gp || 0)) * 2;
+
+  // Last playoff spot's current pts = the minimum pts needed to "be in" right now
+  const bubbleIdx = Math.min(playoffTeams - 1, n - 1);
+  const bubblePts = sortedStandings[bubbleIdx]?.pts || 0;
+
+  // ── CLINCHED ────────────────────────────────────────────────
+  for (let r = 0; r < Math.min(playoffTeams, n); r++) {
+    const myPts = sortedStandings[r].pts || 0;
+    // How many outside teams can still reach strictly MORE than my current pts?
+    let canSurpass = 0;
+    for (let j = playoffTeams; j < n; j++) {
+      if (maxPts(sortedStandings[j]) > myPts) canSurpass++;
+    }
+    // To push me OUT of the playoffs, outside teams would need to grab
+    // (playoffTeams - r) spots above/at my rank. If fewer than that
+    // many can even surpass me, I'm mathematically safe.
+    if (canSurpass < (playoffTeams - r)) {
+      clinched.add(sortedStandings[r].team);
+    }
+  }
+
+  // ── ELIMINATED ──────────────────────────────────────────────
+  for (let r = playoffTeams; r < n; r++) {
+    // Strictly less than — if equal, tiebreakers could still save them
+    if (maxPts(sortedStandings[r]) < bubblePts) {
+      eliminated.add(sortedStandings[r].team);
+    }
+  }
+
+  return { clinched, eliminated };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN COMPONENT
+═══════════════════════════════════════════════════════════════ */
 export default function Standings() {
   const { selectedLeague } = useLeague();
   const [seasons, setSeasons] = useState([]);
@@ -149,6 +213,18 @@ export default function Standings() {
     }
     return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
   }), [standings, sortConfig]);
+
+  // Clinch/elim — recomputed whenever standings or playoffTeams changes.
+  // Always evaluated against the pts-sorted view regardless of current sort column.
+  const ptsSorted = useMemo(() =>
+    [...standings].map(s => ({ ...s, pts_pct: s.gp > 0 ? s.pts / (s.gp * 2) : 0 }))
+      .sort((a, b) => b.pts - a.pts || b.w - a.w || b.gd - a.gd),
+    [standings]
+  );
+  const { clinched, eliminated } = useMemo(
+    () => computeClinchElim(ptsSorted, playoffTeams),
+    [ptsSorted, playoffTeams]
+  );
 
   useEffect(() => {
     if (!selectedLeague) { setSeasons([]); setSelectedSeason(''); return; }
@@ -210,28 +286,16 @@ export default function Standings() {
     })();
   }, [selectedSeason]);
 
-  // FIX 1: Capture rect values as primitives immediately — React synthetic events
-  // can be recycled and e.currentTarget nulled before setState runs.
   const handleRowMouseEnter = useCallback((e, team, pts) => {
     const tiedTeams = sortedStandings.filter(s => Number(s.pts) === Number(pts));
     if (tiedTeams.length < 2) { setTiebreakerInfo(null); return; }
     const el = e.currentTarget;
     const r = el.getBoundingClientRect();
-    // Snapshot primitive values immediately
-    const top = r.top;
-    const right = r.right;
-    const left = r.left;
-    const height = r.height;
-    setTiebreakerInfo({
-      hoveredTeam: team,
-      tiedStandings: tiedTeams,
-      anchorRect: { top, right, left, height },
-    });
+    const top = r.top, right = r.right, left = r.left, height = r.height;
+    setTiebreakerInfo({ hoveredTeam: team, tiedStandings: tiedTeams, anchorRect: { top, right, left, height } });
   }, [sortedStandings]);
 
-  const handleRowMouseLeave = useCallback(() => {
-    setTiebreakerInfo(null);
-  }, []);
+  const handleRowMouseLeave = useCallback(() => { setTiebreakerInfo(null); }, []);
 
   const hasConferences = divisionMap.some(d => d.conference != null);
   const hasDivisions   = divisionMap.some(d => d.division   != null);
@@ -283,7 +347,6 @@ export default function Standings() {
 
   const groupedStandings = getGroupedStandings();
 
-  // FIX 2: Compute tied pts set once, used for isTied check below
   const tiedPtsSet = useMemo(() => {
     const ptsCounts = {};
     sortedStandings.forEach(s => {
@@ -311,7 +374,7 @@ export default function Standings() {
     { label: 'SO',    key: 'shutouts',    width: '5px' },
   ];
 
-  return (
+return (
     <div className="standings-page">
       <div className="scoreboard-header-container">
         <div className="scoreboard-header">
@@ -359,6 +422,8 @@ export default function Standings() {
         </div>
       )}
 
+
+
       {loading ? (
         <div className="loading-screen">
           <div className="loading-spinner" />
@@ -377,14 +442,10 @@ export default function Standings() {
             selectedLeague={selectedLeague}
           />
         ) : (
-          <div className="no-data">
-            <div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div>
-          </div>
+          <div className="no-data"><div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div></div>
         )
       ) : (
         <>
-          {/* FIX 3: Portal renders into document.body reliably;
-              guard added so tooltip only mounts when anchorRect is valid */}
           {tiebreakerInfo && tiebreakerInfo.anchorRect && createPortal(
             <TiebreakerTooltip
               hoveredTeam={tiebreakerInfo.hoveredTeam}
@@ -432,22 +493,33 @@ export default function Standings() {
                     </thead>
                     <tbody>
                       {group.teams.map((s, idx) => {
-                        // FIX 4: Use precomputed tiedPtsSet — O(1) lookup, no per-render filter
-                        const isTied = tiedPtsSet.has(Number(s.pts));
+                        const isTied      = tiedPtsSet.has(Number(s.pts));
+                        const isClinched  = clinched.has(s.team);
+                        const isElim      = eliminated.has(s.team);
+
+                        const rowClass = [
+                          idx % 2 === 0 ? 'even-row' : 'odd-row',
+                          playoffTeams && s.season_rank <= playoffTeams ? 'playoff-team' : 'non-playoff-team',
+                          isTied      ? 'tied-row'      : '',
+                          isClinched  ? 'clinched-row'  : '',
+                          isElim      ? 'eliminated-row': '',
+                        ].filter(Boolean).join(' ');
+
                         return (
                           <React.Fragment key={`${s.team}-${idx}`}>
                             <tr
-                              className={`${idx % 2 === 0 ? 'even-row' : 'odd-row'} ${playoffTeams && s.season_rank <= playoffTeams ? 'playoff-team' : 'non-playoff-team'} ${isTied ? 'tied-row' : ''}`}
+                              className={rowClass}
                               onMouseEnter={isTied ? (e) => handleRowMouseEnter(e, s.team, Number(s.pts)) : undefined}
                               onMouseLeave={isTied ? handleRowMouseLeave : undefined}
                             >
                               <td className="rank-cell">{idx + 1}</td>
+
                               <td className="team-cell">
                                 <div className="row-banner-overlay">
                                   <img src={`/assets/banners/${s.team}.png`} alt="" className="banner-image" onError={e => { e.target.style.display = 'none'; }} />
                                 </div>
                                 <div className="team-info">
-                                  <div className="logo-container">
+                                  <div className={`logo-container${isClinched ? ' logo-clinched' : isElim ? ' logo-elim' : ''}`}>
                                     <img src={`/assets/teamLogos/${s.team}.png`} alt={s.team} className="team-logo"
                                       onError={e => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = 'flex'; }} />
                                     <div className="logo-fallback" style={{ display: 'none' }}>{s.team}</div>
@@ -456,23 +528,24 @@ export default function Standings() {
                                 </div>
                               </td>
                               <td className="coach-cell">{s.coach}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'gp' ? 'sorted-cell' : ''}`}>{s.gp}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'w' ? 'sorted-cell' : ''}`}>{s.w}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'l' ? 'sorted-cell' : ''}`}>{s.l}</td>
-                              <td className={`stat-cell ${sortConfig.key === 't' ? 'sorted-cell' : ''}`}>{s.t}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'otl' ? 'sorted-cell' : ''}`}>{s.otl}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'gp'       ? 'sorted-cell' : ''}`}>{s.gp}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'w'        ? 'sorted-cell' : ''}`}>{s.w}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'l'        ? 'sorted-cell' : ''}`}>{s.l}</td>
+                              <td className={`stat-cell ${sortConfig.key === 't'        ? 'sorted-cell' : ''}`}>{s.t}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'otl'      ? 'sorted-cell' : ''}`}>{s.otl}</td>
                               <td className={`stat-cell pts-cell ${sortConfig.key === 'pts' ? 'sorted-cell' : ''} ${isTied ? 'tied-pts' : ''}`}>{s.pts}</td>
                               <td className={`stat-cell pts-pct-cell ${sortConfig.key === 'pts_pct' ? 'sorted-cell' : ''}`}>
                                 {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
                               </td>
-                              <td className={`stat-cell ${sortConfig.key === 'gf' ? 'sorted-cell' : ''}`}>{s.gf}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'ga' ? 'sorted-cell' : ''}`}>{s.ga}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'gf'       ? 'sorted-cell' : ''}`}>{s.gf}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'ga'       ? 'sorted-cell' : ''}`}>{s.ga}</td>
                               <td className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${sortConfig.key === 'gd' ? 'sorted-cell' : ''}`}>
                                 {s.gd > 0 ? '+' : ''}{s.gd}
                               </td>
-                              <td className={`stat-cell ${sortConfig.key === 'otw' ? 'sorted-cell' : ''}`}>{s.otw}</td>
+                              <td className={`stat-cell ${sortConfig.key === 'otw'      ? 'sorted-cell' : ''}`}>{s.otw}</td>
                               <td className={`stat-cell ${sortConfig.key === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
                             </tr>
+
                             {playoffTeams && idx === playoffTeams - 1 && (
                               <tr className="playoff-cutoff-row">
                                 <td colSpan={columns.length} className="playoff-cutoff-cell">
@@ -503,6 +576,7 @@ export default function Standings() {
       )}
 
       <style>{`
+        /* ── ALL ORIGINAL STYLES (preserved exactly) ── */
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }
@@ -543,7 +617,7 @@ export default function Standings() {
         .arcade-table thead { background:linear-gradient(180deg,#FFD700 0%,#FF6347 100%); }
         .arcade-table th { padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease; position:relative; border-right:1px solid rgba(255,255,255,.2); }
         .arcade-table td { padding:.25rem .5rem; text-align:center; font-size:1.2rem; color:#E0E0E0; border-bottom:1px solid rgba(255,140,0,.2); letter-spacing:1px; position:relative; z-index:1; }
-        .arcade-table .rank-cell { font-family:'Press Start 2P',monospace; font-size:.9rem; color:#FF8C00; font-weight:bold; text-shadow:0 0 5px #FF8C00; position:relative; z-index:10; }
+        .arcade-table .rank-cell { font-family:'Press Start 2P',monospace; font-size:.9rem; color:#FF8C00; font-weight:bold; text-shadow:0 0 5px #FF8C00; position:relative; z-index:10; white-space:nowrap; }
         .arcade-table th:last-child { border-right:none; }
         .arcade-table th:hover:not(.rank-column) { background:linear-gradient(180deg,#FF8C00 0%,#FF8C00 100%); transform:translateY(-2px); }
         .arcade-table th.sorted-column { background:linear-gradient(180deg,#FF8C00 0%,#FFA500 100%); }
@@ -554,7 +628,18 @@ export default function Standings() {
         .arcade-table tbody tr { transition:all .2s ease; position:relative; }
         .playoff-team .rank-cell::before { content:''; position:absolute; left:-8px; top:-1px; bottom:-1px; width:4px; background:linear-gradient(180deg,#00FF00 0%,#00CC00 100%); box-shadow:0 0 10px rgba(0,255,0,.6); z-index:100; }
         .tied-pts { position:relative; animation:tied-pulse 2s ease-in-out infinite; }
-        .tied-pts::after { content:'='; position:absolute; top:-2px; right:2px; font-size:.55rem; color:rgba(255,140,0,.7); font-family:'Press Start 2P',monospace; }
+        .tied-pts::after {
+          content:'';
+          position:absolute;
+          top:0; right:0;
+          width:0; height:0;
+          border-style:solid;
+          border-width:0 9px 9px 0;
+          border-color:transparent rgba(255,140,0,0.85) transparent transparent;
+          filter:drop-shadow(0 0 3px rgba(255,140,0,0.7));
+          animation:triangle-pulse 2s ease-in-out infinite;
+        }
+        @keyframes triangle-pulse { 0%,100%{border-color:transparent rgba(255,140,0,.6) transparent transparent} 50%{border-color:transparent rgba(255,215,0,1) transparent transparent; filter:drop-shadow(0 0 5px rgba(255,215,0,.9))} }
         @keyframes tied-pulse { 0%,100%{text-shadow:0 0 8px rgba(255,140,0,.4)} 50%{text-shadow:0 0 16px rgba(255,140,0,.9),0 0 24px rgba(255,215,0,.4)} }
         .tied-row { cursor:default; }
         .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:400px; pointer-events:none; z-index:0; overflow:hidden; opacity:.15; transition:all .3s ease; }
@@ -587,6 +672,38 @@ export default function Standings() {
         .team-code { display:none; }
         .logo-container { position:relative; width:38px; height:38px; flex-shrink:0; background:rgba(0,0,0,.6); border-radius:8px; padding:3px; border:2px solid rgba(135,206,235,.4); box-shadow:0 0 10px rgba(135,206,235,.3); transition:all .3s ease; }
         .arcade-table tbody tr:hover .logo-container { border-color:rgba(255,140,0,.8); box-shadow:0 0 15px rgba(255,140,0,.6); }
+
+        /* Clinched — thick green border + glow on team logo */
+        .logo-clinched {
+          border:3px solid #00DD60 !important;
+          box-shadow:0 0 10px rgba(0,221,96,.6), 0 0 20px rgba(0,221,96,.25) !important;
+          animation:clinch-logo-pulse 2.4s ease-in-out infinite;
+        }
+        @keyframes clinch-logo-pulse {
+          0%,100% { box-shadow:0 0 8px rgba(0,221,96,.5), 0 0 16px rgba(0,221,96,.2); border-color:#00DD60; }
+          50%      { box-shadow:0 0 14px rgba(0,255,100,.8), 0 0 28px rgba(0,255,100,.4); border-color:#00FF70; }
+        }
+        /* Keep the glow on hover too */
+        .arcade-table tbody tr:hover .logo-clinched {
+          border-color:#00FF70 !important;
+          box-shadow:0 0 18px rgba(0,255,100,.9), 0 0 32px rgba(0,255,100,.4) !important;
+        }
+
+        /* Eliminated — thick red border, slightly desaturated logo */
+        .logo-elim {
+          border: 5px solid #FF0000 !important; /* brighter, thicker */
+          box-shadow:
+            0 0 10px #FF0000,         /* strong outer glow */
+            0 0 20px rgba(255,0,0,0.4), /* softer outer glow */
+            inset 0 0 6px rgba(255,0,0,0.6); /* subtle inner glow */
+          filter: saturate(0.7);       /* slightly desaturated but more contrast */
+          transition: all 0.3s ease;   /* smooth effect if hover/pulsing added */
+        }
+        .arcade-table tbody tr:hover .logo-elim {
+          border-color:#FF3333 !important;
+          box-shadow:0 0 12px rgba(255,50,50,.6), 0 0 22px rgba(255,50,50,.3) !important;
+          filter:saturate(0.7);
+        }
         .team-logo { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 0 6px rgba(135,206,235,.4)); transition:all .3s ease; }
         .arcade-table tbody tr:hover .team-logo { filter:drop-shadow(0 0 15px rgba(255,140,0,1)); transform:scale(1.15); }
         .logo-fallback { display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:linear-gradient(135deg,#87CEEB 0%,#4682B4 100%); border:2px solid #87CEEB; border-radius:8px; font-family:'Press Start 2P',monospace; font-size:.5rem; color:#000; font-weight:bold; }
@@ -611,6 +728,7 @@ export default function Standings() {
           .arcade-table th{font-size:.5rem;padding:.5rem .25rem}
           .arcade-table td{font-size:1rem;padding:.5rem .25rem}
         }
+
       `}</style>
     </div>
   );

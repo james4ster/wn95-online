@@ -13,6 +13,7 @@ import Players from './pages/Players';
 import Stats from './pages/Stats';
 import Scores from './pages/Scores';
 import ScoresBar from "./components/ScoresBar";
+import Media from './pages/Media';
 
 function App() {
   useEffect(() => {
@@ -58,6 +59,8 @@ function App() {
             <Route path="/players" element={<Players />} />
             <Route path="/league/:leagueCode/teams" element={<Teams />} />
             <Route path="/league/:leagueCode/scores" element={<Scores />} />
+            <Route path="/media" element={<Media />} />
+            
           </Routes>
           <Analytics />
         </div>

@@ -57,6 +57,14 @@ export default function LeagueSubNav() {
           <span className="sni">👔</span>
           <span className="snt">MANAGERS</span>
         </NavLink>
+
+        <NavLink
+          to="/media"
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
+        >
+          <span className="sni">🎬</span>
+          <span className="snt">MEDIA</span>
+        </NavLink>
       </div>
 
       <style>{`
@@ -73,16 +81,11 @@ export default function LeagueSubNav() {
           transform: translateZ(0);
         }
 
-        /*
-         * subnav-inner uses the same padding (14px) and max-width structure
-         * as both nav-container and .cg, so the tab strip is visually centered
-         * between the same left/right edges as the page content below.
-         */
         .subnav-inner {
           display: flex;
           align-items: stretch;
-          justify-content: center;   /* center the 6 tabs across the full width */
-          padding: 0 14px;           /* matches home .cg and nav-container */
+          justify-content: center;
+          padding: 0 14px;
           overflow-x: auto;
           scrollbar-width: none;
         }
@@ -93,7 +96,7 @@ export default function LeagueSubNav() {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          padding: 0 1.6rem;        /* slightly wider than before for better spread */
+          padding: 0 1.6rem;
           height: 48px;
           color: rgba(135, 206, 235, 0.65);
           font-family: 'VT323', monospace;
@@ -136,6 +139,8 @@ export default function LeagueSubNav() {
           background: linear-gradient(90deg, transparent, #FFD700, transparent);
           opacity: 1;
         }
+
+
 
         .sni {
           font-size: 1rem;

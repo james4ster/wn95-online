@@ -31,7 +31,11 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
 
   const tooltipW = 360;
   const fixedLeft = window.innerWidth - tooltipW - 16;
-  const fixedTop = Math.max(16, Math.min(anchorRect.top + anchorRect.height / 2, window.innerHeight - 200));
+  const tooltipHeight = 200; // approximate tooltip height
+  const fixedTop = Math.min(
+        Math.max(16, anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2),
+        window.innerHeight - tooltipHeight - 16
+      );
 
   const enriched = tiedStandings.map(s => {
     let h2hPts = 0;
@@ -66,7 +70,7 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
   return (
     <div style={{
       position: 'fixed', top: fixedTop, left: fixedLeft,
-      transform: 'translateY(-50%)',
+     // transform: 'translateY(-50%)',
       zIndex: 9999, width: tooltipW, pointerEvents: 'none',
     }}>
       <div style={{ position: 'absolute', inset: -8, background: 'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)', borderRadius: 16, pointerEvents: 'none' }} />

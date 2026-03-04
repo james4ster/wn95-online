@@ -31,11 +31,9 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
 
   const tooltipW = 360;
   const fixedLeft = window.innerWidth - tooltipW - 16;
-  const tooltipHeight = 200; // approximate tooltip height
-  const fixedTop = Math.min(
-        Math.max(16, anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2),
-        window.innerHeight - tooltipHeight - 16
-      );
+  const tooltipHeight = 200; // or dynamically measured
+const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipHeight - 16));
 
   const enriched = tiedStandings.map(s => {
     let h2hPts = 0;

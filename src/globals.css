@@ -467,4 +467,7 @@ nav.hero-nav a:hover {
   html {
     overflow-y: scroll; /* always reserve scrollbar space */
   }
+  html {
+    overflow-x: hidden;
+  }
 }

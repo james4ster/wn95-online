@@ -5,13 +5,24 @@ import PlayoffBracket from '../components/PlayoffBracket';
 import { createPortal } from 'react-dom';
 
 /* ═══════════════════════════════════════════════════════════════
-   TIEBREAKER TOOLTIP
-   Shows when hovering a team that shares pts with ≥1 other team.
-   Tiebreaker order: 1) H2H pts  2) Overall W  3) Goal Diff
+   COMPUTE STANDINGS FROM RAW GAMES
+   
+   Derives all stats from the games table:
+     W   = regulation win (score_home > score_away, ot = false)
+     OTW = OT/SO win (score_home > score_away, ot = true)
+     L   = regulation loss
+     OTL = OT/SO loss (ot = true, lost)
+     T   = tie (score_home === score_away)
+     Pts = W*2 + OTW*2 + T*1 + OTL*1
+     GF/GA/GD = goals for/against/diff
+     Shutouts = games where opponent scored 0
+     Coach = from most recent game
+   
+   Returns array sorted by: pts → H2H pts → W → GD
 ═══════════════════════════════════════════════════════════════ */
-function computeH2H(teamA, teamB, seasonGames) {
+function computeH2H(teamA, teamB, games) {
   let ptsA = 0, ptsB = 0;
-  (seasonGames || []).forEach(g => {
+  (games || []).forEach(g => {
     const aIsHome = g.home === teamA && g.away === teamB;
     const aIsAway = g.home === teamB && g.away === teamA;
     if (!aIsHome && !aIsAway) return;
@@ -26,14 +37,146 @@ function computeH2H(teamA, teamB, seasonGames) {
   return { ptsA, ptsB };
 }
 
+function computeStandings(games) {
+  const teamMap = {};
+
+  const ensureTeam = (code) => {
+    if (!teamMap[code]) {
+      teamMap[code] = {
+        team: code, coach: '', gp: 0,
+        w: 0, l: 0, t: 0, otl: 0, otw: 0,
+        pts: 0, gf: 0, ga: 0, gd: 0, shutouts: 0,
+        _lastId: -1,
+      };
+    }
+    return teamMap[code];
+  };
+
+  games.forEach(g => {
+    const home = ensureTeam(g.home);
+    const away = ensureTeam(g.away);
+    const sh = g.score_home ?? 0;
+    const sa = g.score_away ?? 0;
+    const isOT = !!g.ot;
+    const gameDate = g.game_date || null;
+
+    // Update coach to most recent game (games are ordered by id asc)
+    if (g.id > home._lastId) { home.coach = g.coach_home || home.coach; home._lastId = g.id; }
+    if (g.id > away._lastId) { away.coach = g.coach_away || away.coach; away._lastId = g.id; }
+
+    home.gp++; away.gp++;
+    home.gf += sh; home.ga += sa;
+    away.gf += sa; away.ga += sh;
+
+    if (sh === sa) {
+      // Tie
+      home.t++; away.t++;
+      home.pts += 1; away.pts += 1;
+    } else if (sh > sa) {
+      // Home wins
+      if (isOT) {
+        home.otw++; home.pts += 2;
+        away.otl++; away.pts += 1;
+      } else {
+        home.w++; home.pts += 2;
+        away.l++;
+      }
+    } else {
+      // Away wins
+      if (isOT) {
+        away.otw++; away.pts += 2;
+        home.otl++; home.pts += 1;
+      } else {
+        away.w++; away.pts += 2;
+        home.l++;
+      }
+    }
+
+    // Shutouts: credit the team whose opponent scored 0
+    if (sa === 0) home.shutouts++;
+    if (sh === 0) away.shutouts++;
+  });
+
+  return Object.values(teamMap).map(({ _lastId, ...t }) => ({
+    ...t,
+    gd: t.gf - t.ga,
+    pts_pct: t.gp > 0 ? t.pts / (t.gp * 2) : 0,
+  }));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TIEBREAKER-AWARE STANDINGS SORT
+   
+   Default sort order (used for rankings, clinch/elim, playoff line):
+     1. pts (desc)
+     2. H2H pts among tied teams (desc)
+     3. Overall W (desc)
+     4. GD (desc)
+   
+   For grouped views (conf/div), tiebreakers are resolved
+   within the group only — teams outside the group are irrelevant.
+═══════════════════════════════════════════════════════════════ */
+function sortWithTiebreakers(teams, games) {
+  // Compute H2H pts for every pair among teams in this group
+  const h2hCache = {};
+  const getH2H = (a, b) => {
+    const key = [a, b].sort().join('::');
+    if (!h2hCache[key]) h2hCache[key] = computeH2H(a, b, games);
+    return h2hCache[key];
+  };
+
+  // For each team, sum H2H pts against all teams in the same pts-tier
+  const withH2H = (tierTeams) => tierTeams.map(t => {
+    let h2hPts = 0;
+    tierTeams.forEach(other => {
+      if (other.team === t.team) return;
+      const { ptsA } = getH2H(t.team, other.team);
+      h2hPts += ptsA;
+    });
+    return { ...t, _h2hPts: h2hPts };
+  });
+
+  // Group teams by pts, resolve tiebreakers within each tier
+  const byPts = {};
+  teams.forEach(t => {
+    const p = t.pts;
+    if (!byPts[p]) byPts[p] = [];
+    byPts[p].push(t);
+  });
+
+  const result = [];
+  Object.keys(byPts)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .forEach(pts => {
+      const tier = byPts[pts];
+      if (tier.length === 1) {
+        result.push({ ...tier[0], _h2hPts: 0 });
+      } else {
+        const enriched = withH2H(tier);
+        enriched.sort((a, b) => {
+          if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
+          if (b.w !== a.w) return b.w - a.w;
+          return b.gd - a.gd;
+        });
+        result.push(...enriched);
+      }
+    });
+
+  return result;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TIEBREAKER TOOLTIP
+═══════════════════════════════════════════════════════════════ */
 function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect }) {
   if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect) return null;
 
   const tooltipW = 360;
   const fixedLeft = window.innerWidth - tooltipW - 16;
-  const tooltipHeight = 200; // or dynamically measured
-const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
-const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipHeight - 16));
+  const tooltipHeight = 200;
+  const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+  const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipHeight - 16));
 
   const enriched = tiedStandings.map(s => {
     let h2hPts = 0;
@@ -51,7 +194,8 @@ const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipH
     return b.gd - a.gd;
   });
 
-  const baseSeed = Math.min(...tiedStandings.map(s => s.season_rank));
+  // baseSeed = position of the first tied team in the overall sorted list
+  const baseSeed = Math.min(...tiedStandings.map(s => s._sortRank ?? 1));
   const maxH2H = Math.max(...ranked.map(r => r.h2hPts), 1);
 
   const StatBar = ({ value, max, color }) => (
@@ -66,11 +210,7 @@ const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipH
   );
 
   return (
-    <div style={{
-      position: 'fixed', top: fixedTop, left: fixedLeft,
-     // transform: 'translateY(-50%)',
-      zIndex: 9999, width: tooltipW, pointerEvents: 'none',
-    }}>
+    <div style={{ position: 'fixed', top: fixedTop, left: fixedLeft, zIndex: 9999, width: tooltipW, pointerEvents: 'none' }}>
       <div style={{ position: 'absolute', inset: -8, background: 'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)', borderRadius: 16, pointerEvents: 'none' }} />
       <div style={{ background: 'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)', border: '1px solid rgba(255,215,0,.5)', borderRadius: 12, boxShadow: '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)', overflow: 'hidden' }}>
         <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid rgba(255,215,0,.15)', background: 'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -107,27 +247,6 @@ const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipH
 
 /* ═══════════════════════════════════════════════════════════════
    CLINCH / ELIMINATION MATH
-   
-   Key variables:
-     maxGP   = highest GP seen across all teams = total regular season games
-     remaining(t) = maxGP - t.gp
-     maxPts(t)    = t.pts + remaining(t) * 2
-   
-   CLINCHED (team at sorted rank r, r < playoffSpots):
-     Count outside teams (rank >= playoffSpots) whose maxPts STRICTLY
-     exceeds this team's current pts. If that count < (playoffSpots - r),
-     there aren't enough outside teams to displace this team — clinched.
-     (Ties assumed to break against = conservative = never premature.)
-   
-   ELIMINATED (team at sorted rank r, r >= playoffSpots):
-     Their maxPts STRICTLY LESS THAN the current pts of the last
-     playoff team. Even winning everything they can't reach the bubble.
-     (Equal pts = tiebreaker situation = not yet eliminated.)
-   
-   3-way tie nuance: tiebreakers are for seeding within the group,
-   not for clinch/elim math — the conservative pts-only approach
-   already handles this correctly since we delay elim until pts gap
-   is unresolvable regardless of tiebreakers.
 ═══════════════════════════════════════════════════════════════ */
 function computeClinchElim(sortedStandings, playoffTeams) {
   const clinched   = new Set();
@@ -138,33 +257,24 @@ function computeClinchElim(sortedStandings, playoffTeams) {
   }
 
   const n = sortedStandings.length;
-  // Total season length = max GP seen (teams with fewer GP have games remaining)
   const maxGP = Math.max(...sortedStandings.map(s => s.gp || 0));
   const maxPts = t => (t.pts || 0) + Math.max(0, maxGP - (t.gp || 0)) * 2;
 
-  // Last playoff spot's current pts = the minimum pts needed to "be in" right now
   const bubbleIdx = Math.min(playoffTeams - 1, n - 1);
   const bubblePts = sortedStandings[bubbleIdx]?.pts || 0;
 
-  // ── CLINCHED ────────────────────────────────────────────────
   for (let r = 0; r < Math.min(playoffTeams, n); r++) {
     const myPts = sortedStandings[r].pts || 0;
-    // How many outside teams can still reach strictly MORE than my current pts?
     let canSurpass = 0;
     for (let j = playoffTeams; j < n; j++) {
       if (maxPts(sortedStandings[j]) > myPts) canSurpass++;
     }
-    // To push me OUT of the playoffs, outside teams would need to grab
-    // (playoffTeams - r) spots above/at my rank. If fewer than that
-    // many can even surpass me, I'm mathematically safe.
     if (canSurpass < (playoffTeams - r)) {
       clinched.add(sortedStandings[r].team);
     }
   }
 
-  // ── ELIMINATED ──────────────────────────────────────────────
   for (let r = playoffTeams; r < n; r++) {
-    // Strictly less than — if equal, tiebreakers could still save them
     if (maxPts(sortedStandings[r]) < bubblePts) {
       eliminated.add(sortedStandings[r].team);
     }
@@ -178,60 +288,27 @@ function computeClinchElim(sortedStandings, playoffTeams) {
 ═══════════════════════════════════════════════════════════════ */
 export default function Standings() {
   const { selectedLeague } = useLeague();
-  const [seasons, setSeasons] = useState([]);
+  const [seasons, setSeasons]               = useState([]);
   const [selectedSeason, setSelectedSeason] = useState('');
-  const [standings, setStandings] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [playoffTeams, setPlayoffTeams] = useState(null);
-  const [divisionMap, setDivisionMap] = useState([]);
-  const [activeView, setActiveView] = useState('overall');
-  const [playoffGames, setPlayoffGames] = useState([]);
-  const [seasonGames, setSeasonGames] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: 'pts', direction: 'descending' });
-  const reverseSortColumns = ['ga', 'l', 'otl'];
+  const [rawGames, setRawGames]             = useState([]);   // source of truth
+  const [loading, setLoading]               = useState(false);
+  const [playoffTeams, setPlayoffTeams]     = useState(null);
+  const [divisionMap, setDivisionMap]       = useState([]);
+  const [activeView, setActiveView]         = useState('overall');
+  const [playoffGames, setPlayoffGames]     = useState([]);
+  const [sortConfig, setSortConfig]         = useState({ key: 'default', direction: 'descending' });
+  const reverseSortColumns                  = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
-  const tableContainerRef = useRef(null);
+  const tableContainerRef                   = useRef(null);
 
-  const handleSort = (key) => {
-    if (key === 'season_rank') { setSortConfig({ key: 'pts', direction: 'descending' }); return; }
-    let direction = 'ascending';
-    if (sortConfig.key === key) {
-      direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
-    } else {
-      direction = reverseSortColumns.includes(key) ? 'ascending' : 'descending';
-    }
-    setSortConfig({ key, direction });
-  };
-
-  const sortedStandings = useMemo(() => [...standings].map(s => ({
-    ...s,
-    pts_pct: s.gp > 0 ? s.pts / (s.gp * 2) : 0,
-  })).sort((a, b) => {
-    const { key, direction } = sortConfig;
-    if (a[key] === null) return 1;
-    if (b[key] === null) return -1;
-    if (typeof a[key] === 'string') {
-      return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
-    }
-    return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
-  }), [standings, sortConfig]);
-
-  // Clinch/elim — recomputed whenever standings or playoffTeams changes.
-  // Always evaluated against the pts-sorted view regardless of current sort column.
-  const ptsSorted = useMemo(() =>
-    [...standings].map(s => ({ ...s, pts_pct: s.gp > 0 ? s.pts / (s.gp * 2) : 0 }))
-      .sort((a, b) => b.pts - a.pts || b.w - a.w || b.gd - a.gd),
-    [standings]
-  );
-  const { clinched, eliminated } = useMemo(
-    () => computeClinchElim(ptsSorted, playoffTeams),
-    [ptsSorted, playoffTeams]
-  );
-
+  // ── Seasons ────────────────────────────────────────────────
   useEffect(() => {
     if (!selectedLeague) { setSeasons([]); setSelectedSeason(''); return; }
     (async () => {
-      const { data, error } = await supabase.from('seasons').select('lg, year, end_date, playoff_teams').order('year', { ascending: false });
+      const { data, error } = await supabase
+        .from('seasons')
+        .select('lg, year, end_date, playoff_teams')
+        .order('year', { ascending: false });
       if (error) { console.error('Error fetching seasons:', error); return; }
       const filtered = data.filter(s => s.lg.startsWith(selectedLeague));
       setSeasons(filtered);
@@ -245,60 +322,119 @@ export default function Standings() {
     setPlayoffTeams(season?.playoff_teams ?? null);
   }, [selectedSeason, seasons]);
 
+  // ── Raw games (replaces standings table fetch) ─────────────
   useEffect(() => {
-    if (!selectedLeague || !selectedSeason) { setStandings([]); return; }
+    if (!selectedLeague || !selectedSeason) { setRawGames([]); return; }
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.from('standings').select('*').eq('season', selectedSeason).order('season_rank', { ascending: true });
-      if (error) console.error('Error fetching standings:', error);
-      else setStandings(data || []);
+      const { data, error } = await supabase
+        .from('games')
+        .select('id, home, away, score_home, score_away, ot, coach_home, coach_away')
+        .eq('lg', selectedSeason)
+        .eq('mode', 'Season')
+        .order('id', { ascending: true });
+      if (error) console.error('Error fetching games:', error);
+      setRawGames(data || []);
       setLoading(false);
     })();
   }, [selectedLeague, selectedSeason]);
 
+  // ── Division map ───────────────────────────────────────────
   useEffect(() => {
     if (!selectedSeason) { setDivisionMap([]); setActiveView('overall'); return; }
     (async () => {
-      const { data, error } = await supabase.from('historical_division_map').select('*').eq('season', selectedSeason);
+      const { data, error } = await supabase
+        .from('historical_division_map')
+        .select('*')
+        .eq('season', selectedSeason);
       if (error) { console.error('Error fetching division map:', error); setDivisionMap([]); }
       else setDivisionMap(data || []);
       setActiveView('overall');
     })();
   }, [selectedSeason]);
 
+  // ── Playoff games ──────────────────────────────────────────
   useEffect(() => {
     if (!selectedSeason) { setPlayoffGames([]); return; }
     (async () => {
-      const { data, error } = await supabase.from('playoff_games')
+      const { data, error } = await supabase
+        .from('playoff_games')
         .select('lg,round,series_number,game_number,team_code_a,team_code_b,team_a_score,team_b_score,game_date,seed_a,seed_b')
-        .eq('lg', selectedSeason).order('game_number', { ascending: true });
+        .eq('lg', selectedSeason)
+        .order('game_number', { ascending: true });
       if (error) console.error('Error fetching playoff_games:', error);
       setPlayoffGames(data || []);
     })();
   }, [selectedSeason]);
 
-  useEffect(() => {
-    if (!selectedSeason) { setSeasonGames([]); return; }
-    (async () => {
-      const { data, error } = await supabase.from('games')
-        .select('id,home,away,score_home,score_away,ot')
-        .eq('lg', selectedSeason).eq('mode', 'Season');
-      if (error) console.error('Error fetching season games:', error);
-      setSeasonGames(data || []);
-    })();
-  }, [selectedSeason]);
+  // ── Compute standings from raw games ───────────────────────
+  const computedStandings = useMemo(() => computeStandings(rawGames), [rawGames]);
+
+  // ── Default (tiebreaker-aware) sort — used for ranking/clinch/elim ──
+  const defaultSorted = useMemo(
+    () => sortWithTiebreakers(computedStandings, rawGames).map((s, idx) => ({ ...s, _sortRank: idx + 1 })),
+    [computedStandings, rawGames]
+  );
+
+  // ── User-column sort (keeps tiebreaker sort as the pts-column default) ──
+  const sortedStandings = useMemo(() => {
+    if (sortConfig.key === 'default' || sortConfig.key === 'pts') {
+      // pts column → use tiebreaker-aware default sort
+      return sortConfig.direction === 'descending'
+        ? defaultSorted
+        : [...defaultSorted].reverse();
+    }
+    if (sortConfig.key === 'season_rank') return defaultSorted;
+
+    return [...defaultSorted].sort((a, b) => {
+      const { key, direction } = sortConfig;
+      if (a[key] === null || a[key] === undefined) return 1;
+      if (b[key] === null || b[key] === undefined) return -1;
+      if (typeof a[key] === 'string') {
+        return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
+      }
+      return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
+    });
+  }, [defaultSorted, sortConfig]);
+
+  // ── Clinch/elim always uses tiebreaker-aware sort ──────────
+  const { clinched, eliminated } = useMemo(
+    () => computeClinchElim(defaultSorted, playoffTeams),
+    [defaultSorted, playoffTeams]
+  );
+
+  // ── Tied pts set (for tooltip trigger) ────────────────────
+  const tiedPtsSet = useMemo(() => {
+    const ptsCounts = {};
+    sortedStandings.forEach(s => {
+      const p = Number(s.pts);
+      ptsCounts[p] = (ptsCounts[p] || 0) + 1;
+    });
+    return new Set(Object.entries(ptsCounts).filter(([, count]) => count > 1).map(([p]) => Number(p)));
+  }, [sortedStandings]);
+
+  const handleSort = (key) => {
+    if (key === 'season_rank') { setSortConfig({ key: 'default', direction: 'descending' }); return; }
+    let direction = 'ascending';
+    if (sortConfig.key === key) {
+      direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+    } else {
+      direction = reverseSortColumns.includes(key) ? 'ascending' : 'descending';
+    }
+    setSortConfig({ key, direction });
+  };
 
   const handleRowMouseEnter = useCallback((e, team, pts) => {
     const tiedTeams = sortedStandings.filter(s => Number(s.pts) === Number(pts));
     if (tiedTeams.length < 2) { setTiebreakerInfo(null); return; }
     const el = e.currentTarget;
     const r = el.getBoundingClientRect();
-    const top = r.top, right = r.right, left = r.left, height = r.height;
-    setTiebreakerInfo({ hoveredTeam: team, tiedStandings: tiedTeams, anchorRect: { top, right, left, height } });
+    setTiebreakerInfo({ hoveredTeam: team, tiedStandings: tiedTeams, anchorRect: { top: r.top, right: r.right, left: r.left, height: r.height } });
   }, [sortedStandings]);
 
   const handleRowMouseLeave = useCallback(() => { setTiebreakerInfo(null); }, []);
 
+  // ── Grouping ───────────────────────────────────────────────
   const hasConferences = divisionMap.some(d => d.conference != null);
   const hasDivisions   = divisionMap.some(d => d.division   != null);
   const availableViews = {
@@ -309,16 +445,37 @@ export default function Standings() {
   };
 
   const getGroupedStandings = () => {
+    // For overall, use global tiebreaker sort
     if (divisionMap.length === 0 || activeView === 'overall') {
       return [{ title: null, subtitle: null, teams: sortedStandings }];
     }
+
+    // For conf/div, re-sort within each group using within-group tiebreakers
+    const sortGroup = (teams) => {
+      if (sortConfig.key !== 'default' && sortConfig.key !== 'pts' && sortConfig.key !== 'season_rank') {
+        // User is sorting by a specific column — apply that within each group
+        return [...teams].sort((a, b) => {
+          const { key, direction } = sortConfig;
+          if (a[key] === null || a[key] === undefined) return 1;
+          if (b[key] === null || b[key] === undefined) return -1;
+          if (typeof a[key] === 'string') {
+            return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
+          }
+          return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
+        });
+      }
+      // Default: tiebreakers within group only
+      return sortWithTiebreakers(teams, rawGames).map((s, idx) => ({ ...s, _sortRank: idx + 1 }));
+    };
+
     if (activeView === 'conference' && hasConferences) {
       const conferences = [...new Set(divisionMap.map(d => d.conference).filter(Boolean))];
-      return conferences.map(conf => ({
-        title: conf, subtitle: null,
-        teams: sortedStandings.filter(s => divisionMap.find(d => d.team === s.team)?.conference === conf),
-      }));
+      return conferences.map(conf => {
+        const teams = sortedStandings.filter(s => divisionMap.find(d => d.team === s.team)?.conference === conf);
+        return { title: conf, subtitle: null, teams: sortGroup(teams) };
+      });
     }
+
     if (activeView === 'division' && hasDivisions) {
       if (hasConferences) {
         const result = [];
@@ -326,37 +483,27 @@ export default function Standings() {
         conferences.forEach(conf => {
           const divs = [...new Set(divisionMap.filter(d => d.conference === conf).map(d => d.division).filter(Boolean))];
           divs.forEach(div => {
-            result.push({
-              title: conf, subtitle: div,
-              teams: sortedStandings.filter(s => {
-                const ti = divisionMap.find(d => d.team === s.team);
-                return ti?.conference === conf && ti?.division === div;
-              }),
+            const teams = sortedStandings.filter(s => {
+              const ti = divisionMap.find(d => d.team === s.team);
+              return ti?.conference === conf && ti?.division === div;
             });
+            result.push({ title: conf, subtitle: div, teams: sortGroup(teams) });
           });
         });
         return result;
       } else {
         const divisions = [...new Set(divisionMap.map(d => d.division).filter(Boolean))];
-        return divisions.map(div => ({
-          title: div, subtitle: null,
-          teams: sortedStandings.filter(s => divisionMap.find(d => d.team === s.team)?.division === div),
-        }));
+        return divisions.map(div => {
+          const teams = sortedStandings.filter(s => divisionMap.find(d => d.team === s.team)?.division === div);
+          return { title: div, subtitle: null, teams: sortGroup(teams) };
+        });
       }
     }
+
     return [{ title: null, subtitle: null, teams: sortedStandings }];
   };
 
   const groupedStandings = getGroupedStandings();
-
-  const tiedPtsSet = useMemo(() => {
-    const ptsCounts = {};
-    sortedStandings.forEach(s => {
-      const p = Number(s.pts);
-      ptsCounts[p] = (ptsCounts[p] || 0) + 1;
-    });
-    return new Set(Object.entries(ptsCounts).filter(([, count]) => count > 1).map(([p]) => Number(p)));
-  }, [sortedStandings]);
 
   const columns = [
     { label: 'Rank',  key: 'season_rank', width: '5px' },
@@ -376,7 +523,10 @@ export default function Standings() {
     { label: 'SO',    key: 'shutouts',    width: '5px' },
   ];
 
-return (
+  // Determine which column header shows as "sorted" — pts and default both highlight pts column
+  const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
+
+  return (
     <div className="standings-page">
       <div className="scoreboard-header-container">
         <div className="scoreboard-header">
@@ -390,7 +540,7 @@ return (
           <select
             className="arcade-select"
             value={selectedSeason}
-            onChange={e => { setSelectedSeason(e.target.value); setSortConfig({ key: 'pts', direction: 'descending' }); }}
+            onChange={e => { setSelectedSeason(e.target.value); setSortConfig({ key: 'default', direction: 'descending' }); }}
             disabled={!selectedLeague || seasons.length === 0}
           >
             <option value="">SELECT SEASON</option>
@@ -399,7 +549,7 @@ return (
         </div>
       </div>
 
-      {standings.length > 0 && (
+      {computedStandings.length > 0 && (
         <div className="view-tabs-container">
           <div className="view-tabs">
             <button className={`tab-button ${activeView === 'overall' ? 'active' : ''}`} onClick={() => setActiveView('overall')}>
@@ -424,8 +574,6 @@ return (
         </div>
       )}
 
-
-
       {loading ? (
         <div className="loading-screen">
           <div className="loading-spinner" />
@@ -433,13 +581,13 @@ return (
         </div>
       ) : !selectedLeague ? (
         <div className="no-data"><div className="no-data-text">SELECT A LEAGUE FROM THE MENU</div></div>
-      ) : standings.length === 0 ? (
+      ) : computedStandings.length === 0 ? (
         <div className="no-data"><div className="no-data-text">SELECT A SEASON</div></div>
       ) : activeView === 'playoffs' ? (
         playoffGames?.length ? (
           <PlayoffBracket
             playoffGames={playoffGames}
-            seasonGames={seasonGames}
+            seasonGames={rawGames}
             selectedSeason={selectedSeason}
             selectedLeague={selectedLeague}
           />
@@ -452,7 +600,7 @@ return (
             <TiebreakerTooltip
               hoveredTeam={tiebreakerInfo.hoveredTeam}
               tiedStandings={tiebreakerInfo.tiedStandings}
-              seasonGames={seasonGames}
+              seasonGames={rawGames}
               anchorRect={tiebreakerInfo.anchorRect}
             />,
             document.body
@@ -481,11 +629,11 @@ return (
                             key={col.key}
                             onClick={() => handleSort(col.key)}
                             style={{ width: col.width }}
-                            className={`${sortConfig.key === col.key ? 'sorted-column' : ''} ${col.key === 'season_rank' ? 'rank-column' : ''}`}
+                            className={`${activeSortKey === col.key ? 'sorted-column' : ''} ${col.key === 'season_rank' ? 'rank-column' : ''}`}
                           >
                             <div className="th-content">
                               <span>{col.label}</span>
-                              {sortConfig.key === col.key && (
+                              {activeSortKey === col.key && (
                                 <span className="sort-indicator">{sortConfig.direction === 'ascending' ? '▲' : '▼'}</span>
                               )}
                             </div>
@@ -495,16 +643,16 @@ return (
                     </thead>
                     <tbody>
                       {group.teams.map((s, idx) => {
-                        const isTied      = tiedPtsSet.has(Number(s.pts));
-                        const isClinched  = clinched.has(s.team);
-                        const isElim      = eliminated.has(s.team);
+                        const isTied     = tiedPtsSet.has(Number(s.pts));
+                        const isClinched = clinched.has(s.team);
+                        const isElim     = eliminated.has(s.team);
 
                         const rowClass = [
                           idx % 2 === 0 ? 'even-row' : 'odd-row',
-                          playoffTeams && s.season_rank <= playoffTeams ? 'playoff-team' : 'non-playoff-team',
-                          isTied      ? 'tied-row'      : '',
-                          isClinched  ? 'clinched-row'  : '',
-                          isElim      ? 'eliminated-row': '',
+                          playoffTeams && s._sortRank <= playoffTeams ? 'playoff-team' : 'non-playoff-team',
+                          isTied      ? 'tied-row'       : '',
+                          isClinched  ? 'clinched-row'   : '',
+                          isElim      ? 'eliminated-row' : '',
                         ].filter(Boolean).join(' ');
 
                         return (
@@ -530,22 +678,22 @@ return (
                                 </div>
                               </td>
                               <td className="coach-cell">{s.coach}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'gp'       ? 'sorted-cell' : ''}`}>{s.gp}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'w'        ? 'sorted-cell' : ''}`}>{s.w}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'l'        ? 'sorted-cell' : ''}`}>{s.l}</td>
-                              <td className={`stat-cell ${sortConfig.key === 't'        ? 'sorted-cell' : ''}`}>{s.t}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'otl'      ? 'sorted-cell' : ''}`}>{s.otl}</td>
-                              <td className={`stat-cell pts-cell ${sortConfig.key === 'pts' ? 'sorted-cell' : ''} ${isTied ? 'tied-pts' : ''}`}>{s.pts}</td>
-                              <td className={`stat-cell pts-pct-cell ${sortConfig.key === 'pts_pct' ? 'sorted-cell' : ''}`}>
+                              <td className={`stat-cell ${activeSortKey === 'gp'       ? 'sorted-cell' : ''}`}>{s.gp}</td>
+                              <td className={`stat-cell ${activeSortKey === 'w'        ? 'sorted-cell' : ''}`}>{s.w}</td>
+                              <td className={`stat-cell ${activeSortKey === 'l'        ? 'sorted-cell' : ''}`}>{s.l}</td>
+                              <td className={`stat-cell ${activeSortKey === 't'        ? 'sorted-cell' : ''}`}>{s.t}</td>
+                              <td className={`stat-cell ${activeSortKey === 'otl'      ? 'sorted-cell' : ''}`}>{s.otl}</td>
+                              <td className={`stat-cell pts-cell ${activeSortKey === 'pts' ? 'sorted-cell' : ''} ${isTied ? 'tied-pts' : ''}`}>{s.pts}</td>
+                              <td className={`stat-cell pts-pct-cell ${activeSortKey === 'pts_pct' ? 'sorted-cell' : ''}`}>
                                 {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
                               </td>
-                              <td className={`stat-cell ${sortConfig.key === 'gf'       ? 'sorted-cell' : ''}`}>{s.gf}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'ga'       ? 'sorted-cell' : ''}`}>{s.ga}</td>
-                              <td className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${sortConfig.key === 'gd' ? 'sorted-cell' : ''}`}>
+                              <td className={`stat-cell ${activeSortKey === 'gf'       ? 'sorted-cell' : ''}`}>{s.gf}</td>
+                              <td className={`stat-cell ${activeSortKey === 'ga'       ? 'sorted-cell' : ''}`}>{s.ga}</td>
+                              <td className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${activeSortKey === 'gd' ? 'sorted-cell' : ''}`}>
                                 {s.gd > 0 ? '+' : ''}{s.gd}
                               </td>
-                              <td className={`stat-cell ${sortConfig.key === 'otw'      ? 'sorted-cell' : ''}`}>{s.otw}</td>
-                              <td className={`stat-cell ${sortConfig.key === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
+                              <td className={`stat-cell ${activeSortKey === 'otw'      ? 'sorted-cell' : ''}`}>{s.otw}</td>
+                              <td className={`stat-cell ${activeSortKey === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
                             </tr>
 
                             {playoffTeams && idx === playoffTeams - 1 && (
@@ -578,7 +726,6 @@ return (
       )}
 
       <style>{`
-        /* ── ALL ORIGINAL STYLES (preserved exactly) ── */
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }
@@ -630,17 +777,7 @@ return (
         .arcade-table tbody tr { transition:all .2s ease; position:relative; }
         .playoff-team .rank-cell::before { content:''; position:absolute; left:-8px; top:-1px; bottom:-1px; width:4px; background:linear-gradient(180deg,#00FF00 0%,#00CC00 100%); box-shadow:0 0 10px rgba(0,255,0,.6); z-index:100; }
         .tied-pts { position:relative; animation:tied-pulse 2s ease-in-out infinite; }
-        .tied-pts::after {
-          content:'';
-          position:absolute;
-          top:0; right:0;
-          width:0; height:0;
-          border-style:solid;
-          border-width:0 9px 9px 0;
-          border-color:transparent rgba(255,140,0,0.85) transparent transparent;
-          filter:drop-shadow(0 0 3px rgba(255,140,0,0.7));
-          animation:triangle-pulse 2s ease-in-out infinite;
-        }
+        .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); animation:triangle-pulse 2s ease-in-out infinite; }
         @keyframes triangle-pulse { 0%,100%{border-color:transparent rgba(255,140,0,.6) transparent transparent} 50%{border-color:transparent rgba(255,215,0,1) transparent transparent; filter:drop-shadow(0 0 5px rgba(255,215,0,.9))} }
         @keyframes tied-pulse { 0%,100%{text-shadow:0 0 8px rgba(255,140,0,.4)} 50%{text-shadow:0 0 16px rgba(255,140,0,.9),0 0 24px rgba(255,215,0,.4)} }
         .tied-row { cursor:default; }
@@ -674,38 +811,11 @@ return (
         .team-code { display:none; }
         .logo-container { position:relative; width:38px; height:38px; flex-shrink:0; background:rgba(0,0,0,.6); border-radius:8px; padding:3px; border:2px solid rgba(135,206,235,.4); box-shadow:0 0 10px rgba(135,206,235,.3); transition:all .3s ease; }
         .arcade-table tbody tr:hover .logo-container { border-color:rgba(255,140,0,.8); box-shadow:0 0 15px rgba(255,140,0,.6); }
-
-        /* Clinched — thick green border + glow on team logo */
-        .logo-clinched {
-          border:3px solid #00DD60 !important;
-          box-shadow:0 0 10px rgba(0,221,96,.6), 0 0 20px rgba(0,221,96,.25) !important;
-          animation:clinch-logo-pulse 2.4s ease-in-out infinite;
-        }
-        @keyframes clinch-logo-pulse {
-          0%,100% { box-shadow:0 0 8px rgba(0,221,96,.5), 0 0 16px rgba(0,221,96,.2); border-color:#00DD60; }
-          50%      { box-shadow:0 0 14px rgba(0,255,100,.8), 0 0 28px rgba(0,255,100,.4); border-color:#00FF70; }
-        }
-        /* Keep the glow on hover too */
-        .arcade-table tbody tr:hover .logo-clinched {
-          border-color:#00FF70 !important;
-          box-shadow:0 0 18px rgba(0,255,100,.9), 0 0 32px rgba(0,255,100,.4) !important;
-        }
-
-        /* Eliminated — thick red border, slightly desaturated logo */
-        .logo-elim {
-          border: 5px solid #FF0000 !important; /* brighter, thicker */
-          box-shadow:
-            0 0 10px #FF0000,         /* strong outer glow */
-            0 0 20px rgba(255,0,0,0.4), /* softer outer glow */
-            inset 0 0 6px rgba(255,0,0,0.6); /* subtle inner glow */
-          filter: saturate(0.7);       /* slightly desaturated but more contrast */
-          transition: all 0.3s ease;   /* smooth effect if hover/pulsing added */
-        }
-        .arcade-table tbody tr:hover .logo-elim {
-          border-color:#FF3333 !important;
-          box-shadow:0 0 12px rgba(255,50,50,.6), 0 0 22px rgba(255,50,50,.3) !important;
-          filter:saturate(0.7);
-        }
+        .logo-clinched { border:3px solid #00DD60 !important; box-shadow:0 0 10px rgba(0,221,96,.6), 0 0 20px rgba(0,221,96,.25) !important; animation:clinch-logo-pulse 2.4s ease-in-out infinite; }
+        @keyframes clinch-logo-pulse { 0%,100% { box-shadow:0 0 8px rgba(0,221,96,.5), 0 0 16px rgba(0,221,96,.2); border-color:#00DD60; } 50% { box-shadow:0 0 14px rgba(0,255,100,.8), 0 0 28px rgba(0,255,100,.4); border-color:#00FF70; } }
+        .arcade-table tbody tr:hover .logo-clinched { border-color:#00FF70 !important; box-shadow:0 0 18px rgba(0,255,100,.9), 0 0 32px rgba(0,255,100,.4) !important; }
+        .logo-elim { border:5px solid #FF0000 !important; box-shadow:0 0 10px #FF0000, 0 0 20px rgba(255,0,0,0.4), inset 0 0 6px rgba(255,0,0,0.6); filter:saturate(0.7); transition:all 0.3s ease; }
+        .arcade-table tbody tr:hover .logo-elim { border-color:#FF3333 !important; box-shadow:0 0 12px rgba(255,50,50,.6), 0 0 22px rgba(255,50,50,.3) !important; filter:saturate(0.7); }
         .team-logo { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 0 6px rgba(135,206,235,.4)); transition:all .3s ease; }
         .arcade-table tbody tr:hover .team-logo { filter:drop-shadow(0 0 15px rgba(255,140,0,1)); transform:scale(1.15); }
         .logo-fallback { display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:linear-gradient(135deg,#87CEEB 0%,#4682B4 100%); border:2px solid #87CEEB; border-radius:8px; font-family:'Press Start 2P',monospace; font-size:.5rem; color:#000; font-weight:bold; }
@@ -730,7 +840,6 @@ return (
           .arcade-table th{font-size:.5rem;padding:.5rem .25rem}
           .arcade-table td{font-size:1rem;padding:.5rem .25rem}
         }
-
       `}</style>
     </div>
   );

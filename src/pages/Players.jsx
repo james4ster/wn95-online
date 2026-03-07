@@ -59,12 +59,14 @@ const PosBadge = ({ pos }) => <span className={`pos-badge pos-${pos}`}>{pos}</sp
 
 export default function Players() {
   const [tab, setTab]         = useState('scout');
-  const [cmpView, setCmpView] = useState('side'); // 'side' | 'year'
+  const [cmpView, setCmpView] = useState('side');
 
   // ── Scout ──
   const [players, setPlayers]                 = useState([]);
   const [loading, setLoading]                 = useState(false);
+  const [currentYear, setCurrentYear]         = useState(null);
   const [page, setPage]                       = useState(0);
+  const [totalCount, setTotalCount]           = useState(0);
   const [totalPages, setTotalPages]           = useState(0);
   const [expandedId, setExpandedId]           = useState(null);
   const [expandedSeasons, setExpandedSeasons] = useState([]);
@@ -87,7 +89,6 @@ export default function Players() {
   const sTimer = useRef(null);
   const cTimer = useRef(null);
 
-  // Player color palette
   const CMP_COLORS = [
     { main: '#00C8FF', bg: 'rgba(0,200,255,.08)',  border: 'rgba(0,200,255,.4)'  },
     { main: '#FF6B35', bg: 'rgba(255,107,53,.08)', border: 'rgba(255,107,53,.4)' },
@@ -95,7 +96,19 @@ export default function Players() {
     { main: '#10B981', bg: 'rgba(16,185,129,.08)', border: 'rgba(16,185,129,.4)' },
   ];
 
-  // Debounce search
+  // ── Fetch current season year on mount ──
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('seasons')
+        .select('year')
+        .order('end_date', { ascending: false })
+        .limit(1);
+      if (data?.[0]) setCurrentYear(data[0].year);
+    })();
+  }, []);
+
+  // ── Debounce search ──
   useEffect(() => {
     clearTimeout(sTimer.current);
     sTimer.current = setTimeout(() => { setDsearch(search); setPage(0); }, 350);
@@ -103,83 +116,53 @@ export default function Players() {
 
   useEffect(() => { setPage(0); }, [posFilter, handFilter, yearFrom, yearTo]);
 
+  // ── Main data fetch — query player_attributes_by_season directly ──
   useEffect(() => {
+    if (currentYear === null) return; // wait for current year to load
     const go = async () => {
       setLoading(true);
       const offset = page * PAGE_SIZE;
-      const end = offset + PAGE_SIZE - 1; // Supabase uses inclusive range
 
-      let { data: masterData, error: masterError, count } = await supabase
-        .from('player_master')
-        .select('player_master_id, player_name', { count: 'exact' }) // get total rows
-        .ilike('player_name', dsearch ? `%${dsearch}%` : '%') // optional search
-        .order('player_name', { ascending: true })
-        .range(offset, end); // server-side pagination
-  
-      if (masterError) {
-        console.error('Error fetching player_master:', masterError);
-        setLoading(false);
-        return;
-      }
-  
-      // Only fetch attributes for the players on this page
-      const masterIds = (masterData || []).map(p => p.player_master_id);
+      // Determine year range — default to current season
+      const yFrom = yearFrom ? parseInt(yearFrom) : currentYear;
+      const yTo   = yearTo   ? parseInt(yearTo)   : currentYear;
 
-        let attrQuery = supabase
-          .from('player_attributes_by_season')
-          .select('player_master_id, year, pos, hand, ovr')
-          .in('player_master_id', masterIds); // only fetch visible players
+      // Build query against player_attributes_by_season
+      // We want one row per player (their best/latest OVR in range)
+      // Supabase can't GROUP BY natively, so we fetch all matching rows
+      // then deduplicate client-side keeping highest OVR
+      let query = supabase
+        .from('player_attributes_by_season')
+        .select('player_master_id, player_name, year, pos, hand, ovr', { count: 'exact' })
+        .gte('year', yFrom)
+        .lte('year', yTo)
+        .order('ovr', { ascending: false });
 
-        if (posFilter)  attrQuery = attrQuery.eq('pos', posFilter);
-        if (handFilter) attrQuery = attrQuery.eq('hand', handFilter);
-        if (yearFrom)   attrQuery = attrQuery.gte('year', parseInt(yearFrom));
-        if (yearTo)     attrQuery = attrQuery.lte('year', parseInt(yearTo));
+      if (dsearch)    query = query.ilike('player_name', `%${dsearch}%`);
+      if (posFilter)  query = query.eq('pos', posFilter);
+      if (handFilter) query = query.eq('hand', handFilter);
 
-        const { data: attrData, error: attrError } = await attrQuery;
+      const { data, error } = await query;
 
-        if (attrError) {
-          console.error(attrError);
-          return;
-        }
-  
-      // 3️⃣ merge master + latest attributes
-      // 3️⃣ merge master + latest attributes
-const grouped = {};
+      if (error) { console.error(error); setLoading(false); return; }
 
-      // combine master + attribute data
-      for (const r of attrData) {
-        if (!grouped[r.player_master_id]) {
-          grouped[r.player_master_id] = {
-            ...masterData.find(m => m.player_master_id === r.player_master_id),
-            allOvr: []
-          };
-        }
-        grouped[r.player_master_id].allOvr.push(r.ovr);
-
-        // optional: latest overwrites
-        grouped[r.player_master_id].pos  = r.pos;
-        grouped[r.player_master_id].hand = r.hand;
-        grouped[r.player_master_id].year = r.year;
+      // Deduplicate by player_master_id, keeping highest OVR row
+      const seen = new Map();
+      for (const row of (data || [])) {
+        const existing = seen.get(row.player_master_id);
+        if (!existing || row.ovr > existing.ovr) seen.set(row.player_master_id, row);
       }
 
-      // convert to array and calculate average
-      const mergedPlayers = Object.values(grouped).map(p => ({
-        ...p,
-        avgOvr: avg(p.allOvr)
-      }));
+      const deduped = Array.from(seen.values())
+        .sort((a, b) => b.ovr - a.ovr);
 
-      // ✅ total pages based on total filtered records, not just this page
-      const totalFiltered = mergedPlayers.length;
-      setTotalPages(Math.ceil(totalFiltered / PAGE_SIZE));
-
-      // ✅ slice the current page
-      const pageOffset = page * PAGE_SIZE;
-      setPlayers(mergedPlayers.slice(pageOffset, pageOffset + PAGE_SIZE));
-
+      setTotalCount(deduped.length);
+      setTotalPages(Math.ceil(deduped.length / PAGE_SIZE));
+      setPlayers(deduped.slice(offset, offset + PAGE_SIZE));
       setLoading(false);
-    }
+    };
     go();
-  }, [dsearch, posFilter, handFilter, yearFrom, yearTo, page]);
+  }, [dsearch, posFilter, handFilter, yearFrom, yearTo, page, currentYear]);
   
 
   // ── Expand seasons ──
@@ -301,10 +284,16 @@ const grouped = {};
             </select>
           </div>
           <div className="fg"><label>YR FROM</label>
-            <input className="f-inp" type="number" placeholder="1917" value={yearFrom} onChange={e => setYearFrom(e.target.value)} />
+            <input className="f-inp" type="number"
+              placeholder={currentYear||'YEAR'}
+              value={yearFrom !== '' ? yearFrom : (currentYear || '')}
+              onChange={e => setYearFrom(e.target.value)} />
           </div>
           <div className="fg"><label>YR TO</label>
-            <input className="f-inp" type="number" placeholder="2025" value={yearTo} onChange={e => setYearTo(e.target.value)} />
+            <input className="f-inp" type="number"
+              placeholder={currentYear||'YEAR'}
+              value={yearTo !== '' ? yearTo : (currentYear || '')}
+              onChange={e => setYearTo(e.target.value)} />
           </div>
           {hasFilters && <button className="clear-btn" onClick={clearFilters}>✕ CLEAR</button>}
         </div>
@@ -336,7 +325,7 @@ const grouped = {};
                   </div>
                   <div className="pr-c"><PosBadge pos={p.pos} /></div>
                   <div className="pr-c pr-hand">{handLabel(p.hand)}</div>
-                  <div className="pr-c"><OvrBadge ovr={p.avgOvr} /></div>
+                  <div className="pr-c"><OvrBadge ovr={p.ovr} /></div>
                   <div className="pr-c">
                     <button className={`cmp-btn ${inCmp ? 'cmp-btn--in' : ''}`}
                       disabled={compareList.length >= 4 || inCmp}

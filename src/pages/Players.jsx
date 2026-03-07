@@ -280,7 +280,7 @@ export default function Players() {
           </div>
           <div className="fg"><label>HAND</label>
             <select className="f-sel" value={handFilter} onChange={e => setHand(e.target.value)}>
-              <option value="">ALL</option><option value="1">RIGHT</option><option value="0">LEFT</option>
+              <option value="">ALL</option><option value="0">RIGHT</option><option value="1">LEFT</option>
             </select>
           </div>
           <div className="fg"><label>YR FROM</label>

@@ -476,7 +476,8 @@ export default function Scores() {
         .select('id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot')
         .eq('lg', season).eq('mode', mode)
         .or(`home.eq.${team},away.eq.${team}`)
-        .order('legacy_game_id', { ascending: true });
+        .not('score_home', 'is', null)
+        .order('game_number', { ascending: true, nullsFirst: false })
       if (error) console.error(error);
       setGames(data ?? []); setLoading(false);
     })();

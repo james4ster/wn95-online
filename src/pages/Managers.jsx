@@ -41,6 +41,9 @@ export default function Managers() {
       setChampionships([]); setTwitchLive(false); setBannerAbr(null);
       return;
     }
+     // Wait until managerMeta is populated
+     if (!Object.keys(managerMeta).length) return;
+
     (async () => {
       setLoading(true);
 
@@ -91,23 +94,49 @@ export default function Managers() {
       } else { setCareerStats(null); setLeagueStats({}); }
 
       try {
-        const { data: champs } = await supabase.from('championships').select('*').eq('coach', selectedMgr);
-        if (champs?.length) {
-          const byLg = {};
-          champs.forEach(c => {
-            const key = (c.season||c.lg||c.season_id||'').replace(/\d.*/,'') || 'MAIN';
-            if (!byLg[key]) byLg[key] = [];
-            byLg[key].push(c);
-          });
-          setChampionships(Object.entries(byLg).map(([lg,wins]) => ({ lg, count:wins.length, wins })));
-        } else setChampionships([]);
-      } catch { setChampionships([]); }
+        // Find this manager's id from managerMeta
+        const mgrMetaEntry = managerMeta[selectedMgr]
+          || Object.values(managerMeta).find(m =>
+              normalize(m.coach_name) === normalize(selectedMgr) ||
+              normalize(m.coach_name)?.includes(normalize(selectedMgr)) ||
+              normalize(selectedMgr)?.includes(normalize(m.coach_name))
+            )
+          || null;
+
+        if (mgrMetaEntry?.id) {
+          const { data: champSeasons } = await supabase
+            .from('seasons')
+            .select('lg, year')
+            .eq('season_champion_manager_id', mgrMetaEntry.id);
+
+          if (champSeasons?.length) {
+            const byLg = {};
+            champSeasons.forEach(s => {
+              const key = (s.lg || '').replace(/\d.*/, '').toUpperCase() || 'MAIN';
+              if (!byLg[key]) byLg[key] = [];
+              byLg[key].push(s);
+            });
+            setChampionships(Object.entries(byLg).map(([lg, wins]) => ({
+              lg,
+              count: wins.length,
+              wins: wins.map(w => ({ season: w.lg, year: w.year })),
+            })));
+          } else {
+            setChampionships([]);
+          }
+        } else {
+          setChampionships([]);
+        }
+      } catch (e) {
+        console.warn('[Managers] championships error:', e);
+        setChampionships([]);
+      }
 
       const mMeta = managerMeta[selectedMgr] || {};
       setTwitchLive(!!mMeta.is_live);
       setLoading(false);
     })();
-  }, [selectedMgr]); // eslint-disable-line
+  }, [selectedMgr, managerMeta]); // eslint-disable-line
 
   // ─── Derived ─────────────────────────────────────────────────────────────────
   const normalize = s => s?.toLowerCase()
@@ -125,6 +154,10 @@ export default function Managers() {
     || {};
   const latestTeam  = teams[0];
   const totalChamps = championships.reduce((a, c) => a + c.count, 0);
+
+  const champSeasonSet = new Set(
+    championships.flatMap(c => c.wins.map(w => w.season))
+  );
 
   // Discord avatar — use discord_id directly with the avatar.png endpoint
   // If discord_avatar hash is stored, use it; otherwise use the default avatar
@@ -282,12 +315,7 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
   const ChampSection = ({ compact=false }) => {
     if (!championships.length) return null;
     return (
-      <div className={`champ-banner${compact?' champ-banner--compact':''}`}>
-        <div className="champ-banner-title">
-          <span className="champ-trophy-anim">🏆</span>
-          {compact ? 'TITLE HAUL' : 'CHAMPIONSHIPS'}
-          <span className="champ-trophy-anim" style={{animationDelay:'0.75s'}}>🏆</span>
-        </div>
+      
         <div className={`champ-league-row${compact?' champ-league-row--compact':''}`}>
           {championships.map((c,i) => compact ? (
             <div key={i} className="champ-compact-block">
@@ -296,14 +324,14 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
             </div>
           ) : (
             <div key={i} className="champ-league-block">
+              <img
+                src={`/assets/awards/${(c.lg||'').toUpperCase().startsWith('Q') ? 'q_champ' : 'w_champ'}.png`}
+                alt={`${c.lg} trophy`}
+                className="champ-trophy-img"
+                onError={e=>{e.currentTarget.style.display='none';}}
+              />
               <div className="champ-count">{c.count}</div>
-              <div className="champ-league-name">{c.lg}</div>
-              <div className="champ-cups">
-                {Array.from({length:Math.min(c.count,8)}).map((_,j) => (
-                  <span key={j} className="champ-cup-icon"
-                    style={{animationDelay:`${j*0.18}s`}}>🏆</span>
-                ))}
-              </div>
+              <div className="champ-league-name">{c.lg} LEAGUE</div>
               <div className="champ-season-list">
                 {c.wins.map((w,j) => (
                   <span key={j} className="champ-season-tag">
@@ -314,17 +342,39 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
             </div>
           ))}
         </div>
-      </div>
+      
     );
   };
 
   // ─── Overview ─────────────────────────────────────────────────────────────────
   const OverviewTab = () => (
     <div className="tab-content">
-      <ChampSection />
       {careerStats && (
         <div className="career-strip">
           <div className="career-strip-title">CAREER AT A GLANCE</div>
+          {championships.length > 0 && (
+            <div className="career-champ-row">
+              {championships.map((c, i) => (
+                <div key={i} className="career-champ-block">
+                  <img
+                    src={`/assets/awards/${(c.lg||'').toUpperCase().startsWith('Q') ? 'q_champ' : 'w_champ'}.png`}
+                    alt={`${c.lg} trophy`}
+                    className="career-champ-trophy"
+                    onError={e=>{e.currentTarget.style.display='none';}}
+                  />
+                  <div className="career-champ-info">
+                    <span className="career-champ-count">{c.count}×</span>
+                    <span className="career-champ-lg">{c.lg}</span>
+                  </div>
+                  <div className="career-champ-seasons">
+                    {c.wins.map((w, j) => (
+                      <span key={j} className="career-champ-tag">{w.season}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="career-stats-row">
             {[
               {lbl:'GP',  val:careerStats.gp,  cls:''},
@@ -415,7 +465,7 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
   // ─── Stats ────────────────────────────────────────────────────────────────────
   const StatsTab = () => (
     <div className="tab-content">
-      <ChampSection compact />
+      
       {!Object.keys(leagueStats).length && (
         <div className="no-data" style={{minHeight:'160px'}}>
           <div className="no-data-text" style={{fontSize:'0.7rem'}}>NO STATS FOUND</div>
@@ -436,6 +486,7 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
             <table className="stats-table">
               <thead>
                 <tr>
+                <th className="th-champ" title="Championship">🏆</th>
                   <th>SEASON</th><th>TEAM</th><th>GP</th><th>W</th><th>L</th>
                   <th>T</th><th>OTL</th><th>PTS</th><th>PTS%</th><th>GF</th><th>GA</th><th>GD</th>
                 </tr>
@@ -446,8 +497,20 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
                   const ptspct = s.gp>0 ? ((s.pts/(s.gp*2))*100).toFixed(1)+'%' : '—';
                   const seasonLabel = data.sf ? (s[data.sf]||'—') : (s.season||s.lg||'—');
                   const teamAbr = s.abr||s.team_abr||s.team||'';
+                  const isChampSeason = champSeasonSet.has(seasonLabel);
+                  const rowLgPrefix = (seasonLabel || '').replace(/\d.*/, '').toUpperCase();
                   return (
-                    <tr key={i}>
+                    <tr key={i} className={isChampSeason ? 'champ-row' : ''}>
+                      <td className="td-champ-cell">
+                        {isChampSeason ? (
+                          <img
+                            src={`/assets/awards/${rowLgPrefix.startsWith('Q') ? 'q_champ' : 'w_champ'}.png`}
+                            alt="champion"
+                            className="td-champ-trophy"
+                            onError={e=>{e.currentTarget.style.display='none';}}
+                          />
+                        ) : <span style={{color:'rgba(255,255,255,.1)'}}>—</span>}
+                      </td>
                       <td className="s-season">{seasonLabel}</td>
                       <td className="s-team">
                         <div className="s-team-cell">
@@ -863,8 +926,10 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
         .champ-league-block { display:flex; flex-direction:column; align-items:center; gap:.5rem; background:rgba(0,0,0,.4); border:1px solid rgba(255,215,0,.25); border-radius:12px; padding:1rem 1.5rem; min-width:130px; }
         .champ-count { font-family:'Press Start 2P',monospace; font-size:2.2rem; color:#FFD700; text-shadow:0 0 20px rgba(255,215,0,.9); line-height:1; }
         .champ-league-name { font-family:'Press Start 2P',monospace; font-size:.5rem; color:rgba(255,165,0,.85); letter-spacing:2px; }
-        .champ-cups { display:flex; gap:.2rem; flex-wrap:wrap; justify-content:center; }
+play:flex; gap:.2rem; flex-wrap:wrap; justify-content:center; }
+play:flex; gap:.2rem; flex-wrap:wrap; justify-content:center; }
         .champ-cup-icon { font-size:1.1rem; display:inline-block; animation:cupFloat 2s ease-in-out infinite; }
+
         @keyframes cupFloat { 0%,100%{transform:translateY(0) scale(1)} 50%{transform:translateY(-4px) scale(1.1)} }
         .champ-season-list { display:flex; flex-wrap:wrap; gap:.25rem; justify-content:center; }
         .champ-season-tag { font-family:'VT323',monospace; font-size:.85rem; color:rgba(255,215,0,.45); background:rgba(255,215,0,.06); border-radius:4px; padding:0 .3rem; }
@@ -873,12 +938,20 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
         .champ-compact-block { display:flex; align-items:center; gap:.4rem; background:rgba(0,0,0,.4); border:1px solid rgba(255,215,0,.2); border-radius:8px; padding:.4rem .8rem; }
         .champ-compact-count { font-family:'Press Start 2P',monospace; font-size:.9rem; color:#FFD700; }
         .champ-compact-lg { font-family:'Press Start 2P',monospace; font-size:.45rem; color:#FFA500; letter-spacing:1px; }
-
+        .champ-trophy-img { width:52px; height:52px; object-fit:contain; filter:drop-shadow(0 0 12px rgba(255,215,0,.8)); animation:trophyBob 2s ease-in-out infinite; }
         /* ===== CAREER STRIP ===== */
         .career-strip { background:linear-gradient(135deg,#0d0d1a,#111125); border:2px solid rgba(255,165,0,.3); border-radius:16px; padding:1.25rem 1.75rem; margin-bottom:2rem; position:relative; overflow:hidden; }
         .career-strip::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,#FFA500,#FFD700,#FFA500,transparent); }
         .career-strip-title { font-family:'Press Start 2P',monospace; font-size:.58rem; color:rgba(255,165,0,.6); letter-spacing:3px; margin-bottom:1rem; }
         .career-stats-row { display:flex; flex-wrap:wrap; }
+        .career-champ-row { display:flex; gap:1rem; flex-wrap:wrap; margin-bottom:1rem; padding-bottom:1rem; border-bottom:1px solid rgba(255,215,0,.15); }
+        .career-champ-block { display:flex; align-items:center; gap:.6rem; background:rgba(255,215,0,.06); border:1px solid rgba(255,215,0,.2); border-radius:10px; padding:.5rem .85rem; }
+        .career-champ-trophy { width:36px; height:36px; object-fit:contain; filter:drop-shadow(0 0 8px rgba(255,215,0,.8)); animation:trophyBob 2s ease-in-out infinite; }
+        .career-champ-info { display:flex; flex-direction:column; }
+        .career-champ-count { font-family:'Press Start 2P',monospace; font-size:.7rem; color:#FFD700; text-shadow:0 0 10px rgba(255,215,0,.7); }
+        .career-champ-lg { font-family:'Press Start 2P',monospace; font-size:.38rem; color:rgba(255,165,0,.7); letter-spacing:1px; margin-top:2px; }
+        .career-champ-seasons { display:flex; flex-wrap:wrap; gap:.2rem; align-items:center; }
+        .career-champ-tag { font-family:'VT323',monospace; font-size:.9rem; color:rgba(255,215,0,.5); background:rgba(255,215,0,.07); border-radius:4px; padding:0 .3rem; }
         .cs-cell { display:flex; flex-direction:column; align-items:center; width:80px; padding:.35rem 0; border-right:1px solid rgba(255,165,0,.15); }
         .cs-cell:last-child { border-right:none; }
         .cs-val { font-family:'VT323',monospace; font-size:2rem; line-height:1; color:#E0E0E0; height:2.1rem; display:flex; align-items:center; justify-content:center; }
@@ -890,6 +963,13 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
         .cs-pos{ color:#00FF64; text-shadow:0 0 10px #00FF64; }
         .cs-neg{ color:#FF3C3C; text-shadow:0 0 10px #FF3C3C; }
         .cs-sub{ color:#87CEEB; font-size:1.75rem !important; }
+
+        .th-champ { width:38px; background:rgba(0,0,0,.25)!important; }
+        .champ-row { background:linear-gradient(90deg,rgba(255,215,0,.12),rgba(255,140,0,.06)) !important; border-left:3px solid rgba(255,215,0,.7) !important; }
+        .champ-row td { color:#FFE566 !important; }
+        .champ-row .s-season { color:#FFD700 !important; text-shadow:0 0 8px rgba(255,215,0,.6); }
+        .td-champ-cell { width:38px; padding:.3rem .4rem !important; vertical-align:middle; text-align:center; }
+        .td-champ-trophy { width:26px; height:26px; object-fit:contain; filter:drop-shadow(0 0 8px rgba(255,215,0,.95)) drop-shadow(0 0 16px rgba(255,140,0,.6)); animation:trophyBob 2s ease-in-out infinite; }
 
         /* ===== SECTIONS ===== */
         .section-block { margin-bottom:2rem; }

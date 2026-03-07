@@ -532,23 +532,29 @@ export default function Stats() {
   // ── Championships ────────────────────────────────────────────────────────
   useEffect(() => {
     if (!allSeasons.length) return;
-    Promise.all([
-      supabase.from('standings').select('team,season').in('season',allSeasons).eq('season_rank',1),
-      supabase.from('teams').select('abr,lg,coach').in('lg',allSeasons),
-    ]).then(([{data:sd},{data:td}]) => {
-      const abrLg = new Map();
-      for (const t of (td||[])) if (t.abr&&t.lg) abrLg.set(`${t.abr}:${t.lg}`, norm(t.coach));
-      const allMap = new Map(), perMap = new Map();
-      for (const s of (sd||[])) {
-        const ck = abrLg.get(`${s.team}:${s.season}`);
-        if (!ck) continue;
-        allMap.set(ck, (allMap.get(ck)||0)+1);
-        if (!perMap.has(s.season)) perMap.set(s.season, new Map());
-        perMap.get(s.season).set(ck, true);
-      }
-      setChampData({ allSeasonsMap: allMap, perSeasonMap: perMap });
-    });
-  }, [allSeasons]);
+    supabase
+      .from('seasons')
+      .select('lg, season_champion_manager_id')
+      .in('lg', allSeasons)
+      .not('season_champion_manager_id', 'is', null)
+      .then(({ data: sd, error }) => {
+        if (error) { console.warn('[Stats] seasons champ error:', error.message); return; }
+        // Build manager id → norm coach name from already-loaded managers list
+        const idToNorm = new Map();
+        for (const mgr of managers) {
+          if (mgr.id && mgr.coach_name) idToNorm.set(mgr.id, norm(mgr.coach_name));
+        }
+        const allMap = new Map(), perMap = new Map();
+        for (const s of (sd || [])) {
+          const ck = idToNorm.get(s.season_champion_manager_id);
+          if (!ck) continue;
+          allMap.set(ck, (allMap.get(ck) || 0) + 1);
+          if (!perMap.has(s.lg)) perMap.set(s.lg, new Map());
+          perMap.get(s.lg).set(ck, true);
+        }
+        setChampData({ allSeasonsMap: allMap, perSeasonMap: perMap });
+      });
+  }, [allSeasons, managers]);
 
   const isAllSeasons = seasonFilter === 'ALL';
   const champMap = useMemo(() => {
@@ -820,17 +826,7 @@ export default function Stats() {
           </span>
         </div>
       )}
-      {tab==='h2h'&&sortedH2hRows.length>0&&(
-        <div className="sp-legend-footer">
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.record.groupBg,borderLeft:GROUPS.record.borderLeft}}/>RECORD</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.goals.groupBg,borderLeft:GROUPS.goals.borderLeft}}/>GOALS</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.home.groupBg,borderLeft:GROUPS.home.borderLeft}}/>HOME</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.away.groupBg,borderLeft:GROUPS.away.borderLeft}}/>AWAY</div>
-          <div className="leg-item" style={{color:'#00DD55'}}><span style={{fontSize:16}}>W3</span> = Win streak</div>
-          <div className="leg-item" style={{color:'#FF5555'}}><span style={{fontSize:16}}>L2</span> = Loss streak</div>
-          <span className="leg-note">Stats shown from Manager A's perspective · Click column to sort</span>
-        </div>
-      )}
+     
 
       <style>{`
         *,*::before,*::after{box-sizing:border-box;}

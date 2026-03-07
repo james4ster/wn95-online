@@ -248,7 +248,7 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
 /* ═══════════════════════════════════════════════════════════════
    CLINCH / ELIMINATION MATH
 ═══════════════════════════════════════════════════════════════ */
-function computeClinchElim(sortedStandings, playoffTeams) {
+function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
   const clinched   = new Set();
   const eliminated = new Set();
 
@@ -256,20 +256,23 @@ function computeClinchElim(sortedStandings, playoffTeams) {
     return { clinched, eliminated };
   }
 
+  // Don't show clinch/elim until at least 50% of season is complete
+  const avgGP = sortedStandings.reduce((sum, t) => sum + (t.gp || 0), 0) / sortedStandings.length;
+  if (avgGP < totalGamesPerTeam * 0.5) return { clinched, eliminated };
+
   const n = sortedStandings.length;
-  const maxGP = Math.max(...sortedStandings.map(s => s.gp || 0));
-  const maxPts = t => (t.pts || 0) + Math.max(0, maxGP - (t.gp || 0)) * 2;
+  const maxPts = t => (t.pts || 0) + Math.max(0, totalGamesPerTeam - (t.gp || 0)) * 2;
 
   const bubbleIdx = Math.min(playoffTeams - 1, n - 1);
   const bubblePts = sortedStandings[bubbleIdx]?.pts || 0;
 
   for (let r = 0; r < Math.min(playoffTeams, n); r++) {
     const myPts = sortedStandings[r].pts || 0;
-    let canSurpass = 0;
+    let couldFinishAbove = 0;
     for (let j = playoffTeams; j < n; j++) {
-      if (maxPts(sortedStandings[j]) > myPts) canSurpass++;
+      if (maxPts(sortedStandings[j]) > myPts) couldFinishAbove++;
     }
-    if (canSurpass < (playoffTeams - r)) {
+    if (couldFinishAbove < (playoffTeams - r)) {
       clinched.add(sortedStandings[r].team);
     }
   }
@@ -300,6 +303,8 @@ export default function Standings() {
   const reverseSortColumns                  = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
   const tableContainerRef                   = useRef(null);
+  const [seasonTeams, setSeasonTeams] = useState([]);
+  const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(52);
 
   // ── Seasons ────────────────────────────────────────────────
   useEffect(() => {
@@ -327,14 +332,37 @@ export default function Standings() {
     if (!selectedLeague || !selectedSeason) { setRawGames([]); return; }
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('games')
-        .select('id, home, away, score_home, score_away, ot, coach_home, coach_away')
-        .eq('lg', selectedSeason)
-        .eq('mode', 'Season')
-        .order('id', { ascending: true });
+      const [{ data: gamesData, error }, { data: teamsData }, { data: scheduleData }] = await Promise.all([
+        supabase
+          .from('games')
+          .select('id, home, away, score_home, score_away, ot, coach_home, coach_away')
+          .eq('lg', selectedSeason)
+          .eq('mode', 'Season')
+          .not('score_home', 'is', null)
+          .order('id', { ascending: true }),
+        supabase
+          .from('teams')
+          .select('abr, coach')
+          .eq('lg', selectedSeason),
+        supabase
+          .from('games')
+          .select('home')
+          .eq('lg', selectedSeason)
+          .eq('mode', 'Season'),
+      ]);
       if (error) console.error('Error fetching games:', error);
-      setRawGames(data || []);
+      setRawGames(gamesData || []);
+      setSeasonTeams(teamsData || []);
+      
+      // Derive games per team from full schedule (home appearances = games as home team)
+      const homeCounts = {};
+      (scheduleData || []).forEach(g => {
+        homeCounts[g.home] = (homeCounts[g.home] || 0) + 1;
+      });
+      const counts = Object.values(homeCounts);
+      const gamesPerTeam = counts.length > 0 ? Math.max(...counts) * 2 : 52; // home + away
+      setTotalGamesPerTeam(gamesPerTeam);
+      console.log('totalGamesPerTeam:', gamesPerTeam, 'homeCounts:', homeCounts);
       setLoading(false);
     })();
   }, [selectedLeague, selectedSeason]);
@@ -368,7 +396,18 @@ export default function Standings() {
   }, [selectedSeason]);
 
   // ── Compute standings from raw games ───────────────────────
-  const computedStandings = useMemo(() => computeStandings(rawGames), [rawGames]);
+  const computedStandings = useMemo(() => {
+    const standings = computeStandings(rawGames);
+    const playedTeams = new Set(standings.map(s => s.team));
+    const zeroed = seasonTeams
+      .filter(({ abr }) => !playedTeams.has(abr))
+      .map(({ abr, coach }) => ({
+        team: abr, coach: coach || '', gp: 0,
+        w: 0, l: 0, t: 0, otl: 0, otw: 0,
+        pts: 0, gf: 0, ga: 0, gd: 0, shutouts: 0, pts_pct: 0,
+      }));
+    return [...standings, ...zeroed];
+  }, [rawGames, seasonTeams]);
 
   // ── Default (tiebreaker-aware) sort — used for ranking/clinch/elim ──
   const defaultSorted = useMemo(
@@ -399,8 +438,8 @@ export default function Standings() {
 
   // ── Clinch/elim always uses tiebreaker-aware sort ──────────
   const { clinched, eliminated } = useMemo(
-    () => computeClinchElim(defaultSorted, playoffTeams),
-    [defaultSorted, playoffTeams]
+    () => computeClinchElim(defaultSorted, playoffTeams, totalGamesPerTeam),
+    [defaultSorted, playoffTeams, totalGamesPerTeam]
   );
 
   // ── Tied pts set (for tooltip trigger) ────────────────────
@@ -408,10 +447,17 @@ export default function Standings() {
     const ptsCounts = {};
     sortedStandings.forEach(s => {
       const p = Number(s.pts);
-      ptsCounts[p] = (ptsCounts[p] || 0) + 1;
+      if (!ptsCounts[p]) ptsCounts[p] = [];
+      ptsCounts[p].push(s);
     });
-    return new Set(Object.entries(ptsCounts).filter(([, count]) => count > 1).map(([p]) => Number(p)));
-  }, [sortedStandings]);
+    const result = new Set();
+    Object.entries(ptsCounts).forEach(([p, teams]) => {
+      if (teams.length < 2) return;
+      const anyNearEnd = teams.some(t => (totalGamesPerTeam - (t.gp || 0)) < 10);
+      if (anyNearEnd) result.add(Number(p));
+    });
+    return result;
+  }, [sortedStandings, totalGamesPerTeam]);
 
   const handleSort = (key) => {
     if (key === 'season_rank') { setSortConfig({ key: 'default', direction: 'descending' }); return; }
@@ -427,10 +473,12 @@ export default function Standings() {
   const handleRowMouseEnter = useCallback((e, team, pts) => {
     const tiedTeams = sortedStandings.filter(s => Number(s.pts) === Number(pts));
     if (tiedTeams.length < 2) { setTiebreakerInfo(null); return; }
+    const anyNearEnd = tiedTeams.some(t => (totalGamesPerTeam - (t.gp || 0)) < 10);
+    if (!anyNearEnd) { setTiebreakerInfo(null); return; }
     const el = e.currentTarget;
     const r = el.getBoundingClientRect();
     setTiebreakerInfo({ hoveredTeam: team, tiedStandings: tiedTeams, anchorRect: { top: r.top, right: r.right, left: r.left, height: r.height } });
-  }, [sortedStandings]);
+  }, [sortedStandings, totalGamesPerTeam]);
 
   const handleRowMouseLeave = useCallback(() => { setTiebreakerInfo(null); }, []);
 

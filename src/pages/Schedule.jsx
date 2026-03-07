@@ -52,10 +52,10 @@ export default function Schedule() {
 
       // Season games — still by team abr (correct for this season series)
       const [homeRes, awayRes] = await Promise.all([
-        supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('home', selectedTeamAbr),
-        supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('away', selectedTeamAbr),
+        supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('home', selectedTeamAbr).not('score_home', 'is', null),
+supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('away', selectedTeamAbr).not('score_home', 'is', null),
       ]);
-      const played = [...(homeRes.data || []), ...(awayRes.data || [])].sort((a, b) => a.game - b.game);
+      const played = [...(homeRes.data || []), ...(awayRes.data || [])].sort((a, b) => a.id - b.id);
       setCompletedGames(played);
 
       const playedOpponentAbrs = new Set(

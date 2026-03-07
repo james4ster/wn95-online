@@ -24,17 +24,31 @@ export default function DefendingChampion() {
     if (!selectedLeague) return;
     setLoading(true); setChamp(null); setSeason(null); setLogoIn(false);
     (async () => {
+      const now = new Date();
       const { data: seasons } = await supabase
-        .from('seasons').select('lg, end_date, year')
-        .order('year', { ascending: false }).limit(20);
-      const ps = (seasons || []).filter(s => lgPrefix(s.lg) === selectedLeague);
-      if (!ps.length) { setLoading(false); return; }
-      const latest = ps.reduce((b, s) =>
-        new Date(s.end_date) > new Date(b.end_date) ? s : b);
-      const { data: rows } = await supabase
-        .from('standings').select('team, season, season_rank')
-        .eq('season', latest.lg).eq('season_rank', 1).limit(1);
-      if (rows?.[0]) { setChamp(rows[0].team); setSeason(rows[0].season); }
+        .from('seasons')
+        .select('lg, end_date, year, season_champion_manager_id')
+        .not('season_champion_manager_id', 'is', null)
+        .order('end_date', { ascending: false })
+        .limit(20);
+
+      const latest = (seasons || []).find(s =>
+        lgPrefix(s.lg) === selectedLeague &&
+        s.end_date && new Date(s.end_date) < now
+      );
+      if (!latest) { setLoading(false); return; }
+
+      const { data: teamRows } = await supabase
+        .from('teams')
+        .select('abr, team, arena')
+        .eq('lg', latest.lg)
+        .eq('manager_id', latest.season_champion_manager_id)
+        .limit(1);
+
+      if (teamRows?.[0]) {
+        setChamp(teamRows[0].abr);
+        setSeason(latest.lg);
+      }
       setLoading(false);
     })();
   }, [selectedLeague]);

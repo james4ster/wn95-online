@@ -474,7 +474,8 @@ export default function Scores() {
       const { data, error } = await supabase
         .from('games')
         .select('id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot')
-        .eq('lg', season).eq('mode', mode)
+        .eq('lg', season)
+        .or(`mode.eq.Season,mode.eq.season`)
         .or(`home.eq.${team},away.eq.${team}`)
         .not('score_home', 'is', null)
         .order('game_number', { ascending: true, nullsFirst: false })

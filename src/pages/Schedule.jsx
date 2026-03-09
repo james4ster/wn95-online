@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useLeague } from '../components/LeagueContext';
 import { supabase } from '../utils/supabaseClient';
 
+const GAMES_PER_OPPONENT = 2; // adjust if format changes
+
 export default function Schedule() {
   const { selectedLeague } = useLeague();
 
@@ -15,6 +17,7 @@ export default function Schedule() {
   const [seasonStats, setSeasonStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('remaining');
+  const [playedCountByOpp, setPlayedCountByOpp] = useState({});
 
   useEffect(() => {
     if (!selectedLeague) { setSeasons([]); setSelectedSeason(''); return; }
@@ -52,37 +55,68 @@ export default function Schedule() {
 
       // Season games — still by team abr (correct for this season series)
       const [homeRes, awayRes] = await Promise.all([
-        supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('home', selectedTeamAbr).not('score_home', 'is', null),
-supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season').ilike('away', selectedTeamAbr).not('score_home', 'is', null),
+        supabase.from('games').select('*').eq('lg', selectedSeason).or('mode.eq.Season,mode.eq.season').ilike('home', selectedTeamAbr).not('score_home', 'is', null),
+        supabase.from('games').select('*').eq('lg', selectedSeason).or('mode.eq.Season,mode.eq.season').ilike('away', selectedTeamAbr).not('score_home', 'is', null),
       ]);
       const played = [...(homeRes.data || []), ...(awayRes.data || [])].sort((a, b) => a.id - b.id);
       setCompletedGames(played);
 
-      const playedOpponentAbrs = new Set(
-        played.map(g => g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away.toLowerCase() : g.home.toLowerCase())
-      );
+      // Count played games per opponent
+// Current season teams — needed for remaining + coach lookups
+const { data: allTeamsData } = await supabase
+  .from('teams').select('team, abr, coach').eq('lg', selectedSeason);
 
-      // Current season teams — to build opponent list and get coach names
-      const { data: allTeamsData } = await supabase
-        .from('teams').select('team, abr, coach').eq('lg', selectedSeason);
+// Count played games per opponent
+// Count played games per opponent
+const playedCountByOpp = {};
+played.forEach(g => {
+  const opp = (g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away : g.home).toLowerCase();
+  playedCountByOpp[opp] = (playedCountByOpp[opp] || 0) + 1;
+  setPlayedCountByOpp(playedCountByOpp);
+});
 
-      const remaining = (allTeamsData || []).filter(t =>
-        t.abr.toLowerCase() !== selectedTeamAbr.toLowerCase() && !playedOpponentAbrs.has(t.abr.toLowerCase())
-      ).sort((a, b) => a.abr.localeCompare(b.abr));
-      setRemainingOpponents(remaining);
+// Fetch total scheduled games per opponent (all games, played or not)
+const [scheduledHomeRes, scheduledAwayRes] = await Promise.all([
+  supabase.from('games').select('home,away').eq('lg', selectedSeason).or('mode.eq.Season,mode.eq.season').ilike('home', selectedTeamAbr),
+  supabase.from('games').select('home,away').eq('lg', selectedSeason).or('mode.eq.Season,mode.eq.season').ilike('away', selectedTeamAbr),
+]);
+
+const scheduledCountByOpp = {};
+[...(scheduledHomeRes.data || []), ...(scheduledAwayRes.data || [])].forEach(g => {
+  const opp = (g.home.toLowerCase() === selectedTeamAbr.toLowerCase() ? g.away : g.home).toLowerCase();
+  scheduledCountByOpp[opp] = (scheduledCountByOpp[opp] || 0) + 1;
+});
+
+// Remaining = opponents not fully played + opponents not in schedule at all
+      const remaining = (allTeamsData || []).filter(t => {
+        const key = t.abr.toLowerCase();
+        if (key === selectedTeamAbr.toLowerCase()) return false;
+        const done = playedCountByOpp[key] || 0;
+        return done < GAMES_PER_OPPONENT;
+      }).sort((a, b) => a.abr.localeCompare(b.abr));
+
+setRemainingOpponents(remaining);
 
       // Get selected team's coach name — stable identifier across rebrands
       const selectedTeamRow = (allTeamsData || []).find(t => t.abr.toLowerCase() === selectedTeamAbr.toLowerCase());
       const selectedCoach = selectedTeamRow?.coach;
+
+   // Guard: if no coach found, skip all-time queries
+      if (!selectedCoach) {
+        setRemainingOpponents(remaining);
+        setH2hRecords({});
+        setLoading(false);
+        return;
+      }
 
       // All-time games: query by coach_home / coach_away — works across rebrands
       // Scoped to same league prefix (e.g. 'W%') so we don't mix leagues
       const leaguePrefix = selectedLeague + '%';
       const [allHome, allAway] = await Promise.all([
         supabase.from('games').select('home,away,coach_home,coach_away,score_home,score_away,result_home,result_away,ot')
-          .eq('mode', 'Season').like('lg', leaguePrefix).ilike('coach_home', selectedCoach),
-        supabase.from('games').select('home,away,coach_home,coach_away,score_home,score_away,result_home,result_away,ot')
-          .eq('mode', 'Season').like('lg', leaguePrefix).ilike('coach_away', selectedCoach),
+  .or('mode.eq.Season,mode.eq.season').like('lg', leaguePrefix).ilike('coach_home', selectedCoach),
+supabase.from('games').select('home,away,coach_home,coach_away,score_home,score_away,result_home,result_away,ot')
+  .or('mode.eq.Season,mode.eq.season').like('lg', leaguePrefix).ilike('coach_away', selectedCoach),
       ]);
       const allGames = [...(allHome.data || []), ...(allAway.data || [])];
 
@@ -396,8 +430,13 @@ supabase.from('games').select('*').eq('lg', selectedSeason).eq('mode', 'Season')
                         </div>
 
                         <div className="cell-season">
-                          <span className="unplayed">NOT YET PLAYED</span>
-                        </div>
+                            {(() => {
+                              const done = playedCountByOpp[team.abr.toLowerCase()] || 0;
+                              return done > 0
+                                ? <span className="unplayed">{GAMES_PER_OPPONENT - done} GAME{GAMES_PER_OPPONENT - done !== 1 ? 'S' : ''} REMAINING</span>
+                                : <span className="unplayed">NOT YET PLAYED</span>;
+                            })()}
+                          </div>
 
                         <div className="cell-divider" />
 

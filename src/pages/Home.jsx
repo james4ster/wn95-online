@@ -251,7 +251,7 @@ const getMeta = t => STORY_META[t] || STORY_META.hot_streak;
 ───────────────────────────────────────────────────────────── */
 async function fetchGazetteEdition({
   leagueLabel, recentForm, winStreaks, lossStreaks,
-  currentSeason, teamNameMap, topScorers
+  currentSeason, teamNameMap, topScorers, recentGames
 }) {
   const today = todayStamp();
 
@@ -289,6 +289,12 @@ async function fetchGazetteEdition({
     return `${s.goal_player_name} (${n.full} / ${s.g_team}): ${s.goals}G ${s.assists}A${best}${ach}`;
   }).join(' | ');
 
+  const gameLines = (recentGames || []).slice(0, 8).map(g => {
+    const home = teamNameMap[g.home]?.full || g.home;
+    const away = teamNameMap[g.away]?.full || g.away;
+    return `${home} ${g.score_home}-${g.score_away} ${away}${g.ot ? ' (OT)' : ''}`;
+  }).join(' | ');
+
   const allCodes = [...new Set([
     ...recentForm.hot.map(t=>t.team),
     ...recentForm.cold.map(t=>t.team),
@@ -318,6 +324,7 @@ Cold teams (last 10): ${coldLines || 'none'}
 Active win streaks: ${winLines || 'none'}
 Active loss streaks: ${lossLines || 'none'}
 ${scorerLines ? `Recent game top scorers: ${scorerLines}` : ''}
+${gameLines ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}` : 'No games in last 24 hours.'}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING RULES
@@ -412,7 +419,7 @@ function GazetteSkeleton() {
 function LeagueGazette({
   leagueLabel, recentForm, winStreaks, lossStreaks,
   currentSeason, loading: dataLoading,
-  teamNameMap, topScorers
+  teamNameMap, topScorers, recentGames
 }) {
   const [edition,    setEdition]    = useState(null);
   const [loading,    setLoading]    = useState(false);
@@ -433,7 +440,7 @@ function LeagueGazette({
     try {
       const data = await fetchGazetteEdition({
         leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
-        teamNameMap, topScorers
+        teamNameMap, topScorers, recentGames
       });
       localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ date: today, league: leagueLabel, data }));
       setEdition(data);
@@ -1048,6 +1055,7 @@ export default function Home() {
   const [evtLoading,      setEvtLoading]      = useState(true);
   const [tickerItems,     setTickerItems]     = useState([]);
   const [teams,           setTeams]           = useState([]);
+  const [recentGames, setRecentGames] = useState([]);
 
   // ── NEW: team name map (abr → { city, nickname, full }) ──────────────────
   const [teamNameMap,     setTeamNameMap]     = useState({});
@@ -1071,6 +1079,7 @@ export default function Home() {
     setRecentForm({hot:[],cold:[]});
     setTeamNameMap({});
     setTopScorers([]);
+    setRecentGames([]);
 
     // ── Seasons ──────────────────────────────────────────────────────────
     const {data:seasons}=await supabase.from('seasons').select('*').order('year',{ascending:false}).limit(20);
@@ -1095,8 +1104,20 @@ export default function Home() {
     // ── Games ─────────────────────────────────────────────────────────────
     const {data:allGames}=await supabase.from('games')
       .select('id,lg,legacy_game_id,home,away,result_home,result_away')
-      .eq('lg',latest.lg).order('legacy_game_id',{ascending:false});
+      .eq('lg',latest.lg).order('id', { ascending: false });
     const games=allGames||[];
+
+    // ── Recent games (last 24 hrs) for gazette ────────────────────────────────
+    const yesterday = new Date(Date.now() - 24*60*60*1000).toISOString();
+    const { data: recentGamesData } = await supabase
+      .from('games')
+      .select('home, away, score_home, score_away, ot')
+      .eq('lg', latest.lg)
+      .eq('mode', 'Season')
+      .not('score_home', 'is', null)
+      .gte('updated_at', yesterday);
+    setRecentGames(recentGamesData || []);
+
 
     // ── Win/loss streaks ──────────────────────────────────────────────────
     const teamHist={};
@@ -1138,13 +1159,13 @@ export default function Home() {
     setRecentForm({hot:form.slice(0,5),cold:[...form].sort((a,b)=>a.pct-b.pct).slice(0,5)});
     setLoading(false);
 
-    // ── Top scorers from the most recent legacy_game_id ───────────────────
-    // Find the highest legacy_game_id (most recent batch of games)
+    // ── Top scorers from the most recent id ───────────────────
+    // Find the highest id (most recent batch of games)
     if(games.length > 0) {
-      const maxGameId = games[0].legacy_game_id; // already sorted desc
-      // Get all game IDs that share this legacy_game_id
+      const maxGameId = games[0].id; // already sorted desc
+      // Get all game IDs that share this id
       const recentGameIds = games
-        .filter(g => g.legacy_game_id === maxGameId)
+        .filter(g => g.id === maxGameId)
         .map(g => g.id);
 
       if(recentGameIds.length > 0) {
@@ -1316,6 +1337,7 @@ export default function Home() {
             loading={loading}
             teamNameMap={teamNameMap}
             topScorers={topScorers}
+            recentGames={recentGames}
           />
         </div>
 

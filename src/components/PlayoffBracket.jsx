@@ -773,11 +773,24 @@ export default function PlayoffBracket({
   const rightCols = rightRounds.map((_, ri) => col(rightRounds, rightRefs.current, ri, true)).reverse();
 
   return (
-    <div style={{ padding: '1.5rem 1.5rem 2rem', minWidth: 'max-content' }}>
-     <div ref={containerRef} style={{
-        display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
-        gap: `${COL_GAP}px`, paddingTop: 36, position: 'relative', minHeight: 10,
-      }}>
+    <div style={{
+      padding: '1.5rem 1.5rem 2rem',
+      overflowX: 'auto',
+      width: '100%'
+    }}>
+    <div
+  ref={containerRef}
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: `${COL_GAP}px`,
+    paddingTop: 36,
+    position: 'relative',
+    minHeight: 10,
+    width: 'max-content'
+  }}
+>
         <BracketLines
           getBox={getBox}
           leftRefs={leftRefs.current}

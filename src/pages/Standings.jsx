@@ -235,29 +235,20 @@ export default function Standings() {
     if (!selectedLeague || !selectedSeason) { setRawGames([]); return; }
     (async () => {
       setLoading(true);
-      try {
-        const [
-          { data: gamesData, error },
-          { data: teamsData },
-          { data: scheduleData },
-        ] = await Promise.all([
-          supabase.from('games').select('id, home, away, score_home, score_away, ot, coach_home, coach_away').eq('lg', selectedSeason).eq('mode', 'Season').not('score_home', 'is', null).order('id', { ascending: true }),
-          supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
-          supabase.from('games').select('home').eq('lg', selectedSeason).eq('mode', 'Season'),
-        ]);
-        if (error) console.error('Error fetching games:', error);
-        setRawGames(gamesData || []);
-        setSeasonTeams(teamsData || []);
-        const homeCounts = {};
-        (scheduleData || []).forEach((g) => { homeCounts[g.home] = (homeCounts[g.home] || 0) + 1; });
-        const counts = Object.values(homeCounts);
-        const gamesPerTeam = counts.length > 0 ? Math.max(...counts) * 2 : 52;
-        setTotalGamesPerTeam(gamesPerTeam);
-      } catch (err) {
-        console.error('Standings fetch error:', err);
-      } finally {
-        setLoading(false);
-      }
+      const [{ data: gamesData, error }, { data: teamsData }, { data: scheduleData }] = await Promise.all([
+        supabase.from('games').select('id, home, away, score_home, score_away, ot, coach_home, coach_away').eq('lg', selectedSeason).eq('mode', 'Season').not('score_home', 'is', null).order('id', { ascending: true }),
+        supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
+        supabase.from('games').select('home').eq('lg', selectedSeason).eq('mode', 'Season'),
+      ]);
+      if (error) console.error('Error fetching games:', error);
+      setRawGames(gamesData || []);
+      setSeasonTeams(teamsData || []);
+      const homeCounts = {};
+      (scheduleData || []).forEach((g) => { homeCounts[g.home] = (homeCounts[g.home] || 0) + 1; });
+      const counts = Object.values(homeCounts);
+      const gamesPerTeam = counts.length > 0 ? Math.max(...counts) * 2 : 52;
+      setTotalGamesPerTeam(gamesPerTeam);
+      setLoading(false);
     })();
   }, [selectedLeague, selectedSeason]);
 

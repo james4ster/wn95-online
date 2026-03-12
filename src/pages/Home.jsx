@@ -1,19 +1,23 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
-import { supabase } from "../utils/supabaseClient";
-import TwitchLiveWidget from "../components/TwitchLiveWidget";
-import { useLeague } from "../components/LeagueContext";
+import { supabase } from '../utils/supabaseClient';
+import TwitchLiveWidget from '../components/TwitchLiveWidget';
+import { useLeague } from '../components/LeagueContext';
 
-const lgPrefix = lg => (lg || '').replace(/[0-9]/g, '').trim();
+const lgPrefix = (lg) => (lg || '').replace(/[0-9]/g, '').trim();
 const LEAGUE_CONFIG = [
-  { prefix: 'W', label: 'WN95',    color: '#87CEEB' },
-  { prefix: 'Q', label: 'THE Q',   color: '#FFD700' },
+  { prefix: 'W', label: 'WN95', color: '#87CEEB' },
+  { prefix: 'Q', label: 'THE Q', color: '#FFD700' },
   { prefix: 'V', label: 'VINTAGE', color: '#FF6B35' },
 ];
-const leagueCfg = prefix => LEAGUE_CONFIG.find(l => l.prefix === prefix) ??
-  { prefix, label: prefix, color: '#aaa' };
+const leagueCfg = (prefix) =>
+  LEAGUE_CONFIG.find((l) => l.prefix === prefix) ?? {
+    prefix,
+    label: prefix,
+    color: '#aaa',
+  };
 
 const getFullTeamName = (teamCode, teams) => {
-  const t = teams.find(t => t.code === teamCode);
+  const t = teams.find((t) => t.code === teamCode);
   return t ? t.team : teamCode;
 };
 
@@ -22,11 +26,12 @@ const getFullTeamName = (teamCode, teams) => {
 //   → { city:"Barrie", nickname:"Dolts", full:"Barrie Dolts", coach:"Dasri" }
 function parseTeamData(teamRow) {
   const fullName = teamRow?.team || '';
-  const coach    = teamRow?.coach || '';
+  const coach = teamRow?.coach || '';
   if (!fullName) return { city: '', nickname: '', full: '', coach };
   const parts = fullName.trim().split(' ');
-  if (parts.length === 1) return { city: parts[0], nickname: parts[0], full: fullName, coach };
-  const city     = parts[0];
+  if (parts.length === 1)
+    return { city: parts[0], nickname: parts[0], full: fullName, coach };
+  const city = parts[0];
   const nickname = parts.slice(1).join(' ');
   return { city, nickname, full: fullName, coach };
 }
@@ -36,13 +41,25 @@ function useLeagueCountdown(season) {
   useEffect(() => {
     if (!season) return;
     const calc = () => {
-      if (!season.end_date) { setTick({ done: true, seasonLabel: season.lg }); return; }
+      if (!season.end_date) {
+        setTick({ done: true, seasonLabel: season.lg });
+        return;
+      }
       const diff = new Date(season.end_date) - Date.now();
-      if (diff <= 0) { setTick({ done: true, seasonLabel: season.lg }); return; }
-      setTick({ done:false, seasonLabel:season.lg,
-        d:Math.floor(diff/86400000), h:Math.floor((diff%86400000)/3600000),
-        m:Math.floor((diff%3600000)/60000), s:Math.floor((diff%60000)/1000),
-        urgent:diff<48*3600000, warning:diff<7*86400000 });
+      if (diff <= 0) {
+        setTick({ done: true, seasonLabel: season.lg });
+        return;
+      }
+      setTick({
+        done: false,
+        seasonLabel: season.lg,
+        d: Math.floor(diff / 86400000),
+        h: Math.floor((diff % 86400000) / 3600000),
+        m: Math.floor((diff % 3600000) / 60000),
+        s: Math.floor((diff % 60000) / 1000),
+        urgent: diff < 48 * 3600000,
+        warning: diff < 7 * 86400000,
+      });
     };
     calc();
     const id = setInterval(calc, 1000);
@@ -51,16 +68,25 @@ function useLeagueCountdown(season) {
   return tick;
 }
 
-const p2 = n => String(n ?? 0).padStart(2, '0');
+const p2 = (n) => String(n ?? 0).padStart(2, '0');
 
 function daysUntil(iso) {
   if (!iso) return null;
   const norm = /[Zz]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z';
   const evMs = new Date(norm).getTime();
   if (isNaN(evMs) || evMs < Date.now()) return null;
-  const now = new Date(), ev = new Date(evMs);
-  const todayMid = new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime();
-  const evMid    = new Date(ev.getFullYear(),ev.getMonth(),ev.getDate()).getTime();
+  const now = new Date(),
+    ev = new Date(evMs);
+  const todayMid = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  const evMid = new Date(
+    ev.getFullYear(),
+    ev.getMonth(),
+    ev.getDate()
+  ).getTime();
   const days = Math.round((evMid - todayMid) / 86400000);
   if (days === 0) return 'TODAY';
   if (days === 1) return 'TMRW';
@@ -70,7 +96,13 @@ function daysUntil(iso) {
 function ClockDisplay() {
   const [time, setTime] = useState('');
   useEffect(() => {
-    const update = () => setTime(new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}));
+    const update = () =>
+      setTime(
+        new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      );
     update();
     const id = setInterval(update, 10000);
     return () => clearInterval(id);
@@ -92,25 +124,37 @@ function InlineCountdown({ cfg, tick }) {
         <div className="icd-meta">
           <span className="icd-dot" />
           <span className="icd-league">{cfg.label}</span>
-          {tick?.seasonLabel && <span className="icd-season">{tick.seasonLabel}</span>}
+          {tick?.seasonLabel && (
+            <span className="icd-season">{tick.seasonLabel}</span>
+          )}
         </div>
       </div>
       <div className="icd-right">
-        {!tick ? <span className="icd-awaiting">AWAITING</span>
-        : tick.done ? (
+        {!tick ? (
+          <span className="icd-awaiting">AWAITING</span>
+        ) : tick.done ? (
           <div className="icd-complete">
-            <span style={{fontSize:15}}>🏆</span>
+            <span style={{ fontSize: 15 }}>🏆</span>
             <span className="icd-done-txt">COMPLETE</span>
           </div>
         ) : (
           <div className="icd-clock">
-            {[{v:tick.d,u:'D'},{v:tick.h,u:'H'},{v:tick.m,u:'M'},{v:tick.s,u:'S'}].map(({v,u})=>(
+            {[
+              { v: tick.d, u: 'D' },
+              { v: tick.h, u: 'H' },
+              { v: tick.m, u: 'M' },
+              { v: tick.s, u: 'S' },
+            ].map(({ v, u }) => (
               <div key={u} className="icd-unit">
                 <span className="icd-n">{p2(v)}</span>
                 <span className="icd-u">{u}</span>
               </div>
             ))}
-            {tick.d<7&&<span style={{fontSize:15,marginLeft:2}}>{tick.urgent?'🚨':'⚡'}</span>}
+            {tick.d < 7 && (
+              <span style={{ fontSize: 15, marginLeft: 2 }}>
+                {tick.urgent ? '🚨' : '⚡'}
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -129,64 +173,140 @@ function PanelHeader({ icon, title, action }) {
 }
 
 const SL_PANELS = [
-  { id:'hot',     icon:'🔥', label:'HOTTEST TEAMS',  sub:'Best record last 10' },
-  { id:'cold',    icon:'🥶', label:'COLDEST TEAMS',  sub:'Worst record last 10' },
-  { id:'wstreak', icon:'🏆', label:'WIN STREAKS',    sub:'Active win streaks' },
-  { id:'lstreak', icon:'💀', label:'LOSS STREAKS',   sub:'Active loss streaks' },
-  { id:'scorers', icon:'⭐', label:'TOP SCORERS',    sub:'Season leaders' },
+  { id: 'hot', icon: '🔥', label: 'HOTTEST TEAMS', sub: 'Best record last 10' },
+  {
+    id: 'cold',
+    icon: '🥶',
+    label: 'COLDEST TEAMS',
+    sub: 'Worst record last 10',
+  },
+  {
+    id: 'wstreak',
+    icon: '🏆',
+    label: 'WIN STREAKS',
+    sub: 'Active win streaks',
+  },
+  {
+    id: 'lstreak',
+    icon: '💀',
+    label: 'LOSS STREAKS',
+    sub: 'Active loss streaks',
+  },
+  { id: 'scorers', icon: '⭐', label: 'TOP SCORERS', sub: 'Season leaders' },
 ];
 
 function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
   const [idx, setIdx] = useState(0);
   const timerRef = useRef(null);
-  const startTimer = useCallback(()=>{
+  const startTimer = useCallback(() => {
     clearInterval(timerRef.current);
-    timerRef.current = setInterval(()=>setIdx(i=>(i+1)%SL_PANELS.length), 8000);
-  },[]);
-  useEffect(()=>{ startTimer(); return()=>clearInterval(timerRef.current); },[startTimer]);
-  const goTo = i => { setIdx(i); startTimer(); };
+    timerRef.current = setInterval(
+      () => setIdx((i) => (i + 1) % SL_PANELS.length),
+      8000
+    );
+  }, []);
+  useEffect(() => {
+    startTimer();
+    return () => clearInterval(timerRef.current);
+  }, [startTimer]);
+  const goTo = (i) => {
+    setIdx(i);
+    startTimer();
+  };
   const p = SL_PANELS[idx];
 
   const rows = () => {
-    if(loading) return [1,2,3,4].map(i=>(<div key={i} className="skel" style={{height:24,margin:'.12rem .65rem'}}/>));
-    if(p.id==='hot'||p.id==='cold'){
-      const list=p.id==='hot'?recentForm.hot:recentForm.cold;
-      if(!list.length) return <div className="sl-empty">No data available</div>;
-      return list.map((t,i)=>(
+    if (loading)
+      return [1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="skel"
+          style={{ height: 24, margin: '.12rem .65rem' }}
+        />
+      ));
+    if (p.id === 'hot' || p.id === 'cold') {
+      const list = p.id === 'hot' ? recentForm.hot : recentForm.cold;
+      if (!list.length)
+        return <div className="sl-empty">No data available</div>;
+      return list.map((t, i) => (
         <div key={t.team} className="sl-row">
-          <span className="sl-rank">#{i+1}</span>
-          <img src={`/assets/teamLogos/${t.team}.png`} alt="" className="sl-logo" onError={e=>{e.currentTarget.style.display='none';}}/>
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${t.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{t.team}</span>
-          <div className="sl-dots">{t.last10.map((w,j)=><span key={j} className={`sl-dot ${w?'sl-dot-w':'sl-dot-l'}`}/>)}</div>
-          <span className={`sl-val ${p.id==='hot'?'sl-val-hot':'sl-val-cold'}`}>{t.w}-{t.l}</span>
+          <div className="sl-dots">
+            {t.last10.map((w, j) => (
+              <span
+                key={j}
+                className={`sl-dot ${w ? 'sl-dot-w' : 'sl-dot-l'}`}
+              />
+            ))}
+          </div>
+          <span
+            className={`sl-val ${
+              p.id === 'hot' ? 'sl-val-hot' : 'sl-val-cold'
+            }`}
+          >
+            {t.w}-{t.l}
+          </span>
         </div>
       ));
     }
-    if(p.id==='wstreak'){
-      if(!winStreaks.length) return <div className="sl-empty">No active win streaks</div>;
-      return winStreaks.slice(0,5).map((s,i)=>(
+    if (p.id === 'wstreak') {
+      if (!winStreaks.length)
+        return <div className="sl-empty">No active win streaks</div>;
+      return winStreaks.slice(0, 5).map((s, i) => (
         <div key={s.team} className="sl-row">
-          <span className="sl-rank">#{i+1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={e=>{e.currentTarget.style.display='none';}}/>
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
-            {Array.from({length:Math.min(s.count,10)},(_,j)=><span key={j} className="sl-dot sl-dot-w"/>)}
-            {s.count>10&&<span className="sl-dots-more">+{s.count-10}</span>}
+            {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
+              <span key={j} className="sl-dot sl-dot-w" />
+            ))}
+            {s.count > 10 && (
+              <span className="sl-dots-more">+{s.count - 10}</span>
+            )}
           </div>
           <span className="sl-val sl-val-hot">{s.count}W</span>
         </div>
       ));
     }
-    if(p.id==='lstreak'){
-      if(!lossStreaks.length) return <div className="sl-empty">No active loss streaks</div>;
-      return lossStreaks.slice(0,5).map((s,i)=>(
+    if (p.id === 'lstreak') {
+      if (!lossStreaks.length)
+        return <div className="sl-empty">No active loss streaks</div>;
+      return lossStreaks.slice(0, 5).map((s, i) => (
         <div key={s.team} className="sl-row">
-          <span className="sl-rank">#{i+1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={e=>{e.currentTarget.style.display='none';}}/>
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
-            {Array.from({length:Math.min(s.count,10)},(_,j)=><span key={j} className="sl-dot sl-dot-l"/>)}
-            {s.count>10&&<span className="sl-dots-more">+{s.count-10}</span>}
+            {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
+              <span key={j} className="sl-dot sl-dot-l" />
+            ))}
+            {s.count > 10 && (
+              <span className="sl-dots-more">+{s.count - 10}</span>
+            )}
           </div>
           <span className="sl-val sl-val-cold">{s.count}L</span>
         </div>
@@ -194,11 +314,15 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
     }
     return (
       <div>
-        {[1,2,3,4,5].map(i=>(
-          <div key={i} className="sl-row" style={{opacity:1-i*.15}}>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="sl-row" style={{ opacity: 1 - i * 0.15 }}>
             <span className="sl-rank">#{i}</span>
-            <div className="sl-bar-wrap"><div className="sl-bar" style={{width:`${100-i*13}%`}}/></div>
-            <span className="sl-val" style={{color:'rgba(255,255,255,.18)'}}>—</span>
+            <div className="sl-bar-wrap">
+              <div className="sl-bar" style={{ width: `${100 - i * 13}%` }} />
+            </div>
+            <span className="sl-val" style={{ color: 'rgba(255,255,255,.18)' }}>
+              —
+            </span>
           </div>
         ))}
         <div className="sl-coming">PLAYER STATS COMING SOON</div>
@@ -209,16 +333,27 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
   return (
     <section className="panel sl-panel">
       <div className="sl-tabs">
-        {SL_PANELS.map((sp,i)=>(
-          <button key={sp.id} className={`sl-tab ${i===idx?'sl-tab-on':''}`} onClick={()=>goTo(i)} title={sp.label}>{sp.icon}</button>
+        {SL_PANELS.map((sp, i) => (
+          <button
+            key={sp.id}
+            className={`sl-tab ${i === idx ? 'sl-tab-on' : ''}`}
+            onClick={() => goTo(i)}
+            title={sp.label}
+          >
+            {sp.icon}
+          </button>
         ))}
       </div>
       <div className="sl-titlebar">
-        <span className="sl-title">{p.icon} {p.label}</span>
+        <span className="sl-title">
+          {p.icon} {p.label}
+        </span>
         <span className="sl-sub">{p.sub}</span>
       </div>
       <div className="sl-body">{rows()}</div>
-      <div className="sl-prog-wrap"><div className="sl-prog" key={`${idx}-${loading}`}/></div>
+      <div className="sl-prog-wrap">
+        <div className="sl-prog" key={`${idx}-${loading}`} />
+      </div>
     </section>
   );
 }
@@ -228,30 +363,38 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
 ═══════════════════════════════════════════════════════════════ */
 
 const GAZETTE_CACHE_KEY = 'league_gazette_v5';
-function todayStamp() { return new Date().toISOString().slice(0, 10); }
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 const STORY_META = {
-  hot_streak:    { color: '#FF4500', tag: 'ON FIRE'         },
-  win_streak:    { color: '#00C853', tag: 'WIN STREAK'      },
-  cold_streak:   { color: '#448AFF', tag: 'COLD SPELL'      },
-  loss_streak:   { color: '#448AFF', tag: 'LOSING SKID'     },
-  big_win:       { color: '#FFD600', tag: 'BIG WIN'         },
-  elimination:   { color: '#D50000', tag: 'ELIMINATED'      },
-  playoff_push:  { color: '#00BFA5', tag: 'PLAYOFF PUSH'    },
-  milestone:     { color: '#FFD600', tag: 'MILESTONE'       },
-  comeback:      { color: '#FF6D00', tag: 'COMEBACK'        },
-  idle:          { color: '#78909C', tag: 'QUIET NIGHT'     },
-  rivalry:       { color: '#E040FB', tag: 'RIVALRY WATCH'   },
+  hot_streak: { color: '#FF4500', tag: 'ON FIRE' },
+  win_streak: { color: '#00C853', tag: 'WIN STREAK' },
+  cold_streak: { color: '#448AFF', tag: 'COLD SPELL' },
+  loss_streak: { color: '#448AFF', tag: 'LOSING SKID' },
+  big_win: { color: '#FFD600', tag: 'BIG WIN' },
+  elimination: { color: '#D50000', tag: 'ELIMINATED' },
+  playoff_push: { color: '#00BFA5', tag: 'PLAYOFF PUSH' },
+  milestone: { color: '#FFD600', tag: 'MILESTONE' },
+  comeback: { color: '#FF6D00', tag: 'COMEBACK' },
+  idle: { color: '#78909C', tag: 'QUIET NIGHT' },
+  rivalry: { color: '#E040FB', tag: 'RIVALRY WATCH' },
 };
-const getMeta = t => STORY_META[t] || STORY_META.hot_streak;
+const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
 
 /* ─────────────────────────────────────────────────────────────
    Fetch from Supabase edge fn
    Now receives: teamNameMap (abr→{city,nickname,full}) + topScorers
 ───────────────────────────────────────────────────────────── */
 async function fetchGazetteEdition({
-  leagueLabel, recentForm, winStreaks, lossStreaks,
-  currentSeason, teamNameMap, topScorers, recentGames
+  leagueLabel,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+  teamNameMap,
+  topScorers,
+  recentGames,
 }) {
   const today = todayStamp();
 
@@ -264,49 +407,95 @@ async function fetchGazetteEdition({
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
-  
+
     if (cached?.date === today && cached?.data) {
       console.log('[Gazette] ✅ Serving from DB cache');
       return cached.data;
     }
-  } catch(e) {
+  } catch (e) {
     console.log('[Gazette] No DB cache found, generating live');
   }
 
   // ── 2. Fallback: generate live ────────────────────────────
   console.log(`[Gazette] ⚠️ Cache miss — calling AI`);
   const season = currentSeason?.lg || leagueLabel;
-  const tn = code => teamNameMap[code] || { city: code, nickname: code, full: code };
+  const tn = (code) =>
+    teamNameMap[code] || { city: code, nickname: code, full: code };
 
-  const hotLines  = recentForm.hot.slice(0,5).map(t => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`).join(' | ');
-  const coldLines = recentForm.cold.slice(0,5).map(t => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`).join(' | ');
-  const winLines  = winStreaks.slice(0,5).map(s => `${tn(s.team).full} [${s.team}]: W${s.count}`).join(' | ');
-  const lossLines = lossStreaks.slice(0,5).map(s => `${tn(s.team).full} [${s.team}]: L${s.count}`).join(' | ');
-  const scorerLines = topScorers.slice(0,6).map(s => {
-    const n = tn(s.g_team);
-    const ach = s.fourGoalGame ? ' 🔥 4-GOAL GAME' : s.hatTrick ? ' 🎩 HAT TRICK' : s.bigNight ? ' ⭐ BIG NIGHT' : '';
-    const best = s.bestGame && (s.bestGame.g + s.bestGame.a) > 0 ? ` (best game: ${s.bestGame.g}G ${s.bestGame.a}A)` : '';
-    return `${s.goal_player_name} (${n.full} / ${s.g_team}): ${s.goals}G ${s.assists}A${best}${ach}`;
-  }).join(' | ');
+  const hotLines = recentForm.hot
+    .slice(0, 5)
+    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
+    .join(' | ');
+  const coldLines = recentForm.cold
+    .slice(0, 5)
+    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
+    .join(' | ');
+  const winLines = winStreaks
+    .slice(0, 5)
+    .map((s) => `${tn(s.team).full} [${s.team}]: W${s.count}`)
+    .join(' | ');
+  const lossLines = lossStreaks
+    .slice(0, 5)
+    .map((s) => `${tn(s.team).full} [${s.team}]: L${s.count}`)
+    .join(' | ');
+  const scorerLines = topScorers
+    .slice(0, 6)
+    .map((s) => {
+      const n = tn(s.g_team);
+      const ach = s.fourGoalGame
+        ? ' 🔥 4-GOAL GAME'
+        : s.hatTrick
+        ? ' 🎩 HAT TRICK'
+        : s.bigNight
+        ? ' ⭐ BIG NIGHT'
+        : '';
+      const best =
+        s.bestGame && s.bestGame.g + s.bestGame.a > 0
+          ? ` (best game: ${s.bestGame.g}G ${s.bestGame.a}A)`
+          : '';
+      return `${s.goal_player_name} (${n.full} / ${s.g_team}): ${s.goals}G ${s.assists}A${best}${ach}`;
+    })
+    .join(' | ');
 
-  const gameLines = (recentGames || []).slice(0, 8).map(g => {
-    const home = teamNameMap[g.home]?.full || g.home;
-    const away = teamNameMap[g.away]?.full || g.away;
-    return `${home} ${g.score_home}-${g.score_away} ${away}${g.ot ? ' (OT)' : ''}`;
-  }).join(' | ');
+  const gameLines = (recentGames || [])
+    .slice(0, 8)
+    .map((g) => {
+      const home = teamNameMap[g.home]?.full || g.home;
+      const away = teamNameMap[g.away]?.full || g.away;
+      return `${home} ${g.score_home}-${g.score_away} ${away}${
+        g.ot ? ' (OT)' : ''
+      }`;
+    })
+    .join(' | ');
 
-  const allCodes = [...new Set([
-    ...recentForm.hot.map(t=>t.team),
-    ...recentForm.cold.map(t=>t.team),
-    ...winStreaks.map(s=>s.team),
-    ...lossStreaks.map(s=>s.team),
-  ])];
-  const nameRef = allCodes.map(code => {
-    const n = tn(code);
-    return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${n.coach ? `, coach: ${n.coach}` : ''})`;
-  }).join('\n');
+  const allCodes = [
+    ...new Set([
+      ...recentForm.hot.map((t) => t.team),
+      ...recentForm.cold.map((t) => t.team),
+      ...winStreaks.map((s) => s.team),
+      ...lossStreaks.map((s) => s.team),
+    ]),
+  ];
+  const nameRef = allCodes
+    .map((code) => {
+      const n = tn(code);
+      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
+        n.coach ? `, coach: ${n.coach}` : ''
+      })`;
+    })
+    .join('\n');
 
-  const angles = ['hot_streak','win_streak','cold_streak','loss_streak','big_win','playoff_push','milestone','comeback','rivalry'];
+  const angles = [
+    'hot_streak',
+    'win_streak',
+    'cold_streak',
+    'loss_streak',
+    'big_win',
+    'playoff_push',
+    'milestone',
+    'comeback',
+    'rivalry',
+  ];
   const angleHint = angles[new Date().getDate() % angles.length];
 
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
@@ -324,7 +513,11 @@ Cold teams (last 10): ${coldLines || 'none'}
 Active win streaks: ${winLines || 'none'}
 Active loss streaks: ${lossLines || 'none'}
 ${scorerLines ? `Recent game top scorers: ${scorerLines}` : ''}
-${gameLines ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}` : 'No games in last 24 hours.'}
+${
+  gameLines
+    ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}`
+    : 'No games in last 24 hours.'
+}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING RULES
@@ -348,7 +541,9 @@ Respond ONLY with valid JSON, zero other text:
   "pull_quote": "12-20 words. Dramatic fake quote.",
   "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
   "bottom_line": "7-11 words. One punchy verdict on the league.",
-  "edition": "Vol. ${Math.floor(Math.random()*30)+1} · Issue ${Math.floor(Math.random()*80)+1}"
+  "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
+    Math.floor(Math.random() * 80) + 1
+  }"
 }`;
 
   const result = await supabase.functions.invoke('gazette-generate', {
@@ -357,9 +552,8 @@ Respond ONLY with valid JSON, zero other text:
 
   if (result.error) throw new Error(result.error.message);
 
-  const raw = result.data?.text
-           || result.data?.message?.content?.[0]?.text
-           || '';
+  const raw =
+    result.data?.text || result.data?.message?.content?.[0]?.text || '';
   const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in response');
   const data = JSON.parse(match[0]);
@@ -368,11 +562,11 @@ Respond ONLY with valid JSON, zero other text:
   try {
     await supabase.from('gazette_cache').upsert({
       league: leagueLabel,
-      date:   today,
+      date: today,
       data,
     });
     console.log('[Gazette] ✅ Written to DB cache');
-  } catch(e) {
+  } catch (e) {
     console.warn('[Gazette] Failed to write to DB cache:', e);
   }
 
@@ -386,25 +580,44 @@ function GazetteSkeleton() {
   return (
     <div className="si-skel">
       <div className="si-skel-cover">
-        <div className="si-skel-b" style={{height:12,width:'30%',marginBottom:8}}/>
-        <div className="si-skel-b" style={{height:22,width:'68%',marginBottom:6}}/>
-        <div className="si-skel-b" style={{height:14,width:'55%'}}/>
+        <div
+          className="si-skel-b"
+          style={{ height: 12, width: '30%', marginBottom: 8 }}
+        />
+        <div
+          className="si-skel-b"
+          style={{ height: 22, width: '68%', marginBottom: 6 }}
+        />
+        <div className="si-skel-b" style={{ height: 14, width: '55%' }} />
       </div>
       <div className="si-skel-grid">
         <div className="si-skel-col">
-          {[1,2,3].map(i=>(
-            <div key={i} style={{marginBottom:16}}>
-              <div className="si-skel-b" style={{height:8,width:'40%',marginBottom:6}}/>
-              <div className="si-skel-b" style={{height:14,width:'92%',marginBottom:4}}/>
-              <div className="si-skel-b" style={{height:11,width:'72%'}}/>
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <div
+                className="si-skel-b"
+                style={{ height: 8, width: '40%', marginBottom: 6 }}
+              />
+              <div
+                className="si-skel-b"
+                style={{ height: 14, width: '92%', marginBottom: 4 }}
+              />
+              <div className="si-skel-b" style={{ height: 11, width: '72%' }} />
             </div>
           ))}
         </div>
-        <div className="si-skel-b si-skel-hero"/>
+        <div className="si-skel-b si-skel-hero" />
         <div className="si-skel-col">
-          <div className="si-skel-b" style={{height:72,borderRadius:6,marginBottom:14}}/>
-          {[88,75,60,50].map((w,i)=>(
-            <div key={i} className="si-skel-b" style={{height:10,width:`${w}%`,marginBottom:7}}/>
+          <div
+            className="si-skel-b"
+            style={{ height: 72, borderRadius: 6, marginBottom: 14 }}
+          />
+          {[88, 75, 60, 50].map((w, i) => (
+            <div
+              key={i}
+              className="si-skel-b"
+              style={{ height: 10, width: `${w}%`, marginBottom: 7 }}
+            />
           ))}
         </div>
       </div>
@@ -417,258 +630,384 @@ function GazetteSkeleton() {
    New props: teamNameMap, topScorers
 ───────────────────────────────────────────────────────────── */
 function LeagueGazette({
-  leagueLabel, recentForm, winStreaks, lossStreaks,
-  currentSeason, loading: dataLoading,
-  teamNameMap, topScorers, recentGames
+  leagueLabel,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+  loading: dataLoading,
+  teamNameMap,
+  topScorers,
+  recentGames,
 }) {
-  const [edition,    setEdition]    = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
+  const [edition, setEdition] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async (force = false) => {
-    const today = todayStamp();
-    if (!force) {
+  const load = useCallback(
+    async (force = false) => {
+      const today = todayStamp();
+      if (!force) {
+        try {
+          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
+          if (c.date === today && c.league === leagueLabel && c.data) {
+            setEdition(c.data);
+            return;
+          }
+        } catch {}
+      }
+      setLoading(true);
+      setError(null);
       try {
-        const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-        if (c.date === today && c.league === leagueLabel && c.data) {
-          setEdition(c.data); return;
-        }
-      } catch {}
-    }
-    setLoading(true); setError(null);
-    try {
-      const data = await fetchGazetteEdition({
-        leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
-        teamNameMap, topScorers, recentGames
-      });
-      localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ date: today, league: leagueLabel, data }));
-      setEdition(data);
-    } catch(e) {
-      console.error('[Gazette]', e);
-      setError(true);
-    } finally {
-      setLoading(false); setRefreshing(false);
-    }
-  }, [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason, teamNameMap, topScorers]);
+        const data = await fetchGazetteEdition({
+          leagueLabel,
+          recentForm,
+          winStreaks,
+          lossStreaks,
+          currentSeason,
+          teamNameMap,
+          topScorers,
+          recentGames,
+        });
+        localStorage.setItem(
+          GAZETTE_CACHE_KEY,
+          JSON.stringify({ date: today, league: leagueLabel, data })
+        );
+        setEdition(data);
+      } catch (e) {
+        console.error('[Gazette]', e);
+        setError(true);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [
+      leagueLabel,
+      recentForm,
+      winStreaks,
+      lossStreaks,
+      currentSeason,
+      teamNameMap,
+      topScorers,
+    ]
+  );
 
   useEffect(() => {
     if (!dataLoading && recentForm.hot.length > 0) load();
   }, [dataLoading, leagueLabel]);
 
-  const handleRefresh = () => { setRefreshing(true); load(true); };
+  const handleRefresh = () => {
+    setRefreshing(true);
+    load(true);
+  };
 
-  const team    = edition?.featured_team || '';
-  const meta    = getMeta(edition?.story_type);
-  const lgKey   = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
-  const dateStr = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  const team = edition?.featured_team || '';
+  // Resolve to a team code even if AI returned a full name
+  const teamCode =
+    Object.entries(teamNameMap).find(
+      ([code, info]) => info.full === team || code === team
+    )?.[0] || team;
+  const meta = getMeta(edition?.story_type);
+  const lgKey = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
-  const featWin  = winStreaks.find(s => s.team === team);
-  const featLoss = lossStreaks.find(s => s.team === team);
-  const featForm = recentForm.hot.find(t => t.team === team)
-                || recentForm.cold.find(t => t.team === team);
+  // All lookups use teamCode (the real abr), not team (which may be a full name)
+  const featWin = winStreaks.find((s) => s.team === teamCode);
+  const featLoss = lossStreaks.find((s) => s.team === teamCode);
+  const featForm =
+    recentForm.hot.find((t) => t.team === teamCode) ||
+    recentForm.cold.find((t) => t.team === teamCode);
 
-  // Full name for the hero footer (show full name if available, fallback to code)
-  const featFullName = teamNameMap[team]?.full || team;
+  // Full name for the hero footer — key into map by teamCode, not team
+  const featFullName = teamNameMap[teamCode]?.full || teamCode;
 
   return (
-    <div className="si-wrap" style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}>
-
+    <div
+      className="si-wrap"
+      style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}
+    >
       {/* ══ MASTHEAD ══════════════════════════════════════════ */}
       <header className="si-mast">
         <div className="si-mast-left">
-          <img src={`/assets/leagueLogos/${lgKey}.png`} alt={leagueLabel}
+          <img
+            src={`/assets/leagueLogos/${lgKey}.png`}
+            alt={leagueLabel}
             className="si-league-logo"
-            onError={e=>{ e.currentTarget.style.display='none'; }}/>
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <div>
             <div className="si-mast-name">{leagueLabel}</div>
             <div className="si-mast-sub">MAGAZINE</div>
           </div>
         </div>
         <div className="si-mast-mid">
-          <hr className="si-hr"/>
+          <hr className="si-hr" />
           <span className="si-mast-date">{dateStr}</span>
-          <hr className="si-hr"/>
+          <hr className="si-hr" />
         </div>
         <div className="si-mast-right">
-          {edition?.edition && <span className="si-issue">{edition.edition}</span>}
-          <button className="si-refresh" onClick={handleRefresh} disabled={loading || refreshing}>
-            <span style={{ display:'inline-block', animation: refreshing ? 'siSpin .7s linear infinite' : 'none' }}>↻</span>
+          {edition?.edition && (
+            <span className="si-issue">{edition.edition}</span>
+          )}
+          <button
+            className="si-refresh"
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                animation: refreshing ? 'siSpin .7s linear infinite' : 'none',
+              }}
+            >
+              ↻
+            </span>
           </button>
         </div>
       </header>
 
-      <div className="si-accent-rule"/>
+      <div className="si-accent-rule" />
 
       {/* ══ BODY ══════════════════════════════════════════════ */}
-      {(loading && !edition)
-        ? <GazetteSkeleton />
-        : error
-        ? (
-          <div className="si-error">
-            <span>📡</span>
-            <div>
-              <div className="si-err-title">PRESS ROOM DOWN</div>
-              <div className="si-err-body">Edge function unavailable.</div>
-            </div>
-            <button className="si-refresh" onClick={handleRefresh}>↻ RETRY</button>
+      {loading && !edition ? (
+        <GazetteSkeleton />
+      ) : error ? (
+        <div className="si-error">
+          <span>📡</span>
+          <div>
+            <div className="si-err-title">PRESS ROOM DOWN</div>
+            <div className="si-err-body">Edge function unavailable.</div>
           </div>
-        )
-        : edition
-        ? (
-          <div className={refreshing ? 'si-content si-fading' : 'si-content si-fadein'}>
+          <button className="si-refresh" onClick={handleRefresh}>
+            ↻ RETRY
+          </button>
+        </div>
+      ) : edition ? (
+        <div
+          className={
+            refreshing ? 'si-content si-fading' : 'si-content si-fadein'
+          }
+        >
+          {/* ── COVER STRIP ─────────────────────────────── */}
+          <div className="si-cover-strip">
+            <span className="si-story-pill" style={{ background: meta.color }}>
+              {meta.tag}
+            </span>
+            <h1 className="si-cover-line">{edition.cover_line}</h1>
+            <p className="si-cover-sub">{edition.cover_sub}</p>
+          </div>
 
-            {/* ── COVER STRIP ─────────────────────────────── */}
-            <div className="si-cover-strip">
-              <span className="si-story-pill" style={{ background: meta.color }}>{meta.tag}</span>
-              <h1 className="si-cover-line">{edition.cover_line}</h1>
-              <p className="si-cover-sub">{edition.cover_sub}</p>
-            </div>
-
-            {/* ── THREE COLUMN ────────────────────────────── */}
-            <div className="si-cols">
-
-              {/* LEFT — story blurbs */}
-              <aside className="si-col-left">
-                {[edition.blurb_1, edition.blurb_2, edition.blurb_3].filter(Boolean).map((b,i) => (
+          {/* ── THREE COLUMN ────────────────────────────── */}
+          <div className="si-cols">
+            {/* LEFT — story blurbs */}
+            <aside className="si-col-left">
+              {[edition.blurb_1, edition.blurb_2, edition.blurb_3]
+                .filter(Boolean)
+                .map((b, i) => (
                   <div key={i} className="si-blurb">
-                    <div className="si-blurb-bar"/>
+                    <div className="si-blurb-bar" />
                     <div className="si-blurb-tag">{b.tag}</div>
                     <div className="si-blurb-hed">{b.headline}</div>
                     <div className="si-blurb-dek">{b.detail}</div>
                   </div>
                 ))}
-              </aside>
+            </aside>
 
-              {/* CENTER — team hero */}
-              <div className="si-col-center">
-                <div className="si-hero">
-                  <div className="si-hero-bg">
-                    <img
-                      src={`/assets/banners/${team}.png`}
-                      alt="" className="si-hero-banner"
-                      onError={e=>{ e.currentTarget.style.display='none'; }}
-                    />
-                    <div className="si-hero-vignette"/>
+            {/* CENTER — team hero */}
+            <div className="si-col-center">
+              <div className="si-hero">
+                <div className="si-hero-bg">
+                  <img
+                    src={`/assets/banners/${teamCode}.png`}
+                    alt=""
+                    className="si-hero-banner"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div className="si-hero-vignette" />
+                </div>
+                <div className="si-hero-body">
+                  <img
+                    src={`/assets/teamLogos/${teamCode}.png`}
+                    alt={teamCode}
+                    className="si-hero-logo"
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = '0';
+                    }}
+                  />
+                </div>
+                <div className="si-hero-foot">
+                  {/* Show full team name in hero footer */}
+                  <div className="si-hero-name-wrap">
+                    <span className="si-hero-team">{featFullName}</span>
+                    <span className="si-hero-code">{teamCode}</span>
                   </div>
-                  <div className="si-hero-body">
-                    <img
-                      src={`/assets/teamLogos/${team}.png`}
-                      alt={team} className="si-hero-logo"
-                      onError={e=>{ e.currentTarget.style.opacity='0'; }}
-                    />
-                  </div>
-                  <div className="si-hero-foot">
-                    {/* Show full team name in hero footer */}
-                    <div className="si-hero-name-wrap">
-                      <span className="si-hero-team">{featFullName}</span>
-                      <span className="si-hero-code">{team}</span>
-                    </div>
-                    <div className="si-hero-badges">
-                      {featWin && (
-                        <span className="si-badge si-badge-w">W{featWin.count}</span>
-                      )}
-                      {featLoss && (
-                        <span className="si-badge si-badge-l">L{featLoss.count}</span>
-                      )}
-                      {featForm && (
-                        <span className="si-badge si-badge-form">
-                          {featForm.w}–{featForm.l} <span className="si-badge-l10">L10</span>
-                        </span>
-                      )}
-                    </div>
+                  <div className="si-hero-badges">
+                    {featWin && (
+                      <span className="si-badge si-badge-w">
+                        W{featWin.count}
+                      </span>
+                    )}
+                    {featLoss && (
+                      <span className="si-badge si-badge-l">
+                        L{featLoss.count}
+                      </span>
+                    )}
+                    {featForm && (
+                      <span className="si-badge si-badge-form">
+                        {featForm.w}–{featForm.l}{' '}
+                        <span className="si-badge-l10">L10</span>
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* RIGHT — quote + live tables */}
-              <aside className="si-col-right">
+            {/* RIGHT — quote + live tables */}
+            <aside className="si-col-right">
+              <div className="si-quote">
+                <div className="si-quote-open">"</div>
+                <p className="si-quote-text">{edition.pull_quote}</p>
+                <div className="si-quote-attr">{edition.quote_attr}</div>
+              </div>
 
-                <div className="si-quote">
-                  <div className="si-quote-open">"</div>
-                  <p className="si-quote-text">{edition.pull_quote}</p>
-                  <div className="si-quote-attr">{edition.quote_attr}</div>
-                </div>
-
-                {/* Recent scorers callout — if we have any */}
-                {topScorers.length > 0 && (
-                  <div className="si-table">
-                    <div className="si-table-hd">
-                      <span className="si-table-dot" style={{background:'#FFD600'}}/>
-                      LAST NIGHT
-                    </div>
-                    {topScorers.slice(0,5).map((s,i) => (
-                      <div key={i} className="si-table-row">
-                        <img src={`/assets/teamLogos/${s.g_team}.png`} alt=""
-                          className="si-table-logo"
-                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
-                        <span className="si-table-team si-table-player">{s.goal_player_name}</span>
-                        <div className="si-scorer-right">
-                          {s.fourGoalGame && <span className="si-achieve si-achieve-4g" title="4-Goal Game">🔥</span>}
-                          {!s.fourGoalGame && s.hatTrick && <span className="si-achieve si-achieve-hat" title="Hat Trick">🎩</span>}
-                          {!s.fourGoalGame && !s.hatTrick && s.bigNight && <span className="si-achieve si-achieve-big" title="Big Night">⭐</span>}
-                          <span className="si-table-val si-val-scorer">
-                            {s.goals}G {s.assists}A
+              {/* Recent scorers callout — if we have any */}
+              {topScorers.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#FFD600' }}
+                    />
+                    LAST NIGHT
+                  </div>
+                  {topScorers.slice(0, 5).map((s, i) => (
+                    <div key={i} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.g_team}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team si-table-player">
+                        {s.goal_player_name}
+                      </span>
+                      <div className="si-scorer-right">
+                        {s.fourGoalGame && (
+                          <span
+                            className="si-achieve si-achieve-4g"
+                            title="4-Goal Game"
+                          >
+                            🔥
                           </span>
-                        </div>
+                        )}
+                        {!s.fourGoalGame && s.hatTrick && (
+                          <span
+                            className="si-achieve si-achieve-hat"
+                            title="Hat Trick"
+                          >
+                            🎩
+                          </span>
+                        )}
+                        {!s.fourGoalGame && !s.hatTrick && s.bigNight && (
+                          <span
+                            className="si-achieve si-achieve-big"
+                            title="Big Night"
+                          >
+                            ⭐
+                          </span>
+                        )}
+                        <span className="si-table-val si-val-scorer">
+                          {s.goals}G {s.assists}A
+                        </span>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* On fire */}
-                {winStreaks.length > 0 && (
-                  <div className="si-table">
-                    <div className="si-table-hd">
-                      <span className="si-table-dot" style={{background:'#FF4500'}}/>
-                      ON FIRE
                     </div>
-                    {winStreaks.slice(0,4).map(s => (
-                      <div key={s.team} className="si-table-row">
-                        <img src={`/assets/teamLogos/${s.team}.png`} alt=""
-                          className="si-table-logo"
-                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
-                        <span className="si-table-team">{teamNameMap[s.team]?.city || s.team}</span>
-                        <span className="si-table-val si-val-w">W{s.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  ))}
+                </div>
+              )}
 
-                {/* Ice cold */}
-                {lossStreaks.length > 0 && (
-                  <div className="si-table">
-                    <div className="si-table-hd">
-                      <span className="si-table-dot" style={{background:'#448AFF'}}/>
-                      ICE COLD
+              {/* On fire */}
+              {winStreaks.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#FF4500' }}
+                    />
+                    ON FIRE
+                  </div>
+                  {winStreaks.slice(0, 4).map((s) => (
+                    <div key={s.team} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.team}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team">
+                        {teamNameMap[s.team]?.city || s.team}
+                      </span>
+                      <span className="si-table-val si-val-w">W{s.count}</span>
                     </div>
-                    {lossStreaks.slice(0,4).map(s => (
-                      <div key={s.team} className="si-table-row">
-                        <img src={`/assets/teamLogos/${s.team}.png`} alt=""
-                          className="si-table-logo"
-                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
-                        <span className="si-table-team">{teamNameMap[s.team]?.city || s.team}</span>
-                        <span className="si-table-val si-val-l">L{s.count}</span>
-                      </div>
-                    ))}
+                  ))}
+                </div>
+              )}
+
+              {/* Ice cold */}
+              {lossStreaks.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#448AFF' }}
+                    />
+                    ICE COLD
                   </div>
-                )}
-
-              </aside>
-            </div>
-
-            {/* ── BOTTOM LINE ─────────────────────────────── */}
-            <div className="si-footer">
-              <hr className="si-hr si-hr-short"/>
-              <span className="si-footer-label">BOTTOM LINE</span>
-              <span className="si-footer-text">{edition.bottom_line}</span>
-              <hr className="si-hr si-hr-short"/>
-            </div>
-
+                  {lossStreaks.slice(0, 4).map((s) => (
+                    <div key={s.team} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.team}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team">
+                        {teamNameMap[s.team]?.city || s.team}
+                      </span>
+                      <span className="si-table-val si-val-l">L{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
           </div>
-        )
-        : null
-      }
+
+          {/* ── BOTTOM LINE ─────────────────────────────── */}
+          <div className="si-footer">
+            <hr className="si-hr si-hr-short" />
+            <span className="si-footer-label">BOTTOM LINE</span>
+            <span className="si-footer-text">{edition.bottom_line}</span>
+            <hr className="si-hr si-hr-short" />
+          </div>
+        </div>
+      ) : null}
 
       <style>{`
         .si-wrap {
@@ -1045,70 +1384,86 @@ export default function Home() {
   const { selectedLeague } = useLeague();
   const cfg = leagueCfg(selectedLeague);
 
-  const [currentSeason,  setCurrentSeason]  = useState(null);
-  const [winStreaks,      setWinStreaks]      = useState([]);
-  const [lossStreaks,     setLossStreaks]     = useState([]);
-  const [recentForm,      setRecentForm]      = useState({hot:[],cold:[]});
-  const [discordEvents,   setDiscordEvents]   = useState([]);
-  const [recentTrades,    setRecentTrades]    = useState([]);
-  const [loading,         setLoading]         = useState(true);
-  const [evtLoading,      setEvtLoading]      = useState(true);
-  const [tickerItems,     setTickerItems]     = useState([]);
-  const [teams,           setTeams]           = useState([]);
+  const [currentSeason, setCurrentSeason] = useState(null);
+  const [winStreaks, setWinStreaks] = useState([]);
+  const [lossStreaks, setLossStreaks] = useState([]);
+  const [recentForm, setRecentForm] = useState({ hot: [], cold: [] });
+  const [discordEvents, setDiscordEvents] = useState([]);
+  const [recentTrades, setRecentTrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [evtLoading, setEvtLoading] = useState(true);
+  const [tickerItems, setTickerItems] = useState([]);
+  const [teams, setTeams] = useState([]);
   const [recentGames, setRecentGames] = useState([]);
 
   // ── NEW: team name map (abr → { city, nickname, full }) ──────────────────
-  const [teamNameMap,     setTeamNameMap]     = useState({});
+  const [teamNameMap, setTeamNameMap] = useState({});
 
   // ── NEW: top scorers from most recent game(s) in this season ─────────────
-  const [topScorers,      setTopScorers]      = useState([]);
+  const [topScorers, setTopScorers] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason);
 
   // Fetch all teams once for the ticker helper (code → team name)
-  useEffect(()=>{
-    supabase.from('teams').select('code,team').then(({data})=>{ if(data) setTeams(data); });
-  },[]);
+  useEffect(() => {
+    supabase
+      .from('teams')
+      .select('code,team')
+      .then(({ data }) => {
+        if (data) setTeams(data);
+      });
+  }, []);
 
-  const loadLeagueData = useCallback(async(prefix)=>{
-    if(!prefix) return;
+  const loadLeagueData = useCallback(async (prefix) => {
+    if (!prefix) return;
     setLoading(true);
     setCurrentSeason(null);
     setWinStreaks([]);
     setLossStreaks([]);
-    setRecentForm({hot:[],cold:[]});
+    setRecentForm({ hot: [], cold: [] });
     setTeamNameMap({});
     setTopScorers([]);
     setRecentGames([]);
 
     // ── Seasons ──────────────────────────────────────────────────────────
-    const {data:seasons}=await supabase.from('seasons').select('*').order('year',{ascending:false}).limit(20);
-    const ps=(seasons||[]).filter(s=>lgPrefix(s.lg)===prefix);
-    if(!ps.length){setLoading(false);return;}
-    const latest=ps.reduce((b,s)=>new Date(s.end_date)>new Date(b.end_date)?s:b);
+    const { data: seasons } = await supabase
+      .from('seasons')
+      .select('*')
+      .order('year', { ascending: false })
+      .limit(20);
+    const ps = (seasons || []).filter((s) => lgPrefix(s.lg) === prefix);
+    if (!ps.length) {
+      setLoading(false);
+      return;
+    }
+    const latest = ps.reduce((b, s) =>
+      new Date(s.end_date) > new Date(b.end_date) ? s : b
+    );
     setCurrentSeason(latest);
 
     // ── Teams for this season → build name map (includes coach) ──────────
     // teams table uses `abr` as the team code that matches games.home/away
-    const {data:seasonTeams} = await supabase
+    const { data: seasonTeams } = await supabase
       .from('teams')
       .select('abr,team,coach')
       .eq('lg', latest.lg);
 
     const nameMap = {};
-    (seasonTeams || []).forEach(t => {
+    (seasonTeams || []).forEach((t) => {
       nameMap[t.abr] = parseTeamData(t);
     });
     setTeamNameMap(nameMap);
 
     // ── Games ─────────────────────────────────────────────────────────────
-    const {data:allGames}=await supabase.from('games')
+    const { data: allGames } = await supabase
+      .from('games')
       .select('id,lg,legacy_game_id,home,away,result_home,result_away')
-      .eq('lg',latest.lg).order('id', { ascending: false });
-    const games=allGames||[];
+      .eq('lg', latest.lg)
+      .order('id', { ascending: false });
+    const games = allGames || [];
 
     // ── Recent games (last 24 hrs) for gazette ────────────────────────────────
-    const yesterday = new Date(Date.now() - 24*60*60*1000).toISOString();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: recentGamesData } = await supabase
       .from('games')
       .select('home, away, score_home, score_away, ot')
@@ -1118,76 +1473,99 @@ export default function Home() {
       .gte('updated_at', yesterday);
     setRecentGames(recentGamesData || []);
 
-
     // ── Win/loss streaks ──────────────────────────────────────────────────
-    const teamHist={};
-    games.forEach(g=>{
-      const hW=['W','OTW'].includes((g.result_home||'').toUpperCase());
-      const aW=['W','OTW'].includes((g.result_away||'').toUpperCase());
-      if(!teamHist[g.home]) teamHist[g.home]=[];
-      if(!teamHist[g.away]) teamHist[g.away]=[];
-      teamHist[g.home].push({win:hW});
-      teamHist[g.away].push({win:aW});
+    const teamHist = {};
+    games.forEach((g) => {
+      const hW = ['W', 'OTW'].includes((g.result_home || '').toUpperCase());
+      const aW = ['W', 'OTW'].includes((g.result_away || '').toUpperCase());
+      if (!teamHist[g.home]) teamHist[g.home] = [];
+      if (!teamHist[g.away]) teamHist[g.away] = [];
+      teamHist[g.home].push({ win: hW });
+      teamHist[g.away].push({ win: aW });
     });
-    const wins=[],losses=[];
-    Object.entries(teamHist).forEach(([team,hist])=>{
-      if(!hist.length) return;
-      const first=hist[0].win; let count=0;
-      for(const h of hist){if(h.win===first)count++;else break;}
-      if(first) wins.push({team,count}); else losses.push({team,count});
+    const wins = [],
+      losses = [];
+    Object.entries(teamHist).forEach(([team, hist]) => {
+      if (!hist.length) return;
+      const first = hist[0].win;
+      let count = 0;
+      for (const h of hist) {
+        if (h.win === first) count++;
+        else break;
+      }
+      if (first) wins.push({ team, count });
+      else losses.push({ team, count });
     });
-    wins.sort((a,b)=>b.count-a.count);
-    losses.sort((a,b)=>b.count-a.count);
-    setWinStreaks(wins.slice(0,5));
-    setLossStreaks(losses.slice(0,5));
+    wins.sort((a, b) => b.count - a.count);
+    losses.sort((a, b) => b.count - a.count);
+    setWinStreaks(wins.slice(0, 5));
+    setLossStreaks(losses.slice(0, 5));
 
     // ── Recent form (last 10) ─────────────────────────────────────────────
-    const last10={};
-    games.forEach(g=>{
-      const hW=['W','OTW'].includes((g.result_home||'').toUpperCase());
-      const aW=['W','OTW'].includes((g.result_away||'').toUpperCase());
-      [[g.home,hW],[g.away,aW]].forEach(([t,w])=>{
-        if(!last10[t]) last10[t]=[];
-        if(last10[t].length<10) last10[t].push(w);
+    const last10 = {};
+    games.forEach((g) => {
+      const hW = ['W', 'OTW'].includes((g.result_home || '').toUpperCase());
+      const aW = ['W', 'OTW'].includes((g.result_away || '').toUpperCase());
+      [
+        [g.home, hW],
+        [g.away, aW],
+      ].forEach(([t, w]) => {
+        if (!last10[t]) last10[t] = [];
+        if (last10[t].length < 10) last10[t].push(w);
       });
     });
-    const form=Object.entries(last10).filter(([,a])=>a.length>=3).map(([team,arr])=>{
-      const w=arr.filter(Boolean).length;
-      return{team,w,l:arr.length-w,last10:arr,pct:w/arr.length};
+    const form = Object.entries(last10)
+      .filter(([, a]) => a.length >= 3)
+      .map(([team, arr]) => {
+        const w = arr.filter(Boolean).length;
+        return { team, w, l: arr.length - w, last10: arr, pct: w / arr.length };
+      });
+    form.sort((a, b) => b.pct - a.pct);
+    setRecentForm({
+      hot: form.slice(0, 5),
+      cold: [...form].sort((a, b) => a.pct - b.pct).slice(0, 5),
     });
-    form.sort((a,b)=>b.pct-a.pct);
-    setRecentForm({hot:form.slice(0,5),cold:[...form].sort((a,b)=>a.pct-b.pct).slice(0,5)});
     setLoading(false);
 
     // ── Top scorers from the most recent id ───────────────────
     // Find the highest id (most recent batch of games)
-    if(games.length > 0) {
+    if (games.length > 0) {
       const maxGameId = games[0].id; // already sorted desc
       // Get all game IDs that share this id
       const recentGameIds = games
-        .filter(g => g.id === maxGameId)
-        .map(g => g.id);
+        .filter((g) => g.id === maxGameId)
+        .map((g) => g.id);
 
-      if(recentGameIds.length > 0) {
-        const {data: scoringData} = await supabase
+      if (recentGameIds.length > 0) {
+        const { data: scoringData } = await supabase
           .from('game_raw_scoring')
-          .select('game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team')
+          .select(
+            'game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team'
+          )
           .in('game_id', recentGameIds);
 
-        if(scoringData && scoringData.length > 0) {
+        if (scoringData && scoringData.length > 0) {
           // Track per-player, per-game stats to detect hat tricks & big nights
           // Structure: { playerName: { g_team, totalGoals, totalAssists, gameBreakdown: {gameId: {g,a}} } }
           const playerMap = {};
 
           const ensurePlayer = (name, team, gameId) => {
-            if(!name) return;
-            if(!playerMap[name]) playerMap[name] = { goal_player_name: name, g_team: team, totalGoals: 0, totalAssists: 0, gameBreakdown: {} };
-            if(!playerMap[name].gameBreakdown[gameId]) playerMap[name].gameBreakdown[gameId] = { g: 0, a: 0 };
+            if (!name) return;
+            if (!playerMap[name])
+              playerMap[name] = {
+                goal_player_name: name,
+                g_team: team,
+                totalGoals: 0,
+                totalAssists: 0,
+                gameBreakdown: {},
+              };
+            if (!playerMap[name].gameBreakdown[gameId])
+              playerMap[name].gameBreakdown[gameId] = { g: 0, a: 0 };
           };
 
-          scoringData.forEach(play => {
+          scoringData.forEach((play) => {
             // Goals
-            if(play.goal_player_name) {
+            if (play.goal_player_name) {
               ensurePlayer(play.goal_player_name, play.g_team, play.game_id);
               playerMap[play.goal_player_name].totalGoals++;
               playerMap[play.goal_player_name].gameBreakdown[play.game_id].g++;
@@ -1195,35 +1573,48 @@ export default function Home() {
               playerMap[play.goal_player_name].g_team = play.g_team;
             }
             // Primary assist — team attributed to g_team of the goal (same game)
-            if(play.assist_primary_name) {
+            if (play.assist_primary_name) {
               ensurePlayer(play.assist_primary_name, play.g_team, play.game_id);
               playerMap[play.assist_primary_name].totalAssists++;
-              playerMap[play.assist_primary_name].gameBreakdown[play.game_id].a++;
+              playerMap[play.assist_primary_name].gameBreakdown[play.game_id]
+                .a++;
             }
             // Secondary assist
-            if(play.assist_secondary_name) {
-              ensurePlayer(play.assist_secondary_name, play.g_team, play.game_id);
+            if (play.assist_secondary_name) {
+              ensurePlayer(
+                play.assist_secondary_name,
+                play.g_team,
+                play.game_id
+              );
               playerMap[play.assist_secondary_name].totalAssists++;
-              playerMap[play.assist_secondary_name].gameBreakdown[play.game_id].a++;
+              playerMap[play.assist_secondary_name].gameBreakdown[play.game_id]
+                .a++;
             }
           });
 
           // Build final scorer list with achievement flags
           const scorerList = Object.values(playerMap)
-            .filter(p => p.totalGoals > 0 || p.totalAssists > 0)
-            .map(p => {
+            .filter((p) => p.totalGoals > 0 || p.totalAssists > 0)
+            .map((p) => {
               const points = p.totalGoals + p.totalAssists;
               // Check for hat trick (3+ goals in a single game)
-              const hatTrick = Object.values(p.gameBreakdown).some(gb => gb.g >= 3);
+              const hatTrick = Object.values(p.gameBreakdown).some(
+                (gb) => gb.g >= 3
+              );
               // Check for big night (5+ points across all games in this batch)
               const bigNight = points >= 5;
               // Check for 4-goal game
-              const fourGoalGame = Object.values(p.gameBreakdown).some(gb => gb.g >= 4);
+              const fourGoalGame = Object.values(p.gameBreakdown).some(
+                (gb) => gb.g >= 4
+              );
               // Best single-game line (most points)
-              const bestGame = Object.values(p.gameBreakdown).reduce((best, gb) => {
-                const pts = gb.g + gb.a;
-                return pts > (best.g + best.a) ? gb : best;
-              }, { g:0, a:0 });
+              const bestGame = Object.values(p.gameBreakdown).reduce(
+                (best, gb) => {
+                  const pts = gb.g + gb.a;
+                  return pts > best.g + best.a ? gb : best;
+                },
+                { g: 0, a: 0 }
+              );
 
               return {
                 goal_player_name: p.goal_player_name,
@@ -1237,91 +1628,147 @@ export default function Home() {
                 bestGame, // { g, a } in single game
               };
             })
-            .sort((a,b) => {
+            .sort((a, b) => {
               // Prioritize hat tricks and big nights to the top
-              const aScore = (a.fourGoalGame ? 100 : 0) + (a.hatTrick ? 50 : 0) + (a.bigNight ? 20 : 0) + a.points;
-              const bScore = (b.fourGoalGame ? 100 : 0) + (b.hatTrick ? 50 : 0) + (b.bigNight ? 20 : 0) + b.points;
+              const aScore =
+                (a.fourGoalGame ? 100 : 0) +
+                (a.hatTrick ? 50 : 0) +
+                (a.bigNight ? 20 : 0) +
+                a.points;
+              const bScore =
+                (b.fourGoalGame ? 100 : 0) +
+                (b.hatTrick ? 50 : 0) +
+                (b.bigNight ? 20 : 0) +
+                b.points;
               return bScore - aScore;
             });
 
-          setTopScorers(scorerList.slice(0,8));
+          setTopScorers(scorerList.slice(0, 8));
         }
       }
     }
 
     // ── Ticker items ──────────────────────────────────────────────────────
-    const lastGames=games.slice(0,15).reverse();
-    const tickerEvents=[]; const teamStk={}; const evSet=new Set();
-    lastGames.forEach(g=>{
-      const hS=Number(g.result_home||0),aS=Number(g.result_away||0);
-      const hName=getFullTeamName(g.home,teams),aName=getFullTeamName(g.away,teams);
-      [[g.home,hS>aS,hName],[g.away,aS>hS,aName]].forEach(([team,win,name])=>{
-        if(!teamStk[team]) teamStk[team]=[];
+    const lastGames = games.slice(0, 15).reverse();
+    const tickerEvents = [];
+    const teamStk = {};
+    const evSet = new Set();
+    lastGames.forEach((g) => {
+      const hS = Number(g.result_home || 0),
+        aS = Number(g.result_away || 0);
+      const hName = getFullTeamName(g.home, teams),
+        aName = getFullTeamName(g.away, teams);
+      [
+        [g.home, hS > aS, hName],
+        [g.away, aS > hS, aName],
+      ].forEach(([team, win, name]) => {
+        if (!teamStk[team]) teamStk[team] = [];
         teamStk[team].push(win);
-        if(teamStk[team].length>5) teamStk[team].shift();
-        const l3=teamStk[team].slice(-3);
-        if(l3.length===3){
-          const msg=l3.every(Boolean)?`🔥 ${name} — 3-GAME WIN STREAK`:l3.every(v=>!v)?`📉 ${name} — 3 STRAIGHT LOSSES`:null;
-          if(msg&&!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
+        if (teamStk[team].length > 5) teamStk[team].shift();
+        const l3 = teamStk[team].slice(-3);
+        if (l3.length === 3) {
+          const msg = l3.every(Boolean)
+            ? `🔥 ${name} — 3-GAME WIN STREAK`
+            : l3.every((v) => !v)
+            ? `📉 ${name} — 3 STRAIGHT LOSSES`
+            : null;
+          if (msg && !evSet.has(msg)) {
+            tickerEvents.push(msg);
+            evSet.add(msg);
+          }
         }
       });
-      if(hS+aS>=4){
-        const msg=`⚡ FINAL: ${hName} ${hS} — ${aS} ${aName}`;
-        if(!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
+      if (hS + aS >= 4) {
+        const msg = `⚡ FINAL: ${hName} ${hS} — ${aS} ${aName}`;
+        if (!evSet.has(msg)) {
+          tickerEvents.push(msg);
+          evSet.add(msg);
+        }
       }
     });
-    form.slice(0,3).forEach(t=>{
-      const msg=`📈 ${getFullTeamName(t.team,teams)} — PLAYOFF POSITION`;
-      if(!evSet.has(msg)){tickerEvents.push(msg);evSet.add(msg);}
+    form.slice(0, 3).forEach((t) => {
+      const msg = `📈 ${getFullTeamName(t.team, teams)} — PLAYOFF POSITION`;
+      if (!evSet.has(msg)) {
+        tickerEvents.push(msg);
+        evSet.add(msg);
+      }
     });
     setTickerItems(tickerEvents);
+  }, []);
 
-  },[]);
+  useEffect(() => {
+    loadLeagueData(selectedLeague);
+  }, [selectedLeague, loadLeagueData]);
 
-  useEffect(()=>{loadLeagueData(selectedLeague);},[selectedLeague,loadLeagueData]);
-
-  useEffect(()=>{
-    const refresh=async()=>{
+  useEffect(() => {
+    const refresh = async () => {
       setEvtLoading(true);
-      const result=await supabase.functions.invoke('discord-events');
-      if(!result.error&&Array.isArray(result.data)) setDiscordEvents(result.data.slice(0,6));
-      else if(result.error) console.warn('[discord-events]',result.error.message);
+      const result = await supabase.functions.invoke('discord-events');
+      if (!result.error && Array.isArray(result.data))
+        setDiscordEvents(result.data.slice(0, 6));
+      else if (result.error)
+        console.warn('[discord-events]', result.error.message);
       setEvtLoading(false);
       supabase.functions.invoke('hyper-endpoint').catch(console.error);
     };
     refresh();
-    const id=setInterval(refresh,10*60*1000);
-    return()=>clearInterval(id);
-  },[]);
+    const id = setInterval(refresh, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  const fmtTime=iso=>iso?new Date(iso).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
-  const displayItems=tickerItems.length>0?tickerItems:['LEAGUE NEWS','TRADE ANNOUNCEMENTS','DRAFT NEWS','SEASON EVENTS','SCHEDULE UPDATES'];
+  const fmtTime = (iso) =>
+    iso
+      ? new Date(iso).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : '';
+  const displayItems =
+    tickerItems.length > 0
+      ? tickerItems
+      : [
+          'LEAGUE NEWS',
+          'TRADE ANNOUNCEMENTS',
+          'DRAFT NEWS',
+          'SEASON EVENTS',
+          'SCHEDULE UPDATES',
+        ];
 
   return (
     <div className="hp">
       <div className="scanlines" aria-hidden />
 
       <div className="cg">
-
         {/* ── LEFT COLUMN ── */}
         <div className="cg-a">
-          <InlineCountdown cfg={cfg} tick={tick}/>
-          <Spotlight recentForm={recentForm} winStreaks={winStreaks} lossStreaks={lossStreaks} loading={loading}/>
+          <InlineCountdown cfg={cfg} tick={tick} />
+          <Spotlight
+            recentForm={recentForm}
+            winStreaks={winStreaks}
+            lossStreaks={lossStreaks}
+            loading={loading}
+          />
           <section className="panel">
-            <PanelHeader icon="🔄" title="TRANSACTIONS"/>
+            <PanelHeader icon="🔄" title="TRANSACTIONS" />
             <div className="tx-body">
-              {recentTrades.length===0?(
+              {recentTrades.length === 0 ? (
                 <div className="tx-ph">
-                  <span style={{fontSize:18,opacity:.2}}>📋</span>
+                  <span style={{ fontSize: 18, opacity: 0.2 }}>📋</span>
                   <span className="tx-ph-msg">TRADE TRACKER COMING SOON</span>
                 </div>
-              ):recentTrades.slice(0,5).map((t,i)=>(
-                <div key={i} className="tx-row">
-                  <div className="tx-teams"><span className="tx-team">{t.from_team}</span><span className="tx-arr">⇄</span><span className="tx-team">{t.to_team}</span></div>
-                  <span className="tx-player">{t.player_name}</span>
-                  <span className="tx-date">{t.trade_date}</span>
-                </div>
-              ))}
+              ) : (
+                recentTrades.slice(0, 5).map((t, i) => (
+                  <div key={i} className="tx-row">
+                    <div className="tx-teams">
+                      <span className="tx-team">{t.from_team}</span>
+                      <span className="tx-arr">⇄</span>
+                      <span className="tx-team">{t.to_team}</span>
+                    </div>
+                    <span className="tx-player">{t.player_name}</span>
+                    <span className="tx-date">{t.trade_date}</span>
+                  </div>
+                ))
+              )}
             </div>
           </section>
         </div>
@@ -1344,45 +1791,105 @@ export default function Home() {
         {/* ── RIGHT COLUMN ── */}
         <div className="cg-c">
           <div className="media-cluster">
-            <section className="panel twg-panel"><TwitchLiveWidget/></section>
+            <section className="panel twg-panel">
+              <TwitchLiveWidget />
+            </section>
             <section className="panel">
               <PanelHeader
-                icon={<svg style={{width:12,height:12,color:'#5865F2',verticalAlign:'middle',flexShrink:0}} viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.62.874-1.395 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>}
+                icon={
+                  <svg
+                    style={{
+                      width: 12,
+                      height: 12,
+                      color: '#5865F2',
+                      verticalAlign: 'middle',
+                      flexShrink: 0,
+                    }}
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.62.874-1.395 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
+                  </svg>
+                }
                 title="UPCOMING EVENTS"
-                action={<a href="https://discord.gg/YOUR_INVITE" target="_blank" rel="noopener noreferrer" className="discord-join">JOIN →</a>}
+                action={
+                  <a
+                    href="https://discord.gg/YOUR_INVITE"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="discord-join"
+                  >
+                    JOIN →
+                  </a>
+                }
               />
               <div className="events">
-                {evtLoading?([1,2,3].map(i=><div key={i} className="skel" style={{height:52,margin:'.2rem .72rem'}}/>))
-                :discordEvents.length===0?(
+                {evtLoading ? (
+                  [1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="skel"
+                      style={{ height: 52, margin: '.2rem .72rem' }}
+                    />
+                  ))
+                ) : discordEvents.length === 0 ? (
                   <div className="panel-empty ev-cta">
                     <p>🎮 No upcoming events.</p>
-                    <p className="ev-setup">Deploy <code>discord-events</code> edge fn.</p>
+                    <p className="ev-setup">
+                      Deploy <code>discord-events</code> edge fn.
+                    </p>
                   </div>
-                ):discordEvents.map(ev=>{
-                  const du=daysUntil(ev.startTime);
-                  const isToday=du==='TODAY',isTmrw=du==='TMRW';
-                  return(
-                    <a key={ev.id} href={ev.url} target="_blank" rel="noopener noreferrer" className="ev-row">
-                      <div className="ev-cal">
-                        <span className="ev-mon">{new Date(ev.startTime).toLocaleDateString('en-US',{month:'short'})}</span>
-                        <span className="ev-day">{new Date(ev.startTime).getDate()}</span>
-                      </div>
-                      <div className="ev-info">
-                        <span className="ev-name">{ev.name}</span>
-                        <span className="ev-time">{fmtTime(ev.startTime)}</span>
-                      </div>
-                      <div className="ev-right">
-                        {ev.status===2?<span className="ev-live">● LIVE</span>
-                        :du?<span className={`ev-du${isToday?' ev-today':isTmrw?' ev-tmrw':''}`}>{du}</span>:null}
-                      </div>
-                    </a>
-                  );
-                })}
+                ) : (
+                  discordEvents.map((ev) => {
+                    const du = daysUntil(ev.startTime);
+                    const isToday = du === 'TODAY',
+                      isTmrw = du === 'TMRW';
+                    return (
+                      <a
+                        key={ev.id}
+                        href={ev.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ev-row"
+                      >
+                        <div className="ev-cal">
+                          <span className="ev-mon">
+                            {new Date(ev.startTime).toLocaleDateString(
+                              'en-US',
+                              { month: 'short' }
+                            )}
+                          </span>
+                          <span className="ev-day">
+                            {new Date(ev.startTime).getDate()}
+                          </span>
+                        </div>
+                        <div className="ev-info">
+                          <span className="ev-name">{ev.name}</span>
+                          <span className="ev-time">
+                            {fmtTime(ev.startTime)}
+                          </span>
+                        </div>
+                        <div className="ev-right">
+                          {ev.status === 2 ? (
+                            <span className="ev-live">● LIVE</span>
+                          ) : du ? (
+                            <span
+                              className={`ev-du${
+                                isToday ? ' ev-today' : isTmrw ? ' ev-tmrw' : ''
+                              }`}
+                            >
+                              {du}
+                            </span>
+                          ) : null}
+                        </div>
+                      </a>
+                    );
+                  })
+                )}
               </div>
             </section>
           </div>
         </div>
-
       </div>
 
       {/* HDTV TICKER */}
@@ -1390,22 +1897,22 @@ export default function Home() {
         <div className="ht-brand">
           <div className="ht-brand-top">{cfg.label}</div>
           <div className="ht-brand-bottom">
-            <span className="ht-live-dot"/>
+            <span className="ht-live-dot" />
             <span>LIVE</span>
           </div>
         </div>
         <div className="ht-stage">
-          <div className="ht-fade-l"/>
-          <div className="ht-fade-r"/>
+          <div className="ht-fade-l" />
+          <div className="ht-fade-r" />
           <div className="ht-rail">
             <div className="ht-belt">
-              {displayItems.concat(displayItems).map((item,i)=>(
+              {displayItems.concat(displayItems).map((item, i) => (
                 <span key={i} className="ht-story">
-                  <span className={`ht-text ht-c${i%4}`}>{item}</span>
+                  <span className={`ht-text ht-c${i % 4}`}>{item}</span>
                   <span className="ht-sep">
-                    <span className="ht-sep-line"/>
+                    <span className="ht-sep-line" />
                     <span className="ht-sep-gem">◆</span>
-                    <span className="ht-sep-line"/>
+                    <span className="ht-sep-line" />
                   </span>
                 </span>
               ))}
@@ -1413,7 +1920,7 @@ export default function Home() {
           </div>
         </div>
         <div className="ht-clock">
-          <ClockDisplay/>
+          <ClockDisplay />
         </div>
       </div>
 

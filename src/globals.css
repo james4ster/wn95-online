@@ -469,8 +469,4 @@ nav.hero-nav a:hover {
   html {
     overflow-y: scroll;
   }
-
-  body {
-    overflow-x: hidden;
-  }
 }

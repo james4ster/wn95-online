@@ -660,8 +660,8 @@ export default function Standings() {
       )}
 
       <style>{`
-        html { overflow-x: hidden; }
-        body { overflow-x: hidden; }
+        html { overflow-x: auto; }
+        body { overflow-x: auto; }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
         .table-container::-webkit-scrollbar { display: none; }

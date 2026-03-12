@@ -651,16 +651,13 @@ export default function Standings() {
       <style>{`
         html { overflow-x: auto; }
         body { overflow-x: auto; }
+        .standings-page {
+          overflow-x: visible;
+        }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .table-container { overflow-x: visible; border-radius:12px; scrollbar-width: none; }
         .table-container::-webkit-scrollbar { display: none; }
         .arcade-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
-        .sticky-scrollbar { position:fixed; bottom:0; left:0; right:0; overflow-x:auto; overflow-y:hidden; z-index:1000; height:14px; background:rgba(0,0,0,.85); border-top:1px solid rgba(255,140,0,.3); }
-        .sticky-scrollbar::-webkit-scrollbar { height:14px; }
-        .sticky-scrollbar::-webkit-scrollbar-track { background:rgba(0,0,0,.6); }
-        .sticky-scrollbar::-webkit-scrollbar-thumb { background:rgba(255,140,0,.6); border-radius:7px; border:2px solid rgba(0,0,0,.5); }
-        .sticky-scrollbar::-webkit-scrollbar-thumb:hover { background:rgba(255,215,0,.8); }
-        .sticky-scroll-inner { height:1px; }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }
         .scoreboard-header::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px); pointer-events:none; }

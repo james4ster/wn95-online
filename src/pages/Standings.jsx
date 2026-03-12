@@ -644,9 +644,7 @@ export default function Standings() {
             ))}
           </div>
 
-          <div ref={stickyScrollRef} className="sticky-scrollbar">
-            <div className="sticky-scroll-inner" />
-          </div>
+          
         </>
       )}
 
@@ -654,7 +652,7 @@ export default function Standings() {
         html { overflow-x: auto; }
         body { overflow-x: auto; }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
-        .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
+        .table-container { overflow-x: visible; border-radius:12px; scrollbar-width: none; }
         .table-container::-webkit-scrollbar { display: none; }
         .arcade-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
         .sticky-scrollbar { position:fixed; bottom:0; left:0; right:0; overflow-x:auto; overflow-y:hidden; z-index:1000; height:14px; background:rgba(0,0,0,.85); border-top:1px solid rgba(255,140,0,.3); }

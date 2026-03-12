@@ -774,6 +774,7 @@ export default function PlayoffBracket({
 
   return (
     <div
+    style={{ minWidth: 2000 }}
       style={{
         padding: '1.5rem 1.5rem 2rem',
         width: '100vw',

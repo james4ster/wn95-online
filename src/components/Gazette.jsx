@@ -9,47 +9,79 @@
 ═══════════════════════════════════════════════════════════════ */
 
 const GAZETTE_CACHE_KEY = 'league_gazette_v3';
-function todayStamp() { return new Date().toISOString().slice(0, 10); }
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 /* ─────────────────────────────────────────────────────────────
    Story angle → accent color + tag
 ───────────────────────────────────────────────────────────── */
 const STORY_META = {
-  hot_streak:    { color: '#FF4500', tag: 'ON FIRE'         },
-  win_streak:    { color: '#00C853', tag: 'WIN STREAK'      },
-  cold_streak:   { color: '#448AFF', tag: 'COLD SPELL'      },
-  loss_streak:   { color: '#448AFF', tag: 'LOSING SKID'     },
-  big_win:       { color: '#FFD600', tag: 'BIG WIN'         },
-  elimination:   { color: '#D50000', tag: 'ELIMINATED'      },
-  playoff_push:  { color: '#00BFA5', tag: 'PLAYOFF PUSH'    },
-  milestone:     { color: '#FFD600', tag: 'MILESTONE'       },
-  comeback:      { color: '#FF6D00', tag: 'COMEBACK'        },
-  idle:          { color: '#78909C', tag: 'QUIET NIGHT'     },
-  rivalry:       { color: '#E040FB', tag: 'RIVALRY WATCH'   },
+  hot_streak: { color: '#FF4500', tag: 'ON FIRE' },
+  win_streak: { color: '#00C853', tag: 'WIN STREAK' },
+  cold_streak: { color: '#448AFF', tag: 'COLD SPELL' },
+  loss_streak: { color: '#448AFF', tag: 'LOSING SKID' },
+  big_win: { color: '#FFD600', tag: 'BIG WIN' },
+  elimination: { color: '#D50000', tag: 'ELIMINATED' },
+  playoff_push: { color: '#00BFA5', tag: 'PLAYOFF PUSH' },
+  milestone: { color: '#FFD600', tag: 'MILESTONE' },
+  comeback: { color: '#FF6D00', tag: 'COMEBACK' },
+  idle: { color: '#78909C', tag: 'QUIET NIGHT' },
+  rivalry: { color: '#E040FB', tag: 'RIVALRY WATCH' },
 };
-const getMeta = t => STORY_META[t] || STORY_META.hot_streak;
+const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
 
 /* ─────────────────────────────────────────────────────────────
    Fetch from Supabase edge fn → Cohere
    Prompt sends rich live data; AI picks story angle + featured team
 ───────────────────────────────────────────────────────────── */
-async function fetchGazetteEdition({ leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason }) {
+async function fetchGazetteEdition({
+  leagueLabel,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+}) {
   const season = currentSeason?.lg || leagueLabel;
 
-  const hotLines  = recentForm.hot.slice(0,5).map(t=>`${t.team}:${t.w}W-${t.l}L`).join(', ');
-  const coldLines = recentForm.cold.slice(0,5).map(t=>`${t.team}:${t.w}W-${t.l}L`).join(', ');
-  const winLines  = winStreaks.slice(0,5).map(s=>`${s.team}:W${s.count}`).join(', ');
-  const lossLines = lossStreaks.slice(0,5).map(s=>`${s.team}:L${s.count}`).join(', ');
+  const hotLines = recentForm.hot
+    .slice(0, 5)
+    .map((t) => `${t.team}:${t.w}W-${t.l}L`)
+    .join(', ');
+  const coldLines = recentForm.cold
+    .slice(0, 5)
+    .map((t) => `${t.team}:${t.w}W-${t.l}L`)
+    .join(', ');
+  const winLines = winStreaks
+    .slice(0, 5)
+    .map((s) => `${s.team}:W${s.count}`)
+    .join(', ');
+  const lossLines = lossStreaks
+    .slice(0, 5)
+    .map((s) => `${s.team}:L${s.count}`)
+    .join(', ');
 
-  const allTeams = [...new Set([
-    ...recentForm.hot.map(t=>t.team),
-    ...recentForm.cold.map(t=>t.team),
-    ...winStreaks.map(s=>s.team),
-    ...lossStreaks.map(s=>s.team),
-  ])];
+  const allTeams = [
+    ...new Set([
+      ...recentForm.hot.map((t) => t.team),
+      ...recentForm.cold.map((t) => t.team),
+      ...winStreaks.map((s) => s.team),
+      ...lossStreaks.map((s) => s.team),
+    ]),
+  ];
 
   // Rotate angle seed daily for variety
-  const angles = ['hot_streak','win_streak','cold_streak','loss_streak','big_win','playoff_push','milestone','comeback','rivalry'];
+  const angles = [
+    'hot_streak',
+    'win_streak',
+    'cold_streak',
+    'loss_streak',
+    'big_win',
+    'playoff_push',
+    'milestone',
+    'comeback',
+    'rivalry',
+  ];
   const daySeed = new Date().getDate() % angles.length;
   const angleHint = angles[daySeed];
 
@@ -86,7 +118,9 @@ Respond ONLY with valid JSON, zero other text:
   "pull_quote": "12-20 words. Dramatic fake quote from a player or coach on the featured team.",
   "quote_attr": "— Fake Name, Role, ${leagueLabel}",
   "bottom_line": "7-11 words. One punchy verdict on the league right now.",
-  "edition": "Vol. ${Math.floor(Math.random()*30)+1} · Issue ${Math.floor(Math.random()*80)+1}"
+  "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
+    Math.floor(Math.random() * 80) + 1
+  }"
 }`;
 
   const result = await supabase.functions.invoke('gazette-generate', {
@@ -95,12 +129,14 @@ Respond ONLY with valid JSON, zero other text:
 
   if (result.error) throw new Error(result.error.message);
 
-  const raw = result.data?.text
-           || result.data?.message?.content?.[0]?.text
-           || '';
+  const raw =
+    result.data?.text || result.data?.message?.content?.[0]?.text || '';
   const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in response');
-  return JSON.parse(match[0]);
+  //return JSON.parse(match[0]);
+  const parsed = JSON.parse(match[0]);
+  console.log('[Gazette JSON]', parsed);
+  return parsed;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -110,25 +146,44 @@ function GazetteSkeleton() {
   return (
     <div className="si-skel">
       <div className="si-skel-cover">
-        <div className="si-skel-b" style={{height:12,width:'30%',marginBottom:8}}/>
-        <div className="si-skel-b" style={{height:22,width:'68%',marginBottom:6}}/>
-        <div className="si-skel-b" style={{height:14,width:'55%'}}/>
+        <div
+          className="si-skel-b"
+          style={{ height: 12, width: '30%', marginBottom: 8 }}
+        />
+        <div
+          className="si-skel-b"
+          style={{ height: 22, width: '68%', marginBottom: 6 }}
+        />
+        <div className="si-skel-b" style={{ height: 14, width: '55%' }} />
       </div>
       <div className="si-skel-grid">
         <div className="si-skel-col">
-          {[1,2,3].map(i=>(
-            <div key={i} style={{marginBottom:16}}>
-              <div className="si-skel-b" style={{height:8,width:'40%',marginBottom:6}}/>
-              <div className="si-skel-b" style={{height:14,width:'92%',marginBottom:4}}/>
-              <div className="si-skel-b" style={{height:11,width:'72%'}}/>
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <div
+                className="si-skel-b"
+                style={{ height: 8, width: '40%', marginBottom: 6 }}
+              />
+              <div
+                className="si-skel-b"
+                style={{ height: 14, width: '92%', marginBottom: 4 }}
+              />
+              <div className="si-skel-b" style={{ height: 11, width: '72%' }} />
             </div>
           ))}
         </div>
-        <div className="si-skel-b si-skel-hero"/>
+        <div className="si-skel-b si-skel-hero" />
         <div className="si-skel-col">
-          <div className="si-skel-b" style={{height:72,borderRadius:6,marginBottom:14}}/>
-          {[88,75,60,50].map((w,i)=>(
-            <div key={i} className="si-skel-b" style={{height:10,width:`${w}%`,marginBottom:7}}/>
+          <div
+            className="si-skel-b"
+            style={{ height: 72, borderRadius: 6, marginBottom: 14 }}
+          />
+          {[88, 75, 60, 50].map((w, i) => (
+            <div
+              key={i}
+              className="si-skel-b"
+              style={{ height: 10, width: `${w}%`, marginBottom: 7 }}
+            />
           ))}
         </div>
       </div>
@@ -139,62 +194,105 @@ function GazetteSkeleton() {
 /* ─────────────────────────────────────────────────────────────
    Main component
 ───────────────────────────────────────────────────────────── */
-function LeagueGazette({ leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason, loading: dataLoading }) {
-  const [edition,    setEdition]    = useState(null);
-  const [loading,    setLoading]    = useState(false);
-  const [error,      setError]      = useState(null);
+function LeagueGazette({
+  leagueLabel,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+  loading: dataLoading,
+}) {
+  const [edition, setEdition] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async (force = false) => {
-    const today = todayStamp();
-    if (!force) {
+  const load = useCallback(
+    async (force = false) => {
+      const today = todayStamp();
+      if (!force) {
+        try {
+          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
+          if (c.date === today && c.league === leagueLabel && c.data) {
+            setEdition(c.data);
+            return;
+          }
+        } catch {}
+      }
+      setLoading(true);
+      setError(null);
       try {
-        const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-        if (c.date === today && c.league === leagueLabel && c.data) {
-          setEdition(c.data); return;
-        }
-      } catch {}
-    }
-    setLoading(true); setError(null);
-    try {
-      const data = await fetchGazetteEdition({ leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason });
-      localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ date: today, league: leagueLabel, data }));
-      setEdition(data);
-    } catch(e) {
-      console.error('[Gazette]', e);
-      setError(true);
-    } finally {
-      setLoading(false); setRefreshing(false);
-    }
-  }, [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]);
+        const data = await fetchGazetteEdition({
+          leagueLabel,
+          recentForm,
+          winStreaks,
+          lossStreaks,
+          currentSeason,
+        });
+        localStorage.setItem(
+          GAZETTE_CACHE_KEY,
+          JSON.stringify({ date: today, league: leagueLabel, data })
+        );
+        setEdition(data);
+      } catch (e) {
+        console.error('[Gazette]', e);
+        setError(true);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]
+  );
 
   useEffect(() => {
     if (!dataLoading && recentForm.hot.length > 0) load();
   }, [dataLoading, leagueLabel]);
 
-  const handleRefresh = () => { setRefreshing(true); load(true); };
+  const handleRefresh = () => {
+    setRefreshing(true);
+    load(true);
+  };
 
   // Derived display values
-  const team    = edition?.featured_team || '';
-  const meta    = getMeta(edition?.story_type);
-  const lgKey   = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
-  const dateStr = new Date().toLocaleDateString('en-US', { weekday:'long', month:'long', day:'numeric', year:'numeric' });
+  const team = edition?.featured_team || '';
+  // If featured_team is a full name, find the matching code
+  const teamCode =
+    Object.entries(teamNameMap).find(
+      ([code, info]) => info.full === team || code === team
+    )?.[0] || team;
+  const meta = getMeta(edition?.story_type);
+  const lgKey = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
 
   // Find live stats for featured team
-  const featWin  = winStreaks.find(s => s.team === team);
-  const featLoss = lossStreaks.find(s => s.team === team);
-  const featForm = recentForm.hot.find(t => t.team === team)
-                || recentForm.cold.find(t => t.team === team);
+  const featWin = winStreaks.find((s) => s.team === team);
+  const featLoss = lossStreaks.find((s) => s.team === team);
+  const featForm =
+    recentForm.hot.find((t) => t.team === team) ||
+    recentForm.cold.find((t) => t.team === team);
 
   return (
-    <div className="si-wrap" style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}>
-
+    <div
+      className="si-wrap"
+      style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}
+    >
       {/* ══ MASTHEAD ══════════════════════════════════════════ */}
       <header className="si-mast">
         <div className="si-mast-left">
-          <img src={`/assets/leagueLogos/${lgKey}.png`} alt={leagueLabel}
+          <img
+            src={`/assets/leagueLogos/${lgKey}.png`}
+            alt={leagueLabel}
             className="si-league-logo"
-            onError={e=>{ e.currentTarget.style.display='none'; }}/>
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <div>
             <div className="si-mast-name">{leagueLabel}</div>
             <div className="si-mast-sub">MAGAZINE</div>
@@ -202,167 +300,208 @@ function LeagueGazette({ leagueLabel, recentForm, winStreaks, lossStreaks, curre
         </div>
 
         <div className="si-mast-mid">
-          <hr className="si-hr"/>
+          <hr className="si-hr" />
           <span className="si-mast-date">{dateStr}</span>
-          <hr className="si-hr"/>
+          <hr className="si-hr" />
         </div>
 
         <div className="si-mast-right">
-          {edition?.edition && <span className="si-issue">{edition.edition}</span>}
-          <button className="si-refresh" onClick={handleRefresh} disabled={loading || refreshing}>
-            <span style={{ display:'inline-block', animation: refreshing ? 'siSpin .7s linear infinite' : 'none' }}>↻</span>
+          {edition?.edition && (
+            <span className="si-issue">{edition.edition}</span>
+          )}
+          <button
+            className="si-refresh"
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                animation: refreshing ? 'siSpin .7s linear infinite' : 'none',
+              }}
+            >
+              ↻
+            </span>
           </button>
         </div>
       </header>
 
       {/* Accent rule */}
-      <div className="si-accent-rule"/>
+      <div className="si-accent-rule" />
 
       {/* ══ BODY ══════════════════════════════════════════════ */}
-      {(loading && !edition)
-        ? <GazetteSkeleton />
-        : error
-        ? (
-          <div className="si-error">
-            <span>📡</span>
-            <div>
-              <div className="si-err-title">PRESS ROOM DOWN</div>
-              <div className="si-err-body">Edge function unavailable.</div>
-            </div>
-            <button className="si-refresh" onClick={handleRefresh}>↻ RETRY</button>
+      {loading && !edition ? (
+        <GazetteSkeleton />
+      ) : error ? (
+        <div className="si-error">
+          <span>📡</span>
+          <div>
+            <div className="si-err-title">PRESS ROOM DOWN</div>
+            <div className="si-err-body">Edge function unavailable.</div>
           </div>
-        )
-        : edition
-        ? (
-          <div className={refreshing ? 'si-content si-fading' : 'si-content si-fadein'}>
+          <button className="si-refresh" onClick={handleRefresh}>
+            ↻ RETRY
+          </button>
+        </div>
+      ) : edition ? (
+        <div
+          className={
+            refreshing ? 'si-content si-fading' : 'si-content si-fadein'
+          }
+        >
+          {/* ── COVER STRIP ─────────────────────────────── */}
+          <div className="si-cover-strip">
+            <span className="si-story-pill" style={{ background: meta.color }}>
+              {meta.tag}
+            </span>
+            <h1 className="si-cover-line">{edition.cover_line}</h1>
+            <p className="si-cover-sub">{edition.cover_sub}</p>
+          </div>
 
-            {/* ── COVER STRIP ─────────────────────────────── */}
-            <div className="si-cover-strip">
-              <span className="si-story-pill" style={{ background: meta.color }}>{meta.tag}</span>
-              <h1 className="si-cover-line">{edition.cover_line}</h1>
-              <p className="si-cover-sub">{edition.cover_sub}</p>
-            </div>
-
-            {/* ── THREE COLUMN ────────────────────────────── */}
-            <div className="si-cols">
-
-              {/* LEFT — story blurbs */}
-              <aside className="si-col-left">
-                {[edition.blurb_1, edition.blurb_2, edition.blurb_3].filter(Boolean).map((b,i) => (
+          {/* ── THREE COLUMN ────────────────────────────── */}
+          <div className="si-cols">
+            {/* LEFT — story blurbs */}
+            <aside className="si-col-left">
+              {[edition.blurb_1, edition.blurb_2, edition.blurb_3]
+                .filter(Boolean)
+                .map((b, i) => (
                   <div key={i} className="si-blurb">
-                    <div className="si-blurb-bar"/>
+                    <div className="si-blurb-bar" />
                     <div className="si-blurb-tag">{b.tag}</div>
                     <div className="si-blurb-hed">{b.headline}</div>
                     <div className="si-blurb-dek">{b.detail}</div>
                   </div>
                 ))}
-              </aside>
+            </aside>
 
-              {/* CENTER — team hero */}
-              <div className="si-col-center">
-                <div className="si-hero">
-                  {/* Atmospheric background */}
-                  <div className="si-hero-bg">
-                    <img
-                      src={`/assets/banners/${team}.png`}
-                      alt="" className="si-hero-banner"
-                      onError={e=>{ e.currentTarget.style.display='none'; }}
-                    />
-                    <div className="si-hero-vignette"/>
-                  </div>
+            {/* CENTER — team hero */}
+            <div className="si-col-center">
+              <div className="si-hero">
+                {/* Atmospheric background */}
+                <div className="si-hero-bg">
+                  <img
+                    src={`/assets/banners/${teamCode}.png`}
+                    alt=""
+                    className="si-hero-banner"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div className="si-hero-vignette" />
+                </div>
 
-                  {/* Logo */}
-                  <div className="si-hero-body">
-                    <img
-                      src={`/assets/teamLogos/${team}.png`}
-                      alt={team} className="si-hero-logo"
-                      onError={e=>{ e.currentTarget.style.opacity='0'; }}
-                    />
-                  </div>
+                {/* Logo */}
+                <div className="si-hero-body">
+                  <img
+                    src={`/assets/teamLogos/${teamCode}.png`}
+                    alt={team}
+                    className="si-hero-logo"
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = '0';
+                    }}
+                  />
+                </div>
 
-                  {/* Footer bar */}
-                  <div className="si-hero-foot">
-                    <span className="si-hero-team">{team}</span>
-                    <div className="si-hero-badges">
-                      {featWin && (
-                        <span className="si-badge si-badge-w">W{featWin.count}</span>
-                      )}
-                      {featLoss && (
-                        <span className="si-badge si-badge-l">L{featLoss.count}</span>
-                      )}
-                      {featForm && (
-                        <span className="si-badge si-badge-form">
-                          {featForm.w}–{featForm.l} <span className="si-badge-l10">L10</span>
-                        </span>
-                      )}
-                    </div>
+                {/* Footer bar */}
+                <div className="si-hero-foot">
+                  <span className="si-hero-team">{team}</span>
+                  <div className="si-hero-badges">
+                    {featWin && (
+                      <span className="si-badge si-badge-w">
+                        W{featWin.count}
+                      </span>
+                    )}
+                    {featLoss && (
+                      <span className="si-badge si-badge-l">
+                        L{featLoss.count}
+                      </span>
+                    )}
+                    {featForm && (
+                      <span className="si-badge si-badge-form">
+                        {featForm.w}–{featForm.l}{' '}
+                        <span className="si-badge-l10">L10</span>
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
-
-              {/* RIGHT — quote + live table */}
-              <aside className="si-col-right">
-
-                {/* Pull quote */}
-                <div className="si-quote">
-                  <div className="si-quote-open">"</div>
-                  <p className="si-quote-text">{edition.pull_quote}</p>
-                  <div className="si-quote-attr">{edition.quote_attr}</div>
-                </div>
-
-                {/* Live: on fire */}
-                {winStreaks.length > 0 && (
-                  <div className="si-table">
-                    <div className="si-table-hd">
-                      <span className="si-table-dot" style={{background:'#FF4500'}}/>
-                      ON FIRE
-                    </div>
-                    {winStreaks.slice(0,4).map(s => (
-                      <div key={s.team} className="si-table-row">
-                        <img src={`/assets/teamLogos/${s.team}.png`} alt=""
-                          className="si-table-logo"
-                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
-                        <span className="si-table-team">{s.team}</span>
-                        <span className="si-table-val si-val-w">W{s.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Live: ice cold */}
-                {lossStreaks.length > 0 && (
-                  <div className="si-table">
-                    <div className="si-table-hd">
-                      <span className="si-table-dot" style={{background:'#448AFF'}}/>
-                      ICE COLD
-                    </div>
-                    {lossStreaks.slice(0,4).map(s => (
-                      <div key={s.team} className="si-table-row">
-                        <img src={`/assets/teamLogos/${s.team}.png`} alt=""
-                          className="si-table-logo"
-                          onError={e=>{ e.currentTarget.style.display='none'; }}/>
-                        <span className="si-table-team">{s.team}</span>
-                        <span className="si-table-val si-val-l">L{s.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-              </aside>
-            </div>{/* /si-cols */}
-
-            {/* ── BOTTOM LINE ─────────────────────────────── */}
-            <div className="si-footer">
-              <hr className="si-hr si-hr-short"/>
-              <span className="si-footer-label">BOTTOM LINE</span>
-              <span className="si-footer-text">{edition.bottom_line}</span>
-              <hr className="si-hr si-hr-short"/>
             </div>
 
+            {/* RIGHT — quote + live table */}
+            <aside className="si-col-right">
+              {/* Pull quote */}
+              <div className="si-quote">
+                <div className="si-quote-open">"</div>
+                <p className="si-quote-text">{edition.pull_quote}</p>
+                <div className="si-quote-attr">{edition.quote_attr}</div>
+              </div>
+
+              {/* Live: on fire */}
+              {winStreaks.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#FF4500' }}
+                    />
+                    ON FIRE
+                  </div>
+                  {winStreaks.slice(0, 4).map((s) => (
+                    <div key={s.team} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.teamCode}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team">{s.team}</span>
+                      <span className="si-table-val si-val-w">W{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Live: ice cold */}
+              {lossStreaks.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#448AFF' }}
+                    />
+                    ICE COLD
+                  </div>
+                  {lossStreaks.slice(0, 4).map((s) => (
+                    <div key={s.team} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.teamCode}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team">{s.team}</span>
+                      <span className="si-table-val si-val-l">L{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
           </div>
-        )
-        : null
-      }
+          {/* /si-cols */}
+
+          {/* ── BOTTOM LINE ─────────────────────────────── */}
+          <div className="si-footer">
+            <hr className="si-hr si-hr-short" />
+            <span className="si-footer-label">BOTTOM LINE</span>
+            <span className="si-footer-text">{edition.bottom_line}</span>
+            <hr className="si-hr si-hr-short" />
+          </div>
+        </div>
+      ) : null}
 
       {/* ══ STYLES ══════════════════════════════════════════ */}
       <style>{`

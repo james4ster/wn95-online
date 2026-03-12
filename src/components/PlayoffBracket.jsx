@@ -774,14 +774,14 @@ export default function PlayoffBracket({
 
   return (
     <div
-    style={{ minWidth: 2000 }}
-      style={{
-        padding: '1.5rem 1.5rem 2rem',
-        width: '100vw',
-        overflowX: 'auto',
-        overflowY: 'hidden'
-      }}
-    >
+    style={{
+      padding: '1.5rem 1.5rem 2rem',
+      width: '100vw',
+      minWidth: 2000,
+      overflowX: 'auto',
+      overflowY: 'hidden'
+    }}
+  >
     <div
   ref={containerRef}
   style={{

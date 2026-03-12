@@ -773,11 +773,14 @@ export default function PlayoffBracket({
   const rightCols = rightRounds.map((_, ri) => col(rightRounds, rightRefs.current, ri, true)).reverse();
 
   return (
-    <div style={{
-      padding: '1.5rem 1.5rem 2rem',
-      overflowX: 'auto',
-      width: '100%'
-    }}>
+    <div
+      style={{
+        padding: '1.5rem 1.5rem 2rem',
+        width: '100vw',
+        overflowX: 'auto',
+        overflowY: 'hidden'
+      }}
+    >
     <div
   ref={containerRef}
   style={{
@@ -788,7 +791,7 @@ export default function PlayoffBracket({
     paddingTop: 36,
     position: 'relative',
     minHeight: 10,
-    width: 'max-content'
+    minWidth: 1400
   }}
 >
         <BracketLines

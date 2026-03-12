@@ -448,6 +448,7 @@ nav.hero-nav a:hover {
 
 
 /* ---------- MOBILE RESPONSIVE ---------- */
+
 @media (max-width: 768px) {
   header.hero-bar {
     flex-direction: column;
@@ -462,12 +463,14 @@ nav.hero-nav a:hover {
   }
 
   header.hero-bar img.logo {
-    height: 35px; /* slightly smaller on mobile */
+    height: 35px;
   }
+
   html {
-    overflow-y: scroll; /* always reserve scrollbar space */
+    overflow-y: scroll;
   }
-  html {
+
+  body {
     overflow-x: hidden;
   }
 }

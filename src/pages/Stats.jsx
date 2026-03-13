@@ -1,89 +1,1059 @@
-// Stats.jsx — Manager Stats + H2H
-import { useEffect, useState, useMemo, useCallback } from 'react';
+// Stats.jsx — Manager Stats + H2H + Team Stats
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from '../components/LeagueContext';
 
-const lgPrefix = lg => (lg || '').replace(/[0-9]/g, '').trim();
-const norm     = s  => (s || '').toString().trim().toLowerCase();
+const lgPrefix = (lg) => (lg || '').replace(/[0-9]/g, '').trim();
+const norm = (s) => (s || '').toString().trim().toLowerCase();
 
-const ASC_DEFAULT = new Set(['l','t','hl','htie','al','atie','otl','hotl','aotl','ga','gapg']);
+const ASC_DEFAULT = new Set([
+  'l',
+  't',
+  'hl',
+  'htie',
+  'al',
+  'atie',
+  'otl',
+  'hotl',
+  'aotl',
+  'ga',
+  'gapg',
+]);
 
 const MANAGER_COLS = [
-  { key:'rank',  label:'#',      tip:'Rank',                               sortable:false, align:'center', group:'core'   },
-  { key:'mgr',   label:'COACH',  tip:'Manager / Coach',                    sortable:true,  align:'left',   group:'core'   },
-  { key:'gp',    label:'GP',     tip:'Games Played',                       sortable:true,  align:'center', group:'record' },
-  { key:'w',     label:'W',      tip:'Wins',                               sortable:true,  align:'center', group:'record' },
-  { key:'l',     label:'L',      tip:'Losses',                             sortable:true,  align:'center', group:'record' },
-  { key:'t',     label:'T',      tip:'Ties',                               sortable:true,  align:'center', group:'record' },
-  { key:'otl',   label:'OTL',    tip:'Overtime Losses',                    sortable:true,  align:'center', group:'record' },
-  { key:'pct',   label:'WIN%',   tip:'Win Percentage',                     sortable:true,  align:'center', group:'record' },
-  { key:'gf',    label:'GF',     tip:'Goals For',                          sortable:true,  align:'center', group:'goals'  },
-  { key:'ga',    label:'GA',     tip:'Goals Against',                      sortable:true,  align:'center', group:'goals'  },
-  { key:'diff',  label:'+/-',    tip:'Goal Differential',                  sortable:true,  align:'center', group:'goals'  },
-  { key:'gfpg',  label:'GF/G',   tip:'Goals For per Game',                 sortable:true,  align:'center', group:'goals'  },
-  { key:'gapg',  label:'GA/G',   tip:'Goals Against per Game',             sortable:true,  align:'center', group:'goals'  },
-  { key:'hw',    label:'W',      tip:'Home Wins',                          sortable:true,  align:'center', group:'home'   },
-  { key:'hl',    label:'L',      tip:'Home Losses',                        sortable:true,  align:'center', group:'home'   },
-  { key:'htie',  label:'T',      tip:'Home Ties',                          sortable:true,  align:'center', group:'home'   },
-  { key:'hotl',  label:'OTL',    tip:'Home OT Losses',                     sortable:true,  align:'center', group:'home'   },
-  { key:'aw',    label:'W',      tip:'Away Wins',                          sortable:true,  align:'center', group:'away'   },
-  { key:'al',    label:'L',      tip:'Away Losses',                        sortable:true,  align:'center', group:'away'   },
-  { key:'atie',  label:'T',      tip:'Away Ties',                          sortable:true,  align:'center', group:'away'   },
-  { key:'aotl',  label:'OTL',    tip:'Away OT Losses',                     sortable:true,  align:'center', group:'away'   },
-  { key:'so',    label:'SO',     tip:'Shutouts (opponent scored 0)',        sortable:true,  align:'center', group:'extra'  },
-  { key:'maxgf', label:'MAX G',  tip:'Most Goals Scored in a Single Game', sortable:true,  align:'center', group:'extra'  },
-  { key:'champs',label:'🏆',     tip:'Championships Won',                  sortable:true,  align:'center', group:'extra'  },
+  {
+    key: 'rank',
+    label: '#',
+    tip: 'Rank',
+    sortable: false,
+    align: 'center',
+    group: 'core',
+  },
+  {
+    key: 'mgr',
+    label: 'COACH',
+    tip: 'Manager / Coach',
+    sortable: true,
+    align: 'left',
+    group: 'core',
+  },
+  {
+    key: 'gp',
+    label: 'GP',
+    tip: 'Games Played',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'w',
+    label: 'W',
+    tip: 'Wins',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'l',
+    label: 'L',
+    tip: 'Losses',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 't',
+    label: 'T',
+    tip: 'Ties',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'otl',
+    label: 'OTL',
+    tip: 'Overtime Losses',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'pct',
+    label: 'WIN%',
+    tip: 'Win Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'gf',
+    label: 'GF',
+    tip: 'Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'ga',
+    label: 'GA',
+    tip: 'Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'diff',
+    label: '+/-',
+    tip: 'Goal Differential',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'gfpg',
+    label: 'GF/G',
+    tip: 'Goals For per Game',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'gapg',
+    label: 'GA/G',
+    tip: 'Goals Against per Game',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'hw',
+    label: 'W',
+    tip: 'Home Wins',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'hl',
+    label: 'L',
+    tip: 'Home Losses',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'htie',
+    label: 'T',
+    tip: 'Home Ties',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'hotl',
+    label: 'OTL',
+    tip: 'Home OT Losses',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'aw',
+    label: 'W',
+    tip: 'Away Wins',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'al',
+    label: 'L',
+    tip: 'Away Losses',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'atie',
+    label: 'T',
+    tip: 'Away Ties',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'aotl',
+    label: 'OTL',
+    tip: 'Away OT Losses',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'so',
+    label: 'SO',
+    tip: 'Shutouts (opponent scored 0)',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
+  {
+    key: 'maxgf',
+    label: 'MAX G',
+    tip: 'Most Goals Scored in a Single Game',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
+  {
+    key: 'champs',
+    label: '🏆',
+    tip: 'Championships Won',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
 ];
 
-// H2H columns — same groups/layout as managers, opponent instead of coach, streak replaces champs
 const H2H_COLS = [
-  { key:'rank',   label:'#',      tip:'Rank',                               sortable:false, align:'center', group:'core'   },
-  { key:'opp',    label:'OPP',    tip:'Opponent Coach',                     sortable:true,  align:'left',   group:'core'   },
-  { key:'gp',     label:'GP',     tip:'Games Played',                       sortable:true,  align:'center', group:'record' },
-  { key:'w',      label:'W',      tip:'Wins',                               sortable:true,  align:'center', group:'record' },
-  { key:'l',      label:'L',      tip:'Losses',                             sortable:true,  align:'center', group:'record' },
-  { key:'t',      label:'T',      tip:'Ties',                               sortable:true,  align:'center', group:'record' },
-  { key:'otl',    label:'OTL',    tip:'Overtime Losses',                    sortable:true,  align:'center', group:'record' },
-  { key:'pct',    label:'WIN%',   tip:'Win Percentage',                     sortable:true,  align:'center', group:'record' },
-  { key:'gf',     label:'GF',     tip:'Goals For',                          sortable:true,  align:'center', group:'goals'  },
-  { key:'ga',     label:'GA',     tip:'Goals Against',                      sortable:true,  align:'center', group:'goals'  },
-  { key:'diff',   label:'+/-',    tip:'Goal Differential',                  sortable:true,  align:'center', group:'goals'  },
-  { key:'gfpg',   label:'GF/G',   tip:'Goals For per Game',                 sortable:true,  align:'center', group:'goals'  },
-  { key:'gapg',   label:'GA/G',   tip:'Goals Against per Game',             sortable:true,  align:'center', group:'goals'  },
-  { key:'hw',     label:'W',      tip:'Home Wins',                          sortable:true,  align:'center', group:'home'   },
-  { key:'hl',     label:'L',      tip:'Home Losses',                        sortable:true,  align:'center', group:'home'   },
-  { key:'htie',   label:'T',      tip:'Home Ties',                          sortable:true,  align:'center', group:'home'   },
-  { key:'hotl',   label:'OTL',    tip:'Home OT Losses',                     sortable:true,  align:'center', group:'home'   },
-  { key:'aw',     label:'W',      tip:'Away Wins',                          sortable:true,  align:'center', group:'away'   },
-  { key:'al',     label:'L',      tip:'Away Losses',                        sortable:true,  align:'center', group:'away'   },
-  { key:'atie',   label:'T',      tip:'Away Ties',                          sortable:true,  align:'center', group:'away'   },
-  { key:'aotl',   label:'OTL',    tip:'Away OT Losses',                     sortable:true,  align:'center', group:'away'   },
-  { key:'so',     label:'SO',     tip:'Shutouts (opponent scored 0)',            sortable:true,  align:'center', group:'extra'  },
-  { key:'maxgf',  label:'MAX G',  tip:'Most Goals Scored in a Single Game',     sortable:true,  align:'center', group:'extra'  },
-  { key:'streak', label:'STK',    tip:'Current streak vs this opponent',         sortable:true,  align:'center', group:'extra'  },
-  { key:'longW',  label:'LNG W',  tip:'Longest winning streak vs this opponent', sortable:true,  align:'center', group:'extra'  },
-  { key:'longL',  label:'LNG L',  tip:'Longest losing streak vs this opponent',  sortable:true,  align:'center', group:'extra'  },
+  {
+    key: 'rank',
+    label: '#',
+    tip: 'Rank',
+    sortable: false,
+    align: 'center',
+    group: 'core',
+  },
+  {
+    key: 'opp',
+    label: 'OPP',
+    tip: 'Opponent Coach',
+    sortable: true,
+    align: 'left',
+    group: 'core',
+  },
+  {
+    key: 'gp',
+    label: 'GP',
+    tip: 'Games Played',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'w',
+    label: 'W',
+    tip: 'Wins',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'l',
+    label: 'L',
+    tip: 'Losses',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 't',
+    label: 'T',
+    tip: 'Ties',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'otl',
+    label: 'OTL',
+    tip: 'Overtime Losses',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'pct',
+    label: 'WIN%',
+    tip: 'Win Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'record',
+  },
+  {
+    key: 'gf',
+    label: 'GF',
+    tip: 'Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'ga',
+    label: 'GA',
+    tip: 'Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'diff',
+    label: '+/-',
+    tip: 'Goal Differential',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'gfpg',
+    label: 'GF/G',
+    tip: 'Goals For per Game',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'gapg',
+    label: 'GA/G',
+    tip: 'Goals Against per Game',
+    sortable: true,
+    align: 'center',
+    group: 'goals',
+  },
+  {
+    key: 'hw',
+    label: 'W',
+    tip: 'Home Wins',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'hl',
+    label: 'L',
+    tip: 'Home Losses',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'htie',
+    label: 'T',
+    tip: 'Home Ties',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'hotl',
+    label: 'OTL',
+    tip: 'Home OT Losses',
+    sortable: true,
+    align: 'center',
+    group: 'home',
+  },
+  {
+    key: 'aw',
+    label: 'W',
+    tip: 'Away Wins',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'al',
+    label: 'L',
+    tip: 'Away Losses',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'atie',
+    label: 'T',
+    tip: 'Away Ties',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'aotl',
+    label: 'OTL',
+    tip: 'Away OT Losses',
+    sortable: true,
+    align: 'center',
+    group: 'away',
+  },
+  {
+    key: 'so',
+    label: 'SO',
+    tip: 'Shutouts (opponent scored 0)',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
+  {
+    key: 'maxgf',
+    label: 'MAX G',
+    tip: 'Most Goals Scored in a Single Game',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
+  {
+    key: 'streak',
+    label: 'STK',
+    tip: 'Current streak vs this opponent',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
+  {
+    key: 'longW',
+    label: 'LNG W',
+    tip: 'Longest winning streak vs this opponent',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
+  {
+    key: 'longL',
+    label: 'LNG L',
+    tip: 'Longest losing streak vs this opponent',
+    sortable: true,
+    align: 'center',
+    group: 'extra',
+  },
 ];
+
+// ─── Team Stats Columns ───────────────────────────────────────────────────
+const TEAM_COLS = [
+  {
+    key: 'rank',
+    label: '#',
+    tip: 'Rank',
+    sortable: false,
+    align: 'center',
+    group: 'core',
+  },
+  {
+    key: 'team',
+    label: 'TEAM',
+    tip: 'Team',
+    sortable: true,
+    align: 'left',
+    group: 'core',
+  },
+  {
+    key: 'gp',
+    label: 'GP',
+    tip: 'Games Played',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'gf',
+    label: 'GF',
+    tip: 'Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'ga',
+    label: 'GA',
+    tip: 'Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'diff',
+    label: '+/-',
+    tip: 'Goal Differential',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'gfpg',
+    label: 'GF/G',
+    tip: 'Goals For per Game',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'gapg',
+    label: 'GA/G',
+    tip: 'Goals Against per Game',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'pp_g',
+    label: 'PPG',
+    tip: 'Power Play Goals',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'sh_g',
+    label: 'SHG',
+    tip: 'Short-Handed Goals',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'ot_g',
+    label: 'OTG',
+    tip: 'Overtime Goals',
+    sortable: true,
+    align: 'center',
+    group: 'scoring',
+  },
+  {
+    key: 'shots',
+    label: 'SF',
+    tip: 'Shots For',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'shots_ag',
+    label: 'SA',
+    tip: 'Shots Against',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'shot_diff',
+    label: 'SD',
+    tip: 'Shot Differential (SF - SA)',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'sfpg',
+    label: 'SF/G',
+    tip: 'Shots For per Game',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'sapg',
+    label: 'SA/G',
+    tip: 'Shots Against per Game',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'shot_pct',
+    label: 'S%',
+    tip: 'Shooting Percentage (Goals / Shots)',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'sv_pct',
+    label: 'SV%',
+    tip: 'Save Percentage (1 - GA/SA)',
+    sortable: true,
+    align: 'center',
+    group: 'shots',
+  },
+  {
+    key: 'pp_pct',
+    label: 'PP%',
+    tip: 'Power Play Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'pp_g',
+    label: 'PPG',
+    tip: 'Power Play Goals',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'pp_amt',
+    label: 'PPA',
+    tip: 'Power Play Attempts',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'pp_shots',
+    label: 'PPS',
+    tip: 'Power Play Shots',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'pp_time_avg',
+    label: 'PP/G',
+    tip: 'Avg Power Play Time per Game (mm:ss)',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'sh_time_avg',
+    label: 'SH/G',
+    tip: 'Avg Short-Handed Time per Game (opponent PP, mm:ss)',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'ps_att',
+    label: 'PSA',
+    tip: 'Penalty Shot Attempts',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'ps_g',
+    label: 'PSG',
+    tip: 'Penalty Shot Goals',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'ps_pct',
+    label: 'PS%',
+    tip: 'Penalty Shot Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'special',
+  },
+  {
+    key: 'fo_won',
+    label: 'FOW',
+    tip: 'Faceoffs Won',
+    sortable: true,
+    align: 'center',
+    group: 'faceoff',
+  },
+  {
+    key: 'fo_total',
+    label: 'FOT',
+    tip: 'Faceoffs Total',
+    sortable: true,
+    align: 'center',
+    group: 'faceoff',
+  },
+  {
+    key: 'fo_pct',
+    label: 'FO%',
+    tip: 'Faceoff Win Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'faceoff',
+  },
+  {
+    key: 'pass_att',
+    label: 'PAT',
+    tip: 'Pass Attempts',
+    sortable: true,
+    align: 'center',
+    group: 'passing',
+  },
+  {
+    key: 'pass_comp',
+    label: 'PC',
+    tip: 'Pass Completions',
+    sortable: true,
+    align: 'center',
+    group: 'passing',
+  },
+  {
+    key: 'pass_pct',
+    label: 'P%',
+    tip: 'Pass Completion Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'passing',
+  },
+  {
+    key: 'pass_att_pg',
+    label: 'PAT/G',
+    tip: 'Pass Attempts per Game',
+    sortable: true,
+    align: 'center',
+    group: 'passing',
+  },
+  {
+    key: 'pass_comp_pg',
+    label: 'PC/G',
+    tip: 'Pass Completions per Game',
+    sortable: true,
+    align: 'center',
+    group: 'passing',
+  },
+  {
+    key: 'chk',
+    label: 'CHK',
+    tip: 'Checks',
+    sortable: true,
+    align: 'center',
+    group: 'physical',
+  },
+  {
+    key: 'chk_ag',
+    label: 'CHKA',
+    tip: 'Checks Against',
+    sortable: true,
+    align: 'center',
+    group: 'physical',
+  },
+  {
+    key: 'chk_pg',
+    label: 'CHK/G',
+    tip: 'Checks per Game',
+    sortable: true,
+    align: 'center',
+    group: 'physical',
+  },
+  {
+    key: 'chk_ag_pg',
+    label: 'CHKA/G',
+    tip: 'Checks Against per Game',
+    sortable: true,
+    align: 'center',
+    group: 'physical',
+  },
+  {
+    key: 'break_g',
+    label: 'BRG',
+    tip: 'Breakaway Goals',
+    sortable: true,
+    align: 'center',
+    group: 'danger',
+  },
+  {
+    key: 'break_att',
+    label: 'BRA',
+    tip: 'Breakaway Attempts',
+    sortable: true,
+    align: 'center',
+    group: 'danger',
+  },
+  {
+    key: 'break_pct',
+    label: 'BR%',
+    tip: 'Breakaway Goal Percentage',
+    sortable: true,
+    align: 'center',
+    group: 'danger',
+  },
+  {
+    key: 'xa_shots',
+    label: '1XA',
+    tip: 'Expected Goals Shots (1XA)',
+    sortable: true,
+    align: 'center',
+    group: 'danger',
+  },
+  {
+    key: 'xg',
+    label: '1XG',
+    tip: 'Expected Goals (1XG)',
+    sortable: true,
+    align: 'center',
+    group: 'danger',
+  },
+  {
+    key: 'xg_pct',
+    label: '1X%',
+    tip: '1X Conversion Rate (1XG / 1XA)',
+    sortable: true,
+    align: 'center',
+    group: 'danger',
+  },
+  {
+    key: 'atk_time_avg',
+    label: 'ATK/G',
+    tip: 'Avg Attack Zone Time per Game (mm:ss)',
+    sortable: true,
+    align: 'center',
+    group: 'time',
+  },
+  {
+    key: 'def_time_avg',
+    label: 'DEF/G',
+    tip: 'Avg Defensive Zone Time per Game (mm:ss)',
+    sortable: true,
+    align: 'center',
+    group: 'time',
+  },
+  // Period scoring
+  {
+    key: 'p1_gf',
+    label: '1GF',
+    tip: 'Period 1 Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'p1_ga',
+    label: '1GA',
+    tip: 'Period 1 Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'p2_gf',
+    label: '2GF',
+    tip: 'Period 2 Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'p2_ga',
+    label: '2GA',
+    tip: 'Period 2 Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'p3_gf',
+    label: '3GF',
+    tip: 'Period 3 Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'p3_ga',
+    label: '3GA',
+    tip: 'Period 3 Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'ot_gf',
+    label: 'OGF',
+    tip: 'Overtime Goals For',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+  {
+    key: 'ot_ga',
+    label: 'OGA',
+    tip: 'Overtime Goals Against',
+    sortable: true,
+    align: 'center',
+    group: 'periods',
+  },
+];
+
+// dedupe pp_g which appears in both scoring and special
+const TEAM_COLS_DEDUPED = (() => {
+  const seen = new Set();
+  const result = [];
+  for (const col of TEAM_COLS) {
+    const uniq = `${col.key}-${col.group}`;
+    if (!seen.has(uniq)) {
+      seen.add(uniq);
+      result.push(col);
+    }
+  }
+  return result;
+})();
 
 const GROUPS = {
-  core:   { label:'',       headerBg:'#07071a',               cellBg:'#07071a',               groupBg:'#07071a',               groupText:'rgba(255,255,255,.3)',  borderLeft:'none' },
-  record: { label:'RECORD', headerBg:'rgba(160,170,255,.09)', cellBg:'rgba(100,110,200,.055)', groupBg:'rgba(160,170,255,.17)', groupText:'rgba(185,195,255,.9)', borderLeft:'3px solid rgba(140,150,255,.5)' },
-  goals:  { label:'GOALS',  headerBg:'rgba(255,140,0,.11)',   cellBg:'rgba(255,120,0,.065)',   groupBg:'rgba(255,140,0,.2)',    groupText:'rgba(255,175,75,.95)', borderLeft:'3px solid rgba(255,140,0,.6)' },
-  home:   { label:'HOME',   headerBg:'rgba(80,165,255,.11)',  cellBg:'rgba(60,140,255,.065)',  groupBg:'rgba(100,175,255,.2)', groupText:'rgba(145,215,255,.95)', borderLeft:'3px solid rgba(100,170,255,.6)' },
-  away:   { label:'AWAY',   headerBg:'rgba(170,110,255,.11)', cellBg:'rgba(150,90,240,.065)',  groupBg:'rgba(180,120,255,.2)', groupText:'rgba(205,165,255,.95)', borderLeft:'3px solid rgba(175,115,255,.6)' },
-  extra:  { label:'EXTRA',  headerBg:'rgba(255,215,0,.09)',   cellBg:'rgba(230,195,0,.05)',    groupBg:'rgba(255,215,0,.17)',  groupText:'rgba(255,220,60,.95)', borderLeft:'3px solid rgba(255,215,0,.5)' },
+  core: {
+    label: '',
+    headerBg: '#07071a',
+    cellBg: '#07071a',
+    groupBg: '#07071a',
+    groupText: 'rgba(255,255,255,.3)',
+    borderLeft: 'none',
+  },
+  record: {
+    label: 'RECORD',
+    headerBg: 'rgba(160,170,255,.09)',
+    cellBg: 'rgba(100,110,200,.055)',
+    groupBg: 'rgba(160,170,255,.17)',
+    groupText: 'rgba(185,195,255,.9)',
+    borderLeft: '3px solid rgba(140,150,255,.5)',
+  },
+  goals: {
+    label: 'GOALS',
+    headerBg: 'rgba(255,140,0,.11)',
+    cellBg: 'rgba(255,120,0,.065)',
+    groupBg: 'rgba(255,140,0,.2)',
+    groupText: 'rgba(255,175,75,.95)',
+    borderLeft: '3px solid rgba(255,140,0,.6)',
+  },
+  home: {
+    label: 'HOME',
+    headerBg: 'rgba(80,165,255,.11)',
+    cellBg: 'rgba(60,140,255,.065)',
+    groupBg: 'rgba(100,175,255,.2)',
+    groupText: 'rgba(145,215,255,.95)',
+    borderLeft: '3px solid rgba(100,170,255,.6)',
+  },
+  away: {
+    label: 'AWAY',
+    headerBg: 'rgba(170,110,255,.11)',
+    cellBg: 'rgba(150,90,240,.065)',
+    groupBg: 'rgba(180,120,255,.2)',
+    groupText: 'rgba(205,165,255,.95)',
+    borderLeft: '3px solid rgba(175,115,255,.6)',
+  },
+  extra: {
+    label: 'EXTRA',
+    headerBg: 'rgba(255,215,0,.09)',
+    cellBg: 'rgba(230,195,0,.05)',
+    groupBg: 'rgba(255,215,0,.17)',
+    groupText: 'rgba(255,220,60,.95)',
+    borderLeft: '3px solid rgba(255,215,0,.5)',
+  },
+  // Team stats groups
+  scoring: {
+    label: 'SCORING',
+    headerBg: 'rgba(255,140,0,.11)',
+    cellBg: 'rgba(255,120,0,.065)',
+    groupBg: 'rgba(255,140,0,.2)',
+    groupText: 'rgba(255,175,75,.95)',
+    borderLeft: '3px solid rgba(255,140,0,.6)',
+  },
+  shots: {
+    label: 'SHOTS',
+    headerBg: 'rgba(80,165,255,.11)',
+    cellBg: 'rgba(60,140,255,.065)',
+    groupBg: 'rgba(100,175,255,.2)',
+    groupText: 'rgba(145,215,255,.95)',
+    borderLeft: '3px solid rgba(100,170,255,.6)',
+  },
+  special: {
+    label: 'SPECIAL TEAMS',
+    headerBg: 'rgba(170,110,255,.11)',
+    cellBg: 'rgba(150,90,240,.065)',
+    groupBg: 'rgba(180,120,255,.2)',
+    groupText: 'rgba(205,165,255,.95)',
+    borderLeft: '3px solid rgba(175,115,255,.6)',
+  },
+  faceoff: {
+    label: 'FACEOFFS',
+    headerBg: 'rgba(0,210,160,.10)',
+    cellBg: 'rgba(0,185,140,.055)',
+    groupBg: 'rgba(0,210,160,.18)',
+    groupText: 'rgba(100,240,200,.9)',
+    borderLeft: '3px solid rgba(0,210,160,.5)',
+  },
+  passing: {
+    label: 'PASSING',
+    headerBg: 'rgba(255,215,0,.09)',
+    cellBg: 'rgba(230,195,0,.05)',
+    groupBg: 'rgba(255,215,0,.17)',
+    groupText: 'rgba(255,220,60,.95)',
+    borderLeft: '3px solid rgba(255,215,0,.5)',
+  },
+  physical: {
+    label: 'PHYSICAL',
+    headerBg: 'rgba(255,80,80,.10)',
+    cellBg: 'rgba(220,60,60,.055)',
+    groupBg: 'rgba(255,80,80,.18)',
+    groupText: 'rgba(255,150,150,.9)',
+    borderLeft: '3px solid rgba(255,80,80,.5)',
+  },
+  danger: {
+    label: 'DANGER',
+    headerBg: 'rgba(255,60,120,.10)',
+    cellBg: 'rgba(220,40,100,.055)',
+    groupBg: 'rgba(255,60,120,.18)',
+    groupText: 'rgba(255,140,180,.9)',
+    borderLeft: '3px solid rgba(255,60,120,.5)',
+  },
+  time: {
+    label: 'ZONE TIME',
+    headerBg: 'rgba(160,170,255,.09)',
+    cellBg: 'rgba(100,110,200,.055)',
+    groupBg: 'rgba(160,170,255,.17)',
+    groupText: 'rgba(185,195,255,.9)',
+    borderLeft: '3px solid rgba(140,150,255,.5)',
+  },
+  periods: {
+    label: 'BY PERIOD',
+    headerBg: 'rgba(0,210,160,.10)',
+    cellBg: 'rgba(0,185,140,.055)',
+    groupBg: 'rgba(0,210,160,.18)',
+    groupText: 'rgba(100,240,200,.9)',
+    borderLeft: '3px solid rgba(0,210,160,.5)',
+  },
 };
 
-const LOSS_KEYS = new Set(['l','t','htie','atie','hl','al','otl','hotl','aotl','ga','gapg']);
-const SEASON_VALS  = new Set(['REG','REGULAR','SEASON','S','RS','REGULAR SEASON']);
-const PLAYOFF_VALS = new Set(['PO','PLAYOFF','PLAYOFFS','P','POST','POSTSEASON']);
+const LOSS_KEYS = new Set([
+  'l',
+  't',
+  'htie',
+  'atie',
+  'hl',
+  'al',
+  'otl',
+  'hotl',
+  'aotl',
+  'ga',
+  'gapg',
+]);
+const SEASON_VALS = new Set([
+  'REG',
+  'REGULAR',
+  'SEASON',
+  'S',
+  'RS',
+  'REGULAR SEASON',
+]);
+const PLAYOFF_VALS = new Set([
+  'PO',
+  'PLAYOFF',
+  'PLAYOFFS',
+  'P',
+  'POST',
+  'POSTSEASON',
+]);
 
-const isWin = (sh, sa, ot, side) => side === 'home' ? sh > sa : sa > sh;
-const isLoss= (sh, sa, ot, side) => side === 'home' ? sh < sa : sa < sh;
-const isTie = (sh, sa)           => sh === sa;
-const isOT  = (g)                => !!g.ot;
+// Team stat columns that are "bad when high"
+const TEAM_LOSS_KEYS = new Set([
+  'ga',
+  'gapg',
+  'sapg',
+  'chk_ag',
+  'chk_ag_pg',
+  'def_time_avg',
+  'sh_time_avg',
+  'p1_ga',
+  'p2_ga',
+  'p3_ga',
+  'ot_ga',
+]);
 
-// Derive result for a team from scores
 function deriveResult(sh, sa, ot, side) {
   if (sh === sa) return 'T';
   const won = side === 'home' ? sh > sa : sa > sh;
@@ -91,56 +1061,281 @@ function deriveResult(sh, sa, ot, side) {
   return ot ? 'OTL' : 'L';
 }
 
-// ─── Manager stats aggregation (score-derived) ────────────────────────────
+// ─── Time parsing helper ─────────────────────────────────────────────────
+// DB stores times as "HH:MM:SS" where HH is actually minutes, MM is seconds
+// e.g. "07:38:00" means 7 minutes 38 seconds, NOT 7 hours 38 minutes
+// So we always take the first two parts as MM:SS and ignore the third
+function parseTimeToSeconds(val) {
+  if (!val) return 0;
+  const str = String(val).trim();
+  const parts = str.split(':').map(Number);
+  if (parts.length >= 2) return parts[0] * 60 + parts[1]; // MM:SS
+  return 0;
+}
+
+function secondsToMMSS(secs) {
+  if (!secs && secs !== 0) return '–';
+  const m = Math.floor(secs / 60);
+  const s = Math.round(secs % 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// ─── Team stats aggregation ───────────────────────────────────────────────
+function buildTeamStats(rows) {
+  const m = new Map();
+
+  const slot = (code) => {
+    if (!code) return null;
+    const key = code.trim().toUpperCase();
+    if (!m.has(key))
+      m.set(key, {
+        team: key,
+        gp: 0,
+        gf: 0,
+        ga: 0,
+        shots: 0,
+        shots_ag: 0,
+        pp_g: 0,
+        pp_amt: 0,
+        pp_shots: 0,
+        sh_g: 0,
+        ot_g: 0,
+        ps_att: 0,
+        ps_g: 0,
+        fo_won: 0,
+        fo_total: 0,
+        pass_att: 0,
+        pass_comp: 0,
+        chk: 0,
+        chk_ag: 0,
+        break_att: 0,
+        break_g: 0,
+        xa_shots: 0,
+        xg: 0,
+        atk_secs: 0,
+        def_secs: 0,
+        pp_secs: 0, // total PP time (own power plays)
+        sh_secs: 0, // total SH time (opponent PP = our penalty kill)
+        // period goals
+        p1_gf: 0,
+        p1_ga: 0,
+        p2_gf: 0,
+        p2_ga: 0,
+        p3_gf: 0,
+        p3_ga: 0,
+        ot_gf: 0,
+        ot_ga: 0,
+      });
+    return m.get(key);
+  };
+
+  for (const g of rows) {
+    const home = slot(g.home);
+    const away = slot(g.away);
+    if (!home || !away) continue;
+
+    // --- HOME ---
+    home.gp++;
+    home.gf += Number(g.home_score || 0);
+    home.ga += Number(g.away_score || 0);
+    home.shots += Number(g.home_shots || 0);
+    home.shots_ag += Number(g.away_shots || 0);
+    home.pp_g += Number(g.home_pp_g || 0);
+    home.pp_amt += Number(g.home_pp_amt || 0);
+    home.pp_shots += Number(g.home_pp_shots || 0);
+    home.sh_g += Number(g.home_shg || 0);
+    home.ot_g += Number(g.home_ot_g || 0);
+    home.ps_att += Number(g.home_ps || 0);
+    home.ps_g += Number(g.home_psg || 0);
+    home.fo_won += Number(g.home_fow || 0);
+    home.fo_total += Number(g.fo_total || 0);
+    home.pass_att += Number(g.home_pass_attempts || 0);
+    home.pass_comp += Number(g.home_pass_complete || 0);
+    home.chk += Number(g.home_chk || 0);
+    home.chk_ag += Number(g.away_chk || 0);
+    home.break_att += Number(g.home_break_attempts || 0);
+    home.break_g += Number(g.home_break_goals || 0);
+    home.xa_shots += Number(g.home_1xa || 0);
+    home.xg += Number(g.home_1xg || 0);
+    home.atk_secs += parseTimeToSeconds(g.home_attack);
+    home.def_secs += parseTimeToSeconds(g.away_attack);
+    home.pp_secs += parseTimeToSeconds(g.home_pp_mins);
+    home.sh_secs += parseTimeToSeconds(g.away_pp_mins); // opponent's PP = our SH
+    home.p1_gf += Number(g.home_1p_g || 0);
+    home.p1_ga += Number(g.away_1p_g || 0);
+    home.p2_gf += Number(g.home_2p_g || 0);
+    home.p2_ga += Number(g.away_2p_g || 0);
+    home.p3_gf += Number(g.home_3p_g || 0);
+    home.p3_ga += Number(g.away_3p_g || 0);
+    home.ot_gf += Number(g.home_ot_g || 0);
+    home.ot_ga += Number(g.away_ot_g || 0);
+
+    // --- AWAY ---
+    away.gp++;
+    away.gf += Number(g.away_score || 0);
+    away.ga += Number(g.home_score || 0);
+    away.shots += Number(g.away_shots || 0);
+    away.shots_ag += Number(g.home_shots || 0);
+    away.pp_g += Number(g.away_pp_g || 0);
+    away.pp_amt += Number(g.away_pp_amt || 0);
+    away.pp_shots += Number(g.away_pp_shots || 0);
+    away.sh_g += Number(g.away_shg || 0);
+    away.ot_g += Number(g.away_ot_g || 0);
+    away.ps_att += Number(g.away_ps || 0);
+    away.ps_g += Number(g.away_psg || 0);
+    away.fo_won += Number(g.away_fow || 0);
+    away.fo_total += Number(g.fo_total || 0);
+    away.pass_att += Number(g.away_pass_attempts || 0);
+    away.pass_comp += Number(g.away_pass_complete || 0);
+    away.chk += Number(g.away_chk || 0);
+    away.chk_ag += Number(g.home_chk || 0);
+    away.break_att += Number(g.away_break_attempts || 0);
+    away.break_g += Number(g.away_break_goals || 0);
+    away.xa_shots += Number(g.away_1xa || 0);
+    away.xg += Number(g.away_1xg || 0);
+    away.atk_secs += parseTimeToSeconds(g.away_attack);
+    away.def_secs += parseTimeToSeconds(g.home_attack);
+    away.pp_secs += parseTimeToSeconds(g.away_pp_mins);
+    away.sh_secs += parseTimeToSeconds(g.home_pp_mins); // opponent's PP = our SH
+    away.p1_gf += Number(g.away_1p_g || 0);
+    away.p1_ga += Number(g.home_1p_g || 0);
+    away.p2_gf += Number(g.away_2p_g || 0);
+    away.p2_ga += Number(g.home_2p_g || 0);
+    away.p3_gf += Number(g.away_3p_g || 0);
+    away.p3_ga += Number(g.home_3p_g || 0);
+    away.ot_gf += Number(g.away_ot_g || 0);
+    away.ot_ga += Number(g.home_ot_g || 0);
+  }
+
+  return Array.from(m.values()).map((s) => {
+    const gp = s.gp || 1;
+    return {
+      ...s,
+      diff: s.gf - s.ga,
+      shot_diff: s.shots - s.shots_ag,
+      gfpg: +(s.gf / gp).toFixed(2),
+      gapg: +(s.ga / gp).toFixed(2),
+      sfpg: +(s.shots / gp).toFixed(2),
+      sapg: +(s.shots_ag / gp).toFixed(2),
+      shot_pct: s.shots > 0 ? +((s.gf / s.shots) * 100).toFixed(1) : 0,
+      sv_pct: s.shots_ag > 0 ? +((1 - s.ga / s.shots_ag) * 100).toFixed(1) : 0,
+      pp_pct: s.pp_amt > 0 ? +((s.pp_g / s.pp_amt) * 100).toFixed(1) : 0,
+      ps_pct: s.ps_att > 0 ? +((s.ps_g / s.ps_att) * 100).toFixed(1) : 0,
+      fo_pct: s.fo_total > 0 ? +((s.fo_won / s.fo_total) * 100).toFixed(1) : 0,
+      pass_pct:
+        s.pass_att > 0 ? +((s.pass_comp / s.pass_att) * 100).toFixed(1) : 0,
+      pass_att_pg: +(s.pass_att / gp).toFixed(1),
+      pass_comp_pg: +(s.pass_comp / gp).toFixed(1),
+      chk_pg: +(s.chk / gp).toFixed(1),
+      chk_ag_pg: +(s.chk_ag / gp).toFixed(1),
+      break_pct:
+        s.break_att > 0 ? +((s.break_g / s.break_att) * 100).toFixed(1) : 0,
+      xg_pct: s.xa_shots > 0 ? +((s.xg / s.xa_shots) * 100).toFixed(1) : 0,
+      atk_time_avg: s.atk_secs / gp,
+      def_time_avg: s.def_secs / gp,
+      pp_time_avg: s.pp_secs / gp,
+      sh_time_avg: s.sh_secs / gp,
+    };
+  });
+}
+
+// ─── Manager stats aggregation ────────────────────────────────────────────
 function buildManagerStats(games, champMap) {
   const m = new Map();
-  const slot = normKey => {
+  const slot = (normKey) => {
     if (!normKey) return null;
-    if (!m.has(normKey)) m.set(normKey, {
-      normKey, gp:0, w:0, l:0, t:0, otl:0,
-      gf:0, ga:0, hw:0, hl:0, htie:0, hotl:0,
-      aw:0, al:0, atie:0, aotl:0, so:0, maxgf:0, _displayName:'',
-    });
+    if (!m.has(normKey))
+      m.set(normKey, {
+        normKey,
+        gp: 0,
+        w: 0,
+        l: 0,
+        t: 0,
+        otl: 0,
+        gf: 0,
+        ga: 0,
+        hw: 0,
+        hl: 0,
+        htie: 0,
+        hotl: 0,
+        aw: 0,
+        al: 0,
+        atie: 0,
+        aotl: 0,
+        so: 0,
+        maxgf: 0,
+        _displayName: '',
+      });
     return m.get(normKey);
   };
 
   for (const g of games) {
-    const hCoach = (g.coach_home||'').trim();
-    const aCoach = (g.coach_away||'').trim();
+    const hCoach = (g.coach_home || '').trim();
+    const aCoach = (g.coach_away || '').trim();
     if (!hCoach || !aCoach) continue;
-    const h = slot(norm(hCoach)), a = slot(norm(aCoach));
+    const h = slot(norm(hCoach)),
+      a = slot(norm(aCoach));
     if (!h || !a) continue;
     if (!h._displayName) h._displayName = hCoach;
     if (!a._displayName) a._displayName = aCoach;
 
-    const sh = Number(g.score_home||0), sa = Number(g.score_away||0);
+    const sh = Number(g.score_home || 0),
+      sa = Number(g.score_away || 0);
     const ot = !!g.ot;
-    h.gp++; a.gp++;
-    h.gf += sh; h.ga += sa; h.maxgf = Math.max(h.maxgf, sh);
-    a.gf += sa; a.ga += sh; a.maxgf = Math.max(a.maxgf, sa);
+    h.gp++;
+    a.gp++;
+    h.gf += sh;
+    h.ga += sa;
+    h.maxgf = Math.max(h.maxgf, sh);
+    a.gf += sa;
+    a.ga += sh;
+    a.maxgf = Math.max(a.maxgf, sa);
 
     const hr = deriveResult(sh, sa, ot, 'home');
     const ar = deriveResult(sh, sa, ot, 'away');
 
-    if      (hr==='W'  ){ h.w++;   h.hw++;   }
-    else if (hr==='OTW'){ h.w++;   h.hw++;   }
-    else if (hr==='T'  ){ h.t++;   h.htie++; }
-    else if (hr==='OTL'){ h.otl++; h.hotl++; }
-    else                { h.l++;   h.hl++;   }
+    if (hr === 'W') {
+      h.w++;
+      h.hw++;
+    } else if (hr === 'OTW') {
+      h.w++;
+      h.hw++;
+    } else if (hr === 'T') {
+      h.t++;
+      h.htie++;
+    } else if (hr === 'OTL') {
+      h.otl++;
+      h.hotl++;
+    } else {
+      h.l++;
+      h.hl++;
+    }
 
-    if      (ar==='W'  ){ a.w++;   a.aw++;   }
-    else if (ar==='OTW'){ a.w++;   a.aw++;   }
-    else if (ar==='T'  ){ a.t++;   a.atie++; }
-    else if (ar==='OTL'){ a.otl++; a.aotl++; }
-    else                { a.l++;   a.al++;   }
+    if (ar === 'W') {
+      a.w++;
+      a.aw++;
+    } else if (ar === 'OTW') {
+      a.w++;
+      a.aw++;
+    } else if (ar === 'T') {
+      a.t++;
+      a.atie++;
+    } else if (ar === 'OTL') {
+      a.otl++;
+      a.aotl++;
+    } else {
+      a.l++;
+      a.al++;
+    }
 
     if (sa === 0) h.so++;
     if (sh === 0) a.so++;
   }
 
-  return Array.from(m.values()).map(s => ({
-    ...s, mgr: s.normKey,
-    pct:  s.gp ? s.w / s.gp : 0,
+  return Array.from(m.values()).map((s) => ({
+    ...s,
+    mgr: s.normKey,
+    pct: s.gp ? s.w / s.gp : 0,
     gfpg: s.gp ? +(s.gf / s.gp).toFixed(2) : 0,
     gapg: s.gp ? +(s.ga / s.gp).toFixed(2) : 0,
     diff: s.gf - s.ga,
@@ -149,23 +1344,18 @@ function buildManagerStats(games, champMap) {
 }
 
 // ─── H2H aggregation ─────────────────────────────────────────────────────
-// Returns rows from mgrA's perspective vs each opponent (or a single opp)
 function buildH2HStats(games, mgrANorm, mgrBNorm) {
-  // Filter to only games involving mgrA
-  const relevant = games.filter(g => {
+  const relevant = games.filter((g) => {
     const h = norm(g.coach_home || '');
     const a = norm(g.coach_away || '');
     if (h !== mgrANorm && a !== mgrANorm) return false;
     if (mgrBNorm && mgrBNorm !== 'ALL') {
       return h === mgrBNorm || a === mgrBNorm;
     }
-    return h !== mgrANorm || a !== mgrANorm; // exclude mirror games
+    return h !== mgrANorm || a !== mgrANorm;
   });
 
-  // Group by opponent
   const oppMap = new Map();
-
-  // Sort by game id ascending so streak is computed in order
   const sorted = [...relevant].sort((a, b) => (a.id || 0) - (b.id || 0));
 
   for (const g of sorted) {
@@ -173,53 +1363,84 @@ function buildH2HStats(games, mgrANorm, mgrBNorm) {
     const aCoach = norm(g.coach_away || '');
     const aIsHome = hCoach === mgrANorm;
     const oppNorm = aIsHome ? aCoach : hCoach;
-    const oppDisplay = aIsHome ? (g.coach_away||'').trim() : (g.coach_home||'').trim();
+    const oppDisplay = aIsHome
+      ? (g.coach_away || '').trim()
+      : (g.coach_home || '').trim();
     if (!oppNorm || oppNorm === mgrANorm) continue;
 
     if (!oppMap.has(oppNorm)) {
       oppMap.set(oppNorm, {
-        oppNorm, oppDisplay,
-        gp:0, w:0, l:0, t:0, otl:0,
-        gf:0, ga:0,
-        hw:0, hl:0, htie:0, hotl:0,
-        aw:0, al:0, atie:0, aotl:0,
-        so:0, maxgf:0,
-        _results: [], // chronological: 'W'|'L'|'T'|'OTL'
+        oppNorm,
+        oppDisplay,
+        gp: 0,
+        w: 0,
+        l: 0,
+        t: 0,
+        otl: 0,
+        gf: 0,
+        ga: 0,
+        hw: 0,
+        hl: 0,
+        htie: 0,
+        hotl: 0,
+        aw: 0,
+        al: 0,
+        atie: 0,
+        aotl: 0,
+        so: 0,
+        maxgf: 0,
+        _results: [],
       });
     }
     const row = oppMap.get(oppNorm);
 
-    const sh = Number(g.score_home||0), sa = Number(g.score_away||0);
+    const sh = Number(g.score_home || 0),
+      sa = Number(g.score_away || 0);
     const ot = !!g.ot;
-
-    // mgrA's perspective
-    const myScore  = aIsHome ? sh : sa;
+    const myScore = aIsHome ? sh : sa;
     const oppScore = aIsHome ? sa : sh;
-    const side     = aIsHome ? 'home' : 'away';
-    const res      = deriveResult(sh, sa, ot, side);
+    const side = aIsHome ? 'home' : 'away';
+    const res = deriveResult(sh, sa, ot, side);
 
     row.gp++;
-    row.gf += myScore; row.ga += oppScore;
+    row.gf += myScore;
+    row.ga += oppScore;
     row.maxgf = Math.max(row.maxgf, myScore);
     if (oppScore === 0) row.so++;
 
     if (aIsHome) {
-      if      (res==='W'||res==='OTW'){ row.w++; row.hw++; }
-      else if (res==='T'             ){ row.t++; row.htie++; }
-      else if (res==='OTL'           ){ row.otl++; row.hotl++; }
-      else                            { row.l++; row.hl++; }
+      if (res === 'W' || res === 'OTW') {
+        row.w++;
+        row.hw++;
+      } else if (res === 'T') {
+        row.t++;
+        row.htie++;
+      } else if (res === 'OTL') {
+        row.otl++;
+        row.hotl++;
+      } else {
+        row.l++;
+        row.hl++;
+      }
     } else {
-      if      (res==='W'||res==='OTW'){ row.w++; row.aw++; }
-      else if (res==='T'             ){ row.t++; row.atie++; }
-      else if (res==='OTL'           ){ row.otl++; row.aotl++; }
-      else                            { row.l++; row.al++; }
+      if (res === 'W' || res === 'OTW') {
+        row.w++;
+        row.aw++;
+      } else if (res === 'T') {
+        row.t++;
+        row.atie++;
+      } else if (res === 'OTL') {
+        row.otl++;
+        row.aotl++;
+      } else {
+        row.l++;
+        row.al++;
+      }
     }
 
-    // Track result for streak calc — treat OTW as W
     row._results.push(res === 'OTW' ? 'W' : res);
   }
 
-  // Compute streak from most recent result backward
   const computeStreak = (results) => {
     if (!results.length) return '–';
     const last = results[results.length - 1];
@@ -231,32 +1452,35 @@ function buildH2HStats(games, mgrANorm, mgrBNorm) {
     return `${last}${count}`;
   };
 
-  // Compute longest W or L streak from results array
   const computeLongest = (results, target) => {
-    let max = 0, cur = 0;
+    let max = 0,
+      cur = 0;
     for (const r of results) {
-      if (r === target) { cur++; max = Math.max(max, cur); }
-      else cur = 0;
+      if (r === target) {
+        cur++;
+        max = Math.max(max, cur);
+      } else cur = 0;
     }
     return max;
   };
 
   return Array.from(oppMap.values()).map(({ _results, ...s }) => ({
     ...s,
-    opp:    s.oppNorm,
-    pct:    s.gp ? s.w / s.gp : 0,
-    gfpg:   s.gp ? +(s.gf / s.gp).toFixed(2) : 0,
-    gapg:   s.gp ? +(s.ga / s.gp).toFixed(2) : 0,
-    diff:   s.gf - s.ga,
+    opp: s.oppNorm,
+    pct: s.gp ? s.w / s.gp : 0,
+    gfpg: s.gp ? +(s.gf / s.gp).toFixed(2) : 0,
+    gapg: s.gp ? +(s.ga / s.gp).toFixed(2) : 0,
+    diff: s.gf - s.ga,
     streak: computeStreak(_results),
-    longW:  computeLongest(_results, 'W'),
-    longL:  computeLongest(_results, 'L'),
+    longW: computeLongest(_results, 'W'),
+    longL: computeLongest(_results, 'L'),
     _streakVal: (() => {
       if (!_results.length) return 0;
       const last = _results[_results.length - 1];
       let count = 0;
       for (let i = _results.length - 1; i >= 0; i--) {
-        if (_results[i] === last) count++; else break;
+        if (_results[i] === last) count++;
+        else break;
       }
       return last === 'W' ? count : last === 'L' ? -count : 0;
     })(),
@@ -266,19 +1490,51 @@ function buildH2HStats(games, mgrANorm, mgrBNorm) {
 // ─── Formatting helpers ───────────────────────────────────────────────────
 function fmtChamps(v, isAllSeasons) {
   if (v === null || v === undefined) return '–';
-  if (isAllSeasons) { const n = Number(v); if (!n) return '–'; if (n <= 3) return '🏆'.repeat(n); return `🏆 ×${n}`; }
+  if (isAllSeasons) {
+    const n = Number(v);
+    if (!n) return '–';
+    if (n <= 3) return '🏆'.repeat(n);
+    return `🏆 ×${n}`;
+  }
   return v ? '🏆' : '–';
 }
 
 function fmtVal(v, key, isAllSeasons) {
-  if (v===null||v===undefined) return '–';
-  if (key==='champs') return fmtChamps(v, isAllSeasons);
-  if (key==='streak') return v || '–';
-  if (key==='longW') return Number(v) > 0 ? String(v) : '–';
-  if (key==='longL') return Number(v) > 0 ? String(v) : '–';
-  if (key==='pct'){ const n=Number(v); if(!isFinite(n))return'–'; return n===1?'1.000':n.toFixed(3).replace(/^0/,''); }
-  if (key==='gfpg'||key==='gapg') return Number(v).toFixed(2);
-  if (key==='diff') return v>0?`+${v}`:String(v);
+  if (v === null || v === undefined) return '–';
+  if (key === 'champs') return fmtChamps(v, isAllSeasons);
+  if (key === 'streak') return v || '–';
+  if (key === 'longW') return Number(v) > 0 ? String(v) : '–';
+  if (key === 'longL') return Number(v) > 0 ? String(v) : '–';
+  if (key === 'pct') {
+    const n = Number(v);
+    if (!isFinite(n)) return '–';
+    return n === 1 ? '1.000' : n.toFixed(3).replace(/^0/, '');
+  }
+  if (key === 'gfpg' || key === 'gapg') return Number(v).toFixed(2);
+  if (key === 'diff' || key === 'shot_diff') return v > 0 ? `+${v}` : String(v);
+  // Team stat percentage fields
+  if (
+    [
+      'shot_pct',
+      'sv_pct',
+      'pp_pct',
+      'ps_pct',
+      'fo_pct',
+      'pass_pct',
+      'break_pct',
+      'xg_pct',
+    ].includes(key)
+  ) {
+    const n = Number(v);
+    if (!isFinite(n)) return '–';
+    return n.toFixed(1) + '%';
+  }
+  // Time fields — stored as raw seconds, display as MM:SS
+  if (
+    ['atk_time_avg', 'def_time_avg', 'pp_time_avg', 'sh_time_avg'].includes(key)
+  ) {
+    return secondsToMMSS(Number(v));
+  }
   return String(v);
 }
 
@@ -289,67 +1545,150 @@ function streakColor(streak) {
   return '#87CEEB';
 }
 
+// ─── Team logo component ──────────────────────────────────────────────────
+function TeamLogo({ code }) {
+  const [err, setErr] = useState(false);
+  if (!code) return null;
+  return err ? (
+    <div className="td-team-logo-fb">{code.slice(0, 3)}</div>
+  ) : (
+    <img
+      src={`/assets/teamLogos/${code}.png`}
+      alt={code}
+      className="td-team-logo"
+      onError={() => setErr(true)}
+    />
+  );
+}
+
 // ─── Shared table renderer ────────────────────────────────────────────────
-function StatsTable({ cols, rows, sortKey, sortDir, onSort, isAllSeasons, mgrMeta, isH2H }) {
+function StatsTable({
+  cols,
+  rows,
+  sortKey,
+  sortDir,
+  onSort,
+  isAllSeasons,
+  mgrMeta,
+  isH2H,
+  isTeam,
+}) {
   const groupSpans = useMemo(() => {
-    const out=[]; let cur=null, span=0;
+    const out = [];
+    let cur = null,
+      span = 0;
     for (const c of cols) {
-      if (c.group!==cur) { if(cur!==null) out.push({group:cur,span}); cur=c.group; span=1; }
-      else span++;
+      if (c.group !== cur) {
+        if (cur !== null) out.push({ group: cur, span });
+        cur = c.group;
+        span = 1;
+      } else span++;
     }
-    if (cur!==null) out.push({group:cur,span});
+    if (cur !== null) out.push({ group: cur, span });
     return out;
   }, [cols]);
 
   const isFirstInGroup = useMemo(() => {
-    const s=new Set(); let prev=null;
-    for (const c of cols) { if(c.group!==prev){s.add(c.key);prev=c.group;} }
+    const s = new Set();
+    let prev = null;
+    for (const c of cols) {
+      if (c.group !== prev) {
+        s.add(c.key + '-' + c.group);
+        prev = c.group;
+      }
+    }
     return s;
   }, [cols]);
 
   const maxVals = useMemo(() => {
-    const mv={};
+    const mv = {};
     for (const c of cols) {
-      if (!['rank','mgr','opp','champs','streak'].includes(c.key)) {
-        const vals = rows.map(r=>Number(r[c.key]||0)).filter(isFinite);
-        mv[c.key] = vals.length ? Math.max(...vals) : 1;
+      if (!['rank', 'mgr', 'opp', 'team', 'champs', 'streak'].includes(c.key)) {
+        const vals = rows.map((r) => Number(r[c.key] || 0)).filter(isFinite);
+        mv[c.key + '-' + c.group] = vals.length ? Math.max(...vals) : 1;
       }
     }
     return mv;
   }, [rows, cols]);
 
+  // Sticky col indices for team tab: rank (0) and team (1)
+  // We use a ref on the table and measure actual th widths after render
+  const tableRef = useRef(null);
+  const [stickyLeftPx, setStickyLeftPx] = useState([0, 0]);
+  useEffect(() => {
+    if (!isTeam || !tableRef.current) return;
+    const ths = tableRef.current.querySelectorAll('thead tr:last-child th');
+    if (ths.length >= 2) {
+      const w0 = ths[0].getBoundingClientRect().width;
+      setStickyLeftPx([0, w0]);
+    }
+  });
+
+  const stickyLeft = useMemo(() => {
+    if (!isTeam) return new Map();
+    const m = new Map();
+    m.set(0, stickyLeftPx[0]);
+    m.set(1, stickyLeftPx[1]);
+    return m;
+  }, [isTeam, stickyLeftPx]);
+
   return (
-    <table className="sp-table">
+    <table ref={tableRef} className="sp-table">
       <thead>
         <tr>
-          {groupSpans.map(({group,span},i) => {
-            const g = GROUPS[group]||{};
+          {groupSpans.map(({ group, span }, i) => {
+            const g = GROUPS[group] || {};
+            const isCore = group === 'core';
             return (
-              <th key={i} colSpan={span} className="sp-gh"
-                style={{background:g.groupBg,color:g.groupText,borderLeft:i>0?g.borderLeft:'none'}}
-              >{g.label}</th>
+              <th
+                key={i}
+                colSpan={span}
+                className={`sp-gh${isCore && isTeam ? ' sticky-gh' : ''}`}
+                style={{
+                  background: g.groupBg,
+                  color: g.groupText,
+                  borderLeft: i > 0 ? g.borderLeft : 'none',
+                  ...(isCore && isTeam
+                    ? { position: 'sticky', left: 0, zIndex: 12 }
+                    : {}),
+                }}
+              >
+                {g.label}
+              </th>
             );
           })}
         </tr>
         <tr>
-          {cols.map(col => {
-            const g = GROUPS[col.group]||{};
-            const active = sortKey===col.key;
-            const first = isFirstInGroup.has(col.key);
+          {cols.map((col, ci) => {
+            const g = GROUPS[col.group] || {};
+            const active = sortKey === col.key;
+            const uniqKey = col.key + '-' + col.group;
+            const first = isFirstInGroup.has(uniqKey);
+            const isSticky = isTeam && (ci === 0 || ci === 1);
+            const sLeft = isSticky ? stickyLeft.get(ci) : undefined;
             return (
-              <th key={col.key}
-                className={`sp-th${col.sortable?' sortable':''}${active?' active':''}`}
+              <th
+                key={uniqKey}
+                className={`sp-th${col.sortable ? ' sortable' : ''}${
+                  active ? ' active' : ''
+                }${isSticky ? ' sticky-col' : ''}`}
                 style={{
-                  background: active?'rgba(255,180,0,0.18)':g.headerBg,
+                  background: active ? 'rgba(255,180,0,0.18)' : g.headerBg,
                   textAlign: col.align,
-                  borderLeft: first&&col.group!=='core'?g.borderLeft:'none',
+                  borderLeft:
+                    first && col.group !== 'core' ? g.borderLeft : 'none',
+                  ...(isSticky
+                    ? { position: 'sticky', left: sLeft, zIndex: 11 }
+                    : {}),
                 }}
                 onClick={() => col.sortable && onSort(col.key)}
                 title={col.tip}
               >
                 {col.label}
                 {col.sortable && (
-                  <span className="sort-icon">{active?(sortDir==='desc'?' ▼':' ▲'):' ⇅'}</span>
+                  <span className="sort-icon">
+                    {active ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}
+                  </span>
                 )}
               </th>
             );
@@ -358,86 +1697,167 @@ function StatsTable({ cols, rows, sortKey, sortDir, onSort, isAllSeasons, mgrMet
       </thead>
       <tbody>
         {rows.map((row, idx) => {
-          const nameKey   = isH2H ? row.oppNorm : row.normKey;
-          const meta      = mgrMeta.get(nameKey);
+          const nameKey = isH2H ? row.oppNorm : isTeam ? row.team : row.normKey;
+          const meta = isTeam ? null : mgrMeta.get(nameKey);
           const displayName = isH2H
-            ? (meta?.displayName || row.oppDisplay || row.oppNorm)
-            : (meta?.displayName || row._displayName || row.normKey);
-          const discordName  = meta?.discordName || null;
-          const discordIsSame = discordName && norm(discordName)===norm(displayName);
+            ? meta?.displayName || row.oppDisplay || row.oppNorm
+            : isTeam
+            ? row.team
+            : meta?.displayName || row._displayName || row.normKey;
+          const discordName = meta?.discordName || null;
+          const discordIsSame =
+            discordName && norm(discordName) === norm(displayName);
 
           return (
-            <tr key={isH2H ? row.oppNorm : row.mgr} className={`sp-row ${idx%2===0?'sp-even':'sp-odd'}`}>
-              {cols.map(col => {
-                const cellKey = isH2H ? col.key : col.key;
-                const raw  = col.key==='rank' ? idx+1 : row[col.key];
-                const num  = Number(raw);
-                const g    = GROUPS[col.group]||{};
-                const mx   = maxVals[col.key]||1;
-                const first= isFirstInGroup.has(col.key);
-                const isSorted = sortKey===col.key;
+            <tr
+              key={isH2H ? row.oppNorm : isTeam ? row.team : row.mgr}
+              className={`sp-row ${idx % 2 === 0 ? 'sp-even' : 'sp-odd'}`}
+            >
+              {cols.map((col, ci) => {
+                const uniqKey = col.key + '-' + col.group;
+                const raw = col.key === 'rank' ? idx + 1 : row[col.key];
+                const num = Number(raw);
+                const g = GROUPS[col.group] || {};
+                const mx = maxVals[uniqKey] || 1;
+                const first = isFirstInGroup.has(uniqKey);
+                const isSorted = sortKey === col.key;
+                const isSticky = isTeam && (ci === 0 || ci === 1);
+                const sLeft = isSticky ? stickyLeft.get(ci) : undefined;
 
-                let heatBg = g.cellBg;
-                if (isFinite(num) && !['rank','mgr','opp','champs','streak'].includes(col.key)) {
-                  const pct = Math.min(Math.abs(num)/mx, 1);
-                  if (LOSS_KEYS.has(col.key) && num>0)
-                    heatBg = `rgba(255,55,55,${(pct*0.22).toFixed(3)})`;
-                  else if (!LOSS_KEYS.has(col.key) && pct>0.7)
-                    heatBg = `rgba(255,210,0,${((pct-0.7)*0.65).toFixed(3)})`;
+                const lossKeys = isTeam ? TEAM_LOSS_KEYS : LOSS_KEYS;
+
+                let heatBg = isSticky
+                  ? idx % 2 === 0
+                    ? '#07071e'
+                    : '#050510'
+                  : g.cellBg;
+                if (
+                  !isSticky &&
+                  isFinite(num) &&
+                  !['rank', 'mgr', 'opp', 'team', 'champs', 'streak'].includes(
+                    col.key
+                  )
+                ) {
+                  const pct = Math.min(Math.abs(num) / mx, 1);
+                  if (lossKeys.has(col.key) && num > 0)
+                    heatBg = `rgba(255,55,55,${(pct * 0.22).toFixed(3)})`;
+                  else if (!lossKeys.has(col.key) && pct > 0.7)
+                    heatBg = `rgba(255,210,0,${((pct - 0.7) * 0.65).toFixed(
+                      3
+                    )})`;
                 }
 
-                const nameColKey = isH2H ? 'opp' : 'mgr';
+                const nameColKey = isH2H ? 'opp' : isTeam ? 'team' : 'mgr';
 
                 return (
-                  <td key={col.key}
-                    className={`sp-td${isSorted?' sorted':''}`}
+                  <td
+                    key={uniqKey}
+                    className={`sp-td${isSorted ? ' sorted' : ''}${
+                      isSticky ? ' sticky-col sticky-td' : ''
+                    }`}
                     style={{
                       textAlign: col.align,
                       background: heatBg,
-                      borderLeft: first&&col.group!=='core'?g.borderLeft:'none',
+                      borderLeft:
+                        first && col.group !== 'core' ? g.borderLeft : 'none',
+                      ...(isSticky
+                        ? { position: 'sticky', left: sLeft, zIndex: 2 }
+                        : {}),
                     }}
                   >
-                    {col.key===nameColKey ? (
+                    {col.key === nameColKey && isTeam ? (
+                      <div className="td-team">
+                        <TeamLogo code={row.team} />
+                        <span className="td-teamcode">{row.team}</span>
+                      </div>
+                    ) : col.key === nameColKey && !isTeam ? (
                       <div className="td-mgr">
                         {meta?.avatar_url ? (
-                          <img src={meta.avatar_url} alt="" className="td-avatar"
-                            onError={e=>{e.currentTarget.style.display='none';}}/>
+                          <img
+                            src={meta.avatar_url}
+                            alt=""
+                            className="td-avatar"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                         ) : (
                           <div className="td-avatar-fb">
-                            {displayName.replace(/\s+/g,'').slice(0,2).toUpperCase()}
+                            {displayName
+                              .replace(/\s+/g, '')
+                              .slice(0, 2)
+                              .toUpperCase()}
                           </div>
                         )}
                         <div className="td-mgr-names">
                           <span className="td-mgrname">{displayName}</span>
                           {discordName && (
-                            <span className="td-discord" style={{opacity:discordIsSame?0.3:0.85}}>
+                            <span
+                              className="td-discord"
+                              style={{ opacity: discordIsSame ? 0.3 : 0.85 }}
+                            >
                               @{discordName}
                             </span>
                           )}
                         </div>
                       </div>
-                    ) : col.key==='rank' ? (
+                    ) : col.key === 'rank' ? (
                       <span className="td-rank">{raw}</span>
-                    ) : col.key==='streak' ? (
-                      <span className="td-val" style={{color:streakColor(raw),textShadow:streakColor(raw)?`0 0 8px ${streakColor(raw)}44`:undefined,fontWeight:'bold'}}>
+                    ) : col.key === 'streak' ? (
+                      <span
+                        className="td-val"
+                        style={{
+                          color: streakColor(raw),
+                          textShadow: streakColor(raw)
+                            ? `0 0 8px ${streakColor(raw)}44`
+                            : undefined,
+                          fontWeight: 'bold',
+                        }}
+                      >
                         {fmtVal(raw, col.key, isAllSeasons)}
                       </span>
-                    ) : col.key==='longW' ? (
-                      <span className="td-val" style={{color: Number(raw)>0?'#00DD55':undefined, textShadow: Number(raw)>0?'0 0 8px rgba(0,221,85,.4)':undefined}}>
+                    ) : col.key === 'longW' ? (
+                      <span
+                        className="td-val"
+                        style={{
+                          color: Number(raw) > 0 ? '#00DD55' : undefined,
+                          textShadow:
+                            Number(raw) > 0
+                              ? '0 0 8px rgba(0,221,85,.4)'
+                              : undefined,
+                        }}
+                      >
                         {fmtVal(raw, col.key, isAllSeasons)}
                       </span>
-                    ) : col.key==='longL' ? (
-                      <span className="td-val" style={{color: Number(raw)>0?'#FF5555':undefined, textShadow: Number(raw)>0?'0 0 8px rgba(255,85,85,.3)':undefined}}>
+                    ) : col.key === 'longL' ? (
+                      <span
+                        className="td-val"
+                        style={{
+                          color: Number(raw) > 0 ? '#FF5555' : undefined,
+                          textShadow:
+                            Number(raw) > 0
+                              ? '0 0 8px rgba(255,85,85,.3)'
+                              : undefined,
+                        }}
+                      >
                         {fmtVal(raw, col.key, isAllSeasons)}
                       </span>
-                    ) : col.key==='champs' ? (
-                      <span className={`td-val${raw?' td-champ':''}`}>
+                    ) : col.key === 'champs' ? (
+                      <span className={`td-val${raw ? ' td-champ' : ''}`}>
                         {fmtVal(raw, col.key, isAllSeasons)}
                       </span>
-                    ) : col.key==='pct' ? (
-                      <span className={`td-val${num>=0.65?' great':''}`}>{fmtVal(raw, col.key)}</span>
-                    ) : col.key==='diff' ? (
-                      <span className={`td-val${num>0?' pos':num<0?' neg':''}`}>{fmtVal(raw, col.key)}</span>
+                    ) : col.key === 'pct' ? (
+                      <span className={`td-val${num >= 0.65 ? ' great' : ''}`}>
+                        {fmtVal(raw, col.key)}
+                      </span>
+                    ) : col.key === 'diff' || col.key === 'shot_diff' ? (
+                      <span
+                        className={`td-val${
+                          num > 0 ? ' pos' : num < 0 ? ' neg' : ''
+                        }`}
+                      >
+                        {fmtVal(raw, col.key)}
+                      </span>
                     ) : (
                       <span className="td-val">{fmtVal(raw, col.key)}</span>
                     )}
@@ -456,33 +1876,47 @@ function StatsTable({ cols, rows, sortKey, sortDir, onSort, isAllSeasons, mgrMet
 export default function Stats() {
   const { selectedLeague } = useLeague();
 
-  const [tab,           setTab]         = useState('managers');
-  const [allSeasons,    setAllSeasons]  = useState([]);
-  const [seasonFilter,  setSeasonFilter]= useState('ALL');
-  const [modeFilter,    setModeFilter]  = useState('ALL');
-  const [allGames,      setAllGames]    = useState([]);
-  const [managers,      setManagers]    = useState([]);
-  const [champData,     setChampData]   = useState({ allSeasonsMap: new Map(), perSeasonMap: new Map() });
-  const [loading,       setLoading]     = useState(true);
-  const [modeValues,    setModeValues]  = useState([]);
+  const [tab, setTab] = useState('managers');
+  const [allSeasons, setAllSeasons] = useState([]);
+  const [seasonFilter, setSeasonFilter] = useState('ALL');
+  const [modeFilter, setModeFilter] = useState('ALL');
+  const [allGames, setAllGames] = useState([]);
+  const [managers, setManagers] = useState([]);
+  const [champData, setChampData] = useState({
+    allSeasonsMap: new Map(),
+    perSeasonMap: new Map(),
+  });
+  const [loading, setLoading] = useState(true);
+  const [modeValues, setModeValues] = useState([]);
 
   // H2H state
-  const [h2hMgrA,  setH2hMgrA]  = useState('');
-  const [h2hMgrB,  setH2hMgrB]  = useState('ALL');
+  const [h2hMgrA, setH2hMgrA] = useState('');
+  const [h2hMgrB, setH2hMgrB] = useState('ALL');
 
-  const [sort,      dispatchSort] = useState({ key:'pct', dir:'desc' });
-  const [h2hSort,   dispatchH2hSort] = useState({ key:'pct', dir:'desc' });
+  // Team stats state
+  const [teamStatsData, setTeamStatsData] = useState([]);
+  const [teamStatsLoading, setTeamStatsLoading] = useState(false);
+  const [teamSeasonFilter, setTeamSeasonFilter] = useState(''); // default to most recent
 
-  const sortKey = sort.key; const sortDir = sort.dir;
-  const h2hSortKey = h2hSort.key; const h2hSortDir = h2hSort.dir;
+  const [sort, dispatchSort] = useState({ key: 'pct', dir: 'desc' });
+  const [h2hSort, dispatchH2hSort] = useState({ key: 'pct', dir: 'desc' });
+  const [teamSort, dispatchTeamSort] = useState({ key: 'gf', dir: 'desc' });
+
+  const sortKey = sort.key;
+  const sortDir = sort.dir;
+  const h2hSortKey = h2hSort.key;
+  const h2hSortDir = h2hSort.dir;
+  const teamSortKey = teamSort.key;
+  const teamSortDir = teamSort.dir;
 
   // ── Fetch managers ───────────────────────────────────────────────────────
   useEffect(() => {
-    supabase.from('managers')
+    supabase
+      .from('managers')
       .select('id,coach_name,discord_id,discord_username,discord_url')
       .then(({ data, error }) => {
         if (error) console.warn('[Stats] managers error:', error.message);
-        setManagers(data||[]);
+        setManagers(data || []);
       });
   }, []);
 
@@ -492,8 +1926,8 @@ export default function Stats() {
       if (!mgr.coach_name) continue;
       m.set(norm(mgr.coach_name), {
         displayName: mgr.coach_name,
-        discordName: (mgr.discord_username||'').trim() || null,
-        avatar_url:  mgr.discord_url || null,
+        discordName: (mgr.discord_username || '').trim() || null,
+        avatar_url: mgr.discord_url || null,
       });
     }
     return m;
@@ -501,33 +1935,53 @@ export default function Stats() {
 
   // ── Fetch all games ──────────────────────────────────────────────────────
   useEffect(() => {
-    setLoading(true); setAllGames([]); setModeValues([]);
-    supabase.from('games')
-      .select('id,lg,mode,home,away,coach_home,coach_away,score_home,score_away,ot')
+    setLoading(true);
+    setAllGames([]);
+    setModeValues([]);
+    supabase
+      .from('games')
+      .select(
+        'id,lg,mode,home,away,coach_home,coach_away,score_home,score_away,ot'
+      )
       .then(({ data, error }) => {
-        if (error) { console.error('[Stats] games error:', error.message); setLoading(false); return; }
-        const rows = data||[];
+        if (error) {
+          console.error('[Stats] games error:', error.message);
+          setLoading(false);
+          return;
+        }
+        const rows = data || [];
         setAllGames(rows);
-        setModeValues([...new Set(rows.map(g=>g.mode).filter(Boolean))]);
+        setModeValues([...new Set(rows.map((g) => g.mode).filter(Boolean))]);
         setLoading(false);
       });
   }, []);
 
   const leagueGames = useMemo(() => {
-    if (!selectedLeague||!allGames.length) return [];
-    return allGames.filter(g=>g.lg&&lgPrefix(g.lg)===selectedLeague);
+    if (!selectedLeague || !allGames.length) return [];
+    return allGames.filter((g) => g.lg && lgPrefix(g.lg) === selectedLeague);
   }, [allGames, selectedLeague]);
 
   useEffect(() => {
     setSeasonFilter('ALL');
-    if (!leagueGames.length) { setAllSeasons([]); return; }
-    const codes = [...new Set(leagueGames.map(g=>g.lg).filter(Boolean))];
-    codes.sort((a,b) => {
-      const na=parseInt(a.replace(/\D/g,''),10)||0, nb=parseInt(b.replace(/\D/g,''),10)||0;
-      return nb-na;
+    if (!leagueGames.length) {
+      setAllSeasons([]);
+      return;
+    }
+    const codes = [...new Set(leagueGames.map((g) => g.lg).filter(Boolean))];
+    codes.sort((a, b) => {
+      const na = parseInt(a.replace(/\D/g, ''), 10) || 0,
+        nb = parseInt(b.replace(/\D/g, ''), 10) || 0;
+      return nb - na;
     });
     setAllSeasons(codes);
   }, [leagueGames]);
+
+  // ── Default teamSeasonFilter to most recent season ───────────────────────
+  useEffect(() => {
+    if (allSeasons.length > 0 && !teamSeasonFilter) {
+      setTeamSeasonFilter(allSeasons[0]);
+    }
+  }, [allSeasons]);
 
   // ── Championships ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -538,14 +1992,18 @@ export default function Stats() {
       .in('lg', allSeasons)
       .not('season_champion_manager_id', 'is', null)
       .then(({ data: sd, error }) => {
-        if (error) { console.warn('[Stats] seasons champ error:', error.message); return; }
-        // Build manager id → norm coach name from already-loaded managers list
+        if (error) {
+          console.warn('[Stats] seasons champ error:', error.message);
+          return;
+        }
         const idToNorm = new Map();
         for (const mgr of managers) {
-          if (mgr.id && mgr.coach_name) idToNorm.set(mgr.id, norm(mgr.coach_name));
+          if (mgr.id && mgr.coach_name)
+            idToNorm.set(mgr.id, norm(mgr.coach_name));
         }
-        const allMap = new Map(), perMap = new Map();
-        for (const s of (sd || [])) {
+        const allMap = new Map(),
+          perMap = new Map();
+        for (const s of sd || []) {
           const ck = idToNorm.get(s.season_champion_manager_id);
           if (!ck) continue;
           allMap.set(ck, (allMap.get(ck) || 0) + 1);
@@ -565,41 +2023,101 @@ export default function Stats() {
   // ── Filtered games ───────────────────────────────────────────────────────
   const filteredGames = useMemo(() => {
     if (!leagueGames.length) return [];
-    let r = isAllSeasons ? leagueGames : leagueGames.filter(g=>g.lg===seasonFilter);
-    if (modeFilter==='SEASON')   r = r.filter(g=>SEASON_VALS.has((g.mode||'').trim().toUpperCase()));
-    if (modeFilter==='PLAYOFFS') r = r.filter(g=>PLAYOFF_VALS.has((g.mode||'').trim().toUpperCase()));
+    let r = isAllSeasons
+      ? leagueGames
+      : leagueGames.filter((g) => g.lg === seasonFilter);
+    if (modeFilter === 'SEASON')
+      r = r.filter((g) => SEASON_VALS.has((g.mode || '').trim().toUpperCase()));
+    if (modeFilter === 'PLAYOFFS')
+      r = r.filter((g) =>
+        PLAYOFF_VALS.has((g.mode || '').trim().toUpperCase())
+      );
     return r;
   }, [leagueGames, seasonFilter, isAllSeasons, modeFilter]);
 
+  // ── Fetch team stats from game_stats_team ────────────────────────────────
+  useEffect(() => {
+    if (tab !== 'teams' || !teamSeasonFilter || !selectedLeague) return;
+    setTeamStatsLoading(true);
+    setTeamStatsData([]);
+
+    // season field in game_stats_team is like "W16" — match the season code directly
+    // We fetch by season value, case-insensitive handled by ilike
+    supabase
+      .from('game_stats_team')
+      .select('*')
+      .ilike('season', teamSeasonFilter)
+      .then(({ data, error }) => {
+        if (error) {
+          console.error('[Stats] game_stats_team error:', error.message);
+          setTeamStatsLoading(false);
+          return;
+        }
+
+        // Also filter by mode if needed
+        let rows = data || [];
+        if (modeFilter === 'SEASON')
+          rows = rows.filter((g) =>
+            SEASON_VALS.has((g.type || '').trim().toUpperCase())
+          );
+        if (modeFilter === 'PLAYOFFS')
+          rows = rows.filter((g) =>
+            PLAYOFF_VALS.has((g.type || '').trim().toUpperCase())
+          );
+
+        setTeamStatsData(rows);
+        setTeamStatsLoading(false);
+      });
+  }, [tab, teamSeasonFilter, selectedLeague, modeFilter]);
+
   // ── Sort handlers ────────────────────────────────────────────────────────
   const handleSort = useCallback((key) => {
-    if (!key||key==='rank') return;
-    dispatchSort(prev => prev.key===key
-      ? { key, dir: prev.dir==='desc'?'asc':'desc' }
-      : { key, dir: ASC_DEFAULT.has(key)?'asc':'desc' });
+    if (!key || key === 'rank') return;
+    dispatchSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
+        : { key, dir: ASC_DEFAULT.has(key) ? 'asc' : 'desc' }
+    );
   }, []);
 
   const handleH2hSort = useCallback((key) => {
-    if (!key||key==='rank') return;
-    dispatchH2hSort(prev => prev.key===key
-      ? { key, dir: prev.dir==='desc'?'asc':'desc' }
-      : { key, dir: ASC_DEFAULT.has(key)?'asc':'desc' });
+    if (!key || key === 'rank') return;
+    dispatchH2hSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
+        : { key, dir: ASC_DEFAULT.has(key) ? 'asc' : 'desc' }
+    );
   }, []);
 
-  useEffect(() => { dispatchSort({ key:'pct', dir:'desc' }); }, [tab]);
-  useEffect(() => { dispatchH2hSort({ key:'pct', dir:'desc' }); }, [tab]);
+  const handleTeamSort = useCallback((key) => {
+    if (!key || key === 'rank') return;
+    dispatchTeamSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === 'desc' ? 'asc' : 'desc' }
+        : { key, dir: TEAM_LOSS_KEYS.has(key) ? 'asc' : 'desc' }
+    );
+  }, []);
+
+  useEffect(() => {
+    dispatchSort({ key: 'pct', dir: 'desc' });
+  }, [tab]);
+  useEffect(() => {
+    dispatchH2hSort({ key: 'pct', dir: 'desc' });
+  }, [tab]);
+  useEffect(() => {
+    dispatchTeamSort({ key: 'gf', dir: 'desc' });
+  }, [tab]);
 
   // ── Manager list for H2H dropdowns ──────────────────────────────────────
   const h2hManagerList = useMemo(() => {
     const coaches = new Set();
     for (const g of filteredGames) {
-      if (g.coach_home) coaches.add((g.coach_home).trim());
-      if (g.coach_away) coaches.add((g.coach_away).trim());
+      if (g.coach_home) coaches.add(g.coach_home.trim());
+      if (g.coach_away) coaches.add(g.coach_away.trim());
     }
-    return [...coaches].sort((a,b) => a.localeCompare(b));
+    return [...coaches].sort((a, b) => a.localeCompare(b));
   }, [filteredGames]);
 
-  // Reset mgrA if they disappear from filtered games
   useEffect(() => {
     if (h2hMgrA && !h2hManagerList.map(norm).includes(norm(h2hMgrA))) {
       setH2hMgrA('');
@@ -613,12 +2131,19 @@ export default function Stats() {
   }, [filteredGames, champMap]);
 
   const sortedManagerRows = useMemo(() => {
-    return [...managerRows].sort((a,b) => {
-      let av=a[sortKey], bv=b[sortKey];
-      if (sortKey==='champs') { av=av==null?-1:(av===true?1:Number(av)); bv=bv==null?-1:(bv===true?1:Number(bv)); }
-      if (typeof av==='string') { av=av.toLowerCase(); bv=(bv||'').toLowerCase(); }
-      if (av===bv) return 0;
-      return (av>bv?1:-1)*(sortDir==='desc'?-1:1);
+    return [...managerRows].sort((a, b) => {
+      let av = a[sortKey],
+        bv = b[sortKey];
+      if (sortKey === 'champs') {
+        av = av == null ? -1 : av === true ? 1 : Number(av);
+        bv = bv == null ? -1 : bv === true ? 1 : Number(bv);
+      }
+      if (typeof av === 'string') {
+        av = av.toLowerCase();
+        bv = (bv || '').toLowerCase();
+      }
+      if (av === bv) return 0;
+      return (av > bv ? 1 : -1) * (sortDir === 'desc' ? -1 : 1);
     });
   }, [managerRows, sortKey, sortDir]);
 
@@ -631,14 +2156,36 @@ export default function Stats() {
   }, [filteredGames, h2hMgrA, h2hMgrB]);
 
   const sortedH2hRows = useMemo(() => {
-    return [...h2hRows].sort((a,b) => {
-      let av = h2hSortKey==='streak' ? a._streakVal : a[h2hSortKey];
-      let bv = h2hSortKey==='streak' ? b._streakVal : b[h2hSortKey];
-      if (typeof av==='string') { av=av.toLowerCase(); bv=(bv||'').toLowerCase(); }
-      if (av===bv) return 0;
-      return (av>bv?1:-1)*(h2hSortDir==='desc'?-1:1);
+    return [...h2hRows].sort((a, b) => {
+      let av = h2hSortKey === 'streak' ? a._streakVal : a[h2hSortKey];
+      let bv = h2hSortKey === 'streak' ? b._streakVal : b[h2hSortKey];
+      if (typeof av === 'string') {
+        av = av.toLowerCase();
+        bv = (bv || '').toLowerCase();
+      }
+      if (av === bv) return 0;
+      return (av > bv ? 1 : -1) * (h2hSortDir === 'desc' ? -1 : 1);
     });
   }, [h2hRows, h2hSortKey, h2hSortDir]);
+
+  // ── Team rows ─────────────────────────────────────────────────────────────
+  const teamRows = useMemo(() => {
+    if (!teamStatsData.length) return [];
+    return buildTeamStats(teamStatsData);
+  }, [teamStatsData]);
+
+  const sortedTeamRows = useMemo(() => {
+    return [...teamRows].sort((a, b) => {
+      let av = a[teamSortKey],
+        bv = b[teamSortKey];
+      if (typeof av === 'string') {
+        av = av.toLowerCase();
+        bv = (bv || '').toLowerCase();
+      }
+      if (av === bv) return 0;
+      return (av > bv ? 1 : -1) * (teamSortDir === 'desc' ? -1 : 1);
+    });
+  }, [teamRows, teamSortKey, teamSortDir]);
 
   const hasModeData = modeValues.length > 0;
 
@@ -655,18 +2202,66 @@ export default function Stats() {
 
       {/* ── Tabs ── */}
       <div className="sp-tabs">
-        <div style={{display:'flex',gap:'.5rem',alignItems:'flex-end',flex:1}}>
-          <button className={`sp-tab ${tab==='managers'?'on':''}`} onClick={()=>setTab('managers')}>👔 MANAGERS</button>
-          <button className={`sp-tab ${tab==='h2h'?'on':''}`}      onClick={()=>setTab('h2h')}>⚔️ H2H</button>
-          <button className={`sp-tab ${tab==='players'?'on':''}`}  onClick={()=>setTab('players')}>🏒 PLAYERS</button>
+        <div
+          style={{
+            display: 'flex',
+            gap: '.5rem',
+            alignItems: 'flex-end',
+            flex: 1,
+          }}
+        >
+          <button
+            className={`sp-tab ${tab === 'managers' ? 'on' : ''}`}
+            onClick={() => setTab('managers')}
+          >
+            👔 MANAGERS
+          </button>
+          <button
+            className={`sp-tab ${tab === 'h2h' ? 'on' : ''}`}
+            onClick={() => setTab('h2h')}
+          >
+            ⚔️ H2H
+          </button>
+          <button
+            className={`sp-tab ${tab === 'teams' ? 'on' : ''}`}
+            onClick={() => setTab('teams')}
+          >
+            🏒 TEAMS
+          </button>
+          <button
+            className={`sp-tab ${tab === 'players' ? 'on' : ''}`}
+            onClick={() => setTab('players')}
+          >
+            👤 PLAYERS
+          </button>
         </div>
-        {((tab==='managers'&&sortedManagerRows.length>0)||(tab==='h2h'&&sortedH2hRows.length>0)) && (
+        {((tab === 'managers' && sortedManagerRows.length > 0) ||
+          (tab === 'h2h' && sortedH2hRows.length > 0) ||
+          (tab === 'teams' && sortedTeamRows.length > 0)) && (
           <div className="sp-legend-inline">
-            <div className="leg-item"><span className="leg-sw" style={{background:'rgba(255,210,0,.38)',border:'1px solid rgba(255,215,0,.6)'}}/>BEST</div>
-            <div className="leg-item"><span className="leg-sw" style={{background:'rgba(255,55,55,.32)',border:'1px solid rgba(255,80,80,.5)'}}/>WORST</div>
+            <div className="leg-item">
+              <span
+                className="leg-sw"
+                style={{
+                  background: 'rgba(255,210,0,.38)',
+                  border: '1px solid rgba(255,215,0,.6)',
+                }}
+              />
+              BEST
+            </div>
+            <div className="leg-item">
+              <span
+                className="leg-sw"
+                style={{
+                  background: 'rgba(255,55,55,.32)',
+                  border: '1px solid rgba(255,80,80,.5)',
+                }}
+              />
+              WORST
+            </div>
           </div>
         )}
-        <div className="sp-tabs-line"/>
+        <div className="sp-tabs-line" />
       </div>
 
       {/* ── Filters ── */}
@@ -675,42 +2270,109 @@ export default function Stats() {
           <div className="sf-group">
             <span className="sf-lbl">MODE</span>
             <div className="sf-btns">
-              {['ALL','SEASON','PLAYOFFS'].map(mo => (
-                <button key={mo}
-                  className={`sf-btn ${modeFilter===mo?'sf-on':''}${!hasModeData&&mo!=='ALL'?' sf-dim':''}`}
+              {['ALL', 'SEASON', 'PLAYOFFS'].map((mo) => (
+                <button
+                  key={mo}
+                  className={`sf-btn ${
+                    (tab === 'teams' ? modeFilter : modeFilter) === mo
+                      ? 'sf-on'
+                      : ''
+                  }${!hasModeData && mo !== 'ALL' ? ' sf-dim' : ''}`}
                   onClick={() => setModeFilter(mo)}
-                >{mo}</button>
+                >
+                  {mo}
+                </button>
               ))}
             </div>
           </div>
-          <div className="sf-group">
-            <span className="sf-lbl">SEASON</span>
-            <div className="sf-sel-wrap">
-              <select className="sf-sel" value={seasonFilter} onChange={e=>setSeasonFilter(e.target.value)}>
-                <option value="ALL">ALL SEASONS</option>
-                {allSeasons.map(s=><option key={s} value={s}>{s}</option>)}
-              </select>
-              <span className="sf-caret">▾</span>
+
+          {/* Season filter — hidden for Teams tab (Teams uses its own selector) */}
+          {tab !== 'teams' && (
+            <div className="sf-group">
+              <span className="sf-lbl">SEASON</span>
+              <div className="sf-sel-wrap">
+                <select
+                  className="sf-sel"
+                  value={seasonFilter}
+                  onChange={(e) => setSeasonFilter(e.target.value)}
+                >
+                  <option value="ALL">ALL SEASONS</option>
+                  {allSeasons.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <span className="sf-caret">▾</span>
+              </div>
             </div>
-          </div>
-          {tab==='managers' && !loading && sortedManagerRows.length>0 && (
-            <div className="sf-count">{filteredGames.length.toLocaleString()} GAMES · {sortedManagerRows.length} COACHES</div>
           )}
-          {tab==='h2h' && h2hMgrA && sortedH2hRows.length>0 && (
-            <div className="sf-count">{sortedH2hRows.reduce((s,r)=>s+r.gp,0)} GAMES · {sortedH2hRows.length} OPPONENTS</div>
+
+          {/* Team tab season selector */}
+          {tab === 'teams' && (
+            <div className="sf-group">
+              <span className="sf-lbl">SEASON</span>
+              <div className="sf-sel-wrap">
+                <select
+                  className="sf-sel"
+                  value={teamSeasonFilter}
+                  onChange={(e) => setTeamSeasonFilter(e.target.value)}
+                >
+                  {allSeasons.length === 0 && (
+                    <option value="">— NO SEASONS —</option>
+                  )}
+                  {allSeasons.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+                <span className="sf-caret">▾</span>
+              </div>
+            </div>
+          )}
+
+          {tab === 'managers' && !loading && sortedManagerRows.length > 0 && (
+            <div className="sf-count">
+              {filteredGames.length.toLocaleString()} GAMES ·{' '}
+              {sortedManagerRows.length} COACHES
+            </div>
+          )}
+          {tab === 'h2h' && h2hMgrA && sortedH2hRows.length > 0 && (
+            <div className="sf-count">
+              {sortedH2hRows.reduce((s, r) => s + r.gp, 0)} GAMES ·{' '}
+              {sortedH2hRows.length} OPPONENTS
+            </div>
+          )}
+          {tab === 'teams' && sortedTeamRows.length > 0 && (
+            <div className="sf-count">
+              {teamStatsData.length.toLocaleString()} GAMES ·{' '}
+              {sortedTeamRows.length} TEAMS
+            </div>
           )}
         </div>
       </div>
 
-      {/* ── H2H dropdowns (only shown on h2h tab) ── */}
-      {tab==='h2h' && (
+      {/* ── H2H dropdowns ── */}
+      {tab === 'h2h' && (
         <div className="h2h-selectors">
           <div className="h2h-sel-group">
             <span className="sf-lbl">MANAGER A</span>
             <div className="sf-sel-wrap">
-              <select className="sf-sel h2h-sel" value={h2hMgrA} onChange={e=>{setH2hMgrA(e.target.value); setH2hMgrB('ALL');}}>
+              <select
+                className="sf-sel h2h-sel"
+                value={h2hMgrA}
+                onChange={(e) => {
+                  setH2hMgrA(e.target.value);
+                  setH2hMgrB('ALL');
+                }}
+              >
                 <option value="">— SELECT MANAGER —</option>
-                {h2hManagerList.map(m=><option key={m} value={m}>{m}</option>)}
+                {h2hManagerList.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
               </select>
               <span className="sf-caret">▾</span>
             </div>
@@ -719,14 +2381,20 @@ export default function Stats() {
           <div className="h2h-sel-group">
             <span className="sf-lbl">MANAGER B</span>
             <div className="sf-sel-wrap">
-              <select className="sf-sel h2h-sel" value={h2hMgrB}
-                onChange={e=>setH2hMgrB(e.target.value)}
+              <select
+                className="sf-sel h2h-sel"
+                value={h2hMgrB}
+                onChange={(e) => setH2hMgrB(e.target.value)}
                 disabled={!h2hMgrA}
               >
                 <option value="ALL">ALL OPPONENTS</option>
                 {h2hManagerList
-                  .filter(m => norm(m) !== norm(h2hMgrA))
-                  .map(m=><option key={m} value={m}>{m}</option>)}
+                  .filter((m) => norm(m) !== norm(h2hMgrA))
+                  .map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
               </select>
               <span className="sf-caret">▾</span>
             </div>
@@ -735,10 +2403,14 @@ export default function Stats() {
             <div className="h2h-headline">
               <span className="h2h-name-a">{h2hMgrA}</span>
               <span className="h2h-vs-txt">vs</span>
-              <span className="h2h-name-b">{h2hMgrB==='ALL'?'ALL OPPONENTS':h2hMgrB}</span>
-              {sortedH2hRows.length>0&&(
+              <span className="h2h-name-b">
+                {h2hMgrB === 'ALL' ? 'ALL OPPONENTS' : h2hMgrB}
+              </span>
+              {sortedH2hRows.length > 0 && (
                 <span className="h2h-record">
-                  {sortedH2hRows.reduce((s,r)=>s+r.w,0)}W–{sortedH2hRows.reduce((s,r)=>s+r.l,0)}L–{sortedH2hRows.reduce((s,r)=>s+r.t,0)}T
+                  {sortedH2hRows.reduce((s, r) => s + r.w, 0)}W–
+                  {sortedH2hRows.reduce((s, r) => s + r.l, 0)}L–
+                  {sortedH2hRows.reduce((s, r) => s + r.t, 0)}T
                 </span>
               )}
             </div>
@@ -747,27 +2419,77 @@ export default function Stats() {
       )}
 
       {/* ── Content ── */}
-      {tab==='players' ? (
+      {tab === 'players' ? (
         <div className="sp-placeholder">
-          <div style={{fontSize:50,opacity:.18}}>🏒</div>
+          <div style={{ fontSize: 50, opacity: 0.18 }}>👤</div>
           <div className="sp-ph-title">PLAYER STATS COMING SOON</div>
-          <div className="sp-ph-sub">Will appear once <code>player_stats</code> table is populated.</div>
+          <div className="sp-ph-sub">
+            Will appear once <code>player_stats</code> table is populated.
+          </div>
         </div>
-      ) : tab==='h2h' ? (
+      ) : tab === 'teams' ? (
+        <div className="sp-table-outer">
+          {teamStatsLoading ? (
+            <div className="sp-state">
+              <div className="sp-spinner" />
+              <span className="sp-state-txt">CRUNCHING NUMBERS…</span>
+            </div>
+          ) : !teamSeasonFilter ? (
+            <div className="sp-state">
+              <span style={{ fontSize: 44, opacity: 0.18 }}>🏒</span>
+              <span className="sp-state-txt">SELECT A SEASON</span>
+              <span className="sp-state-sub">
+                Team stats are displayed per season. Choose a season above to
+                load team data.
+              </span>
+            </div>
+          ) : sortedTeamRows.length === 0 ? (
+            <div className="sp-state">
+              <span style={{ fontSize: 44, opacity: 0.18 }}>📊</span>
+              <span className="sp-state-txt">NO TEAM DATA FOUND</span>
+              <span className="sp-state-sub">
+                No <code>game_stats_team</code> records found for season{' '}
+                <strong>{teamSeasonFilter}</strong>
+                {modeFilter !== 'ALL' ? ` (mode: ${modeFilter})` : ''}.
+              </span>
+            </div>
+          ) : (
+            <StatsTable
+              cols={TEAM_COLS_DEDUPED}
+              rows={sortedTeamRows}
+              sortKey={teamSortKey}
+              sortDir={teamSortDir}
+              onSort={handleTeamSort}
+              isAllSeasons={false}
+              mgrMeta={new Map()}
+              isH2H={false}
+              isTeam={true}
+            />
+          )}
+        </div>
+      ) : tab === 'h2h' ? (
         <div className="sp-table-outer">
           {loading ? (
-            <div className="sp-state"><div className="sp-spinner"/><span className="sp-state-txt">CRUNCHING NUMBERS…</span></div>
+            <div className="sp-state">
+              <div className="sp-spinner" />
+              <span className="sp-state-txt">CRUNCHING NUMBERS…</span>
+            </div>
           ) : !h2hMgrA ? (
             <div className="sp-state">
-              <span style={{fontSize:44,opacity:.18}}>⚔️</span>
+              <span style={{ fontSize: 44, opacity: 0.18 }}>⚔️</span>
               <span className="sp-state-txt">SELECT A MANAGER</span>
-              <span className="sp-state-sub">Choose Manager A to see their head-to-head record against all opponents.</span>
+              <span className="sp-state-sub">
+                Choose Manager A to see their head-to-head record against all
+                opponents.
+              </span>
             </div>
-          ) : sortedH2hRows.length===0 ? (
+          ) : sortedH2hRows.length === 0 ? (
             <div className="sp-state">
-              <span style={{fontSize:44,opacity:.18}}>📊</span>
+              <span style={{ fontSize: 44, opacity: 0.18 }}>📊</span>
               <span className="sp-state-txt">NO H2H DATA FOUND</span>
-              <span className="sp-state-sub">No games found for this combination of filters.</span>
+              <span className="sp-state-sub">
+                No games found for this combination of filters.
+              </span>
             </div>
           ) : (
             <StatsTable
@@ -779,21 +2501,27 @@ export default function Stats() {
               isAllSeasons={isAllSeasons}
               mgrMeta={mgrMeta}
               isH2H={true}
+              isTeam={false}
             />
           )}
         </div>
       ) : (
         <div className="sp-table-outer">
           {loading ? (
-            <div className="sp-state"><div className="sp-spinner"/><span className="sp-state-txt">CRUNCHING NUMBERS…</span></div>
-          ) : sortedManagerRows.length===0 ? (
             <div className="sp-state">
-              <span style={{fontSize:44,opacity:.18}}>📊</span>
+              <div className="sp-spinner" />
+              <span className="sp-state-txt">CRUNCHING NUMBERS…</span>
+            </div>
+          ) : sortedManagerRows.length === 0 ? (
+            <div className="sp-state">
+              <span style={{ fontSize: 44, opacity: 0.18 }}>📊</span>
               <span className="sp-state-txt">NO STATS FOUND</span>
               <span className="sp-state-sub">
-                {modeFilter!=='ALL'&&!filteredGames.length
-                  ?`Mode "${modeFilter}" — no games matched. DB values: ${modeValues.join(', ')}`
-                  :'Check that game data exists for this league.'}
+                {modeFilter !== 'ALL' && !filteredGames.length
+                  ? `Mode "${modeFilter}" — no games matched. DB values: ${modeValues.join(
+                      ', '
+                    )}`
+                  : 'Check that game data exists for this league.'}
               </span>
             </div>
           ) : (
@@ -806,27 +2534,83 @@ export default function Stats() {
               isAllSeasons={isAllSeasons}
               mgrMeta={mgrMeta}
               isH2H={false}
+              isTeam={false}
             />
           )}
         </div>
       )}
 
       {/* ── Legends ── */}
-      {tab==='managers'&&sortedManagerRows.length>0&&(
+      {tab === 'managers' && sortedManagerRows.length > 0 && (
         <div className="sp-legend-footer">
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.record.groupBg,borderLeft:GROUPS.record.borderLeft}}/>RECORD</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.goals.groupBg,borderLeft:GROUPS.goals.borderLeft}}/>GOALS</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.home.groupBg,borderLeft:GROUPS.home.borderLeft}}/>HOME</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:GROUPS.away.groupBg,borderLeft:GROUPS.away.borderLeft}}/>AWAY</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:'rgba(255,210,0,.38)',border:'1px solid rgba(255,215,0,.6)'}}/>TOP</div>
-          <div className="leg-item"><span className="leg-sw" style={{background:'rgba(255,55,55,.32)',border:'1px solid rgba(255,80,80,.5)'}}/>WORST</div>
+          <div className="leg-item">
+            <span
+              className="leg-sw"
+              style={{
+                background: GROUPS.record.groupBg,
+                borderLeft: GROUPS.record.borderLeft,
+              }}
+            />
+            RECORD
+          </div>
+          <div className="leg-item">
+            <span
+              className="leg-sw"
+              style={{
+                background: GROUPS.goals.groupBg,
+                borderLeft: GROUPS.goals.borderLeft,
+              }}
+            />
+            GOALS
+          </div>
+          <div className="leg-item">
+            <span
+              className="leg-sw"
+              style={{
+                background: GROUPS.home.groupBg,
+                borderLeft: GROUPS.home.borderLeft,
+              }}
+            />
+            HOME
+          </div>
+          <div className="leg-item">
+            <span
+              className="leg-sw"
+              style={{
+                background: GROUPS.away.groupBg,
+                borderLeft: GROUPS.away.borderLeft,
+              }}
+            />
+            AWAY
+          </div>
+          <div className="leg-item">
+            <span
+              className="leg-sw"
+              style={{
+                background: 'rgba(255,210,0,.38)',
+                border: '1px solid rgba(255,215,0,.6)',
+              }}
+            />
+            TOP
+          </div>
+          <div className="leg-item">
+            <span
+              className="leg-sw"
+              style={{
+                background: 'rgba(255,55,55,.32)',
+                border: '1px solid rgba(255,80,80,.5)',
+              }}
+            />
+            WORST
+          </div>
           <span className="leg-note">
-            {isAllSeasons?'All-time champs shown':`${seasonFilter} champion only`}
+            {isAllSeasons
+              ? 'All-time champs shown'
+              : `${seasonFilter} champion only`}
             {' · '}Click column to sort · click again to reverse
           </span>
         </div>
       )}
-     
 
       <style>{`
         *,*::before,*::after{box-sizing:border-box;}
@@ -865,7 +2649,6 @@ export default function Stats() {
         .sf-caret{position:absolute;right:.6rem;font-size:14px;color:rgba(255,255,255,.4);pointer-events:none;}
         .sf-count{font-family:'Press Start 2P',monospace;font-size:10px;color:rgba(255,255,255,.2);letter-spacing:1px;margin-left:auto;}
 
-        /* H2H selectors bar */
         .h2h-selectors{display:flex;align-items:center;flex-wrap:wrap;gap:1rem 2rem;padding:1rem 2rem;background:rgba(0,0,18,.6);border-bottom:1px solid rgba(255,140,0,.15);max-width:100%;}
         .h2h-sel-group{display:flex;align-items:center;gap:.6rem;}
         .h2h-sel{min-width:200px;font-size:11px!important;}
@@ -876,15 +2659,26 @@ export default function Stats() {
         .h2h-name-b{font-family:'Press Start 2P',monospace;font-size:12px;color:#FFD700;text-shadow:0 0 10px rgba(255,215,0,.5);}
         .h2h-record{font-family:'VT323',monospace;font-size:22px;color:rgba(255,255,255,.5);margin-left:.5rem;letter-spacing:1px;}
 
+        /* Table — page scrolls horizontally via html/body overflow-x:auto */
         .sp-table-outer{width:100%;}
         .sp-table{width:max-content;min-width:100%;border-collapse:collapse;}
+        /* Group header row */
         .sp-gh{font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:3px;padding:.5rem .65rem .4rem;text-align:center;border-bottom:2px solid rgba(255,255,255,.1);}
+        /* Column header row — sticky top within the page scroll */
         .sp-th{font-family:'Press Start 2P',monospace;font-size:11px;padding:.65rem .65rem;white-space:nowrap;position:sticky;top:0;z-index:10;border-bottom:2px solid rgba(255,255,255,.12);user-select:none;color:rgba(255,255,255,.5);transition:color .12s,background .12s,box-shadow .12s;}
         .sp-th.sortable{cursor:pointer;}
         .sp-th.sortable:hover{color:#FF8C00!important;}
         .sp-th.active{color:#FFD700!important;box-shadow:inset 0 -3px 0 rgba(255,215,0,.7);}
         .sort-icon{opacity:.5;font-size:10px;}
         .sp-th.active .sort-icon{opacity:1;}
+        /* Sticky left cols — rank and team for team tab */
+        .sticky-col{box-shadow:3px 0 0 0 #07071a;}
+        .sticky-td{background:#07071e;}
+        .sp-th.sticky-col{z-index:13!important;background:#07071a!important;box-shadow:3px 0 0 0 #07071a;}
+        .sp-gh.sticky-gh{z-index:13!important;background:#07071a!important;box-shadow:3px 0 0 0 #07071a;}
+        .sp-even .sticky-td{background:#07071e!important;}
+        .sp-odd  .sticky-td{background:#050510!important;}
+        .sp-row:hover .sticky-td{background:rgba(40,20,0,.97)!important;box-shadow:3px 0 0 0 rgba(40,20,0,.97);}
         .sp-td.sorted{box-shadow:inset 2px 0 0 rgba(255,215,0,.18),inset -1px 0 0 rgba(255,215,0,.08);}
         .sp-even{background:rgba(0,0,22,.88);}
         .sp-odd {background:rgba(0,0,10,.92);}
@@ -892,9 +2686,16 @@ export default function Stats() {
         .sp-row:hover td{background:rgba(255,130,0,0.14)!important;box-shadow:inset 0 1px 0 rgba(255,140,0,.25),inset 0 -1px 0 rgba(255,140,0,.25);}
         .sp-row:hover td:first-child{box-shadow:inset 4px 0 0 #FF8C00,inset 0 1px 0 rgba(255,140,0,.25),inset 0 -1px 0 rgba(255,140,0,.25);}
         .sp-row:hover .td-mgrname{color:#FF8C00!important;text-shadow:0 0 12px rgba(255,130,0,.6);}
+        .sp-row:hover .td-teamcode{color:#FF8C00!important;text-shadow:0 0 12px rgba(255,130,0,.6);}
         .sp-row:hover .td-rank{color:rgba(255,180,0,.65);}
         .sp-row:hover .td-val{color:rgba(255,255,255,.98);}
         .sp-td{font-family:'VT323',monospace;font-size:22px;color:rgba(255,255,255,.82);padding:.38rem .65rem;border-bottom:1px solid rgba(255,255,255,.04);white-space:nowrap;transition:background .1s,box-shadow .1s,color .1s;}
+
+        /* Team logo cell */
+        .td-team{display:flex;align-items:center;gap:.5rem;min-width:100px;}
+        .td-team-logo{width:32px;height:32px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 4px rgba(255,255,255,.15));}
+        .td-team-logo-fb{width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;background:rgba(255,140,0,.12);border:1.5px solid rgba(255,140,0,.3);font-family:'Press Start 2P',monospace;font-size:7px;color:#FF8C00;flex-shrink:0;letter-spacing:0;}
+        .td-teamcode{font-family:'Press Start 2P',monospace;font-size:11px;color:rgba(255,255,255,.9);letter-spacing:1px;transition:color .1s,text-shadow .1s;}
 
         .td-mgr{display:flex;align-items:center;gap:.45rem;min-width:165px;}
         .td-avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2);}

@@ -1692,7 +1692,7 @@ export default function Home() {
     const ranked = Object.entries(allTeamStats)
       .filter(([, s]) => s.gp >= 3)
       .map(([team, s]) => ({ team, gp: s.gp, w: s.w, pct: s.w / s.gp }))
-      .sort((a, b) => b.pct - a.pct || b.w - a.w);
+      .sort((a, b) => b.w - a.w || b.pct - a.pct);
 
     if (ranked.length > 0) {
       const leader = ranked[0];

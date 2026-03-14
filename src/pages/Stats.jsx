@@ -1572,6 +1572,7 @@ function StatsTable({
   mgrMeta,
   isH2H,
   isTeam,
+  hasStickyCols,
 }) {
   const groupSpans = useMemo(() => {
     const out = [];
@@ -1611,12 +1612,12 @@ function StatsTable({
     return mv;
   }, [rows, cols]);
 
-  // Sticky col indices for team tab: rank (0) and team (1)
+  // Sticky col indices: rank (0) and name col (1)
   // We use a ref on the table and measure actual th widths after render
   const tableRef = useRef(null);
   const [stickyLeftPx, setStickyLeftPx] = useState([0, 0]);
   useEffect(() => {
-    if (!isTeam || !tableRef.current) return;
+    if (!hasStickyCols || !tableRef.current) return;
     const ths = tableRef.current.querySelectorAll('thead tr:last-child th');
     if (ths.length >= 2) {
       const w0 = ths[0].getBoundingClientRect().width;
@@ -1625,12 +1626,12 @@ function StatsTable({
   });
 
   const stickyLeft = useMemo(() => {
-    if (!isTeam) return new Map();
+    if (!hasStickyCols) return new Map();
     const m = new Map();
     m.set(0, stickyLeftPx[0]);
     m.set(1, stickyLeftPx[1]);
     return m;
-  }, [isTeam, stickyLeftPx]);
+  }, [hasStickyCols, stickyLeftPx]);
 
   return (
     <table ref={tableRef} className="sp-table">
@@ -1643,12 +1644,14 @@ function StatsTable({
               <th
                 key={i}
                 colSpan={span}
-                className={`sp-gh${isCore && isTeam ? ' sticky-gh' : ''}`}
+                className={`sp-gh${
+                  isCore && hasStickyCols ? ' sticky-gh' : ''
+                }`}
                 style={{
                   background: g.groupBg,
                   color: g.groupText,
                   borderLeft: i > 0 ? g.borderLeft : 'none',
-                  ...(isCore && isTeam
+                  ...(isCore && hasStickyCols
                     ? { position: 'sticky', left: 0, zIndex: 12 }
                     : {}),
                 }}
@@ -1664,7 +1667,7 @@ function StatsTable({
             const active = sortKey === col.key;
             const uniqKey = col.key + '-' + col.group;
             const first = isFirstInGroup.has(uniqKey);
-            const isSticky = isTeam && (ci === 0 || ci === 1);
+            const isSticky = hasStickyCols && (ci === 0 || ci === 1);
             const sLeft = isSticky ? stickyLeft.get(ci) : undefined;
             return (
               <th
@@ -1721,7 +1724,7 @@ function StatsTable({
                 const mx = maxVals[uniqKey] || 1;
                 const first = isFirstInGroup.has(uniqKey);
                 const isSorted = sortKey === col.key;
-                const isSticky = isTeam && (ci === 0 || ci === 1);
+                const isSticky = hasStickyCols && (ci === 0 || ci === 1);
                 const sLeft = isSticky ? stickyLeft.get(ci) : undefined;
 
                 const lossKeys = isTeam ? TEAM_LOSS_KEYS : LOSS_KEYS;
@@ -2464,6 +2467,7 @@ export default function Stats() {
               mgrMeta={new Map()}
               isH2H={false}
               isTeam={true}
+              hasStickyCols={true}
             />
           )}
         </div>
@@ -2502,6 +2506,7 @@ export default function Stats() {
               mgrMeta={mgrMeta}
               isH2H={true}
               isTeam={false}
+              hasStickyCols={true}
             />
           )}
         </div>
@@ -2535,6 +2540,7 @@ export default function Stats() {
               mgrMeta={mgrMeta}
               isH2H={false}
               isTeam={false}
+              hasStickyCols={true}
             />
           )}
         </div>
@@ -2613,9 +2619,9 @@ export default function Stats() {
       )}
 
       <style>{`
+        *,*::before,*::after{box-sizing:border-box;}
         html{overflow-x:auto;}
         body{background:#00000a!important;overflow-x:auto;}
-        *,*::before,*::after{box-sizing:border-box;}
         .sp{min-height:100vh;background:radial-gradient(ellipse 100% 35% at 50% 0%,#0a0a22 0%,transparent 55%),#00000a;padding-bottom:80px;overflow-x:visible;}
         .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.05) 2px,rgba(0,0,0,.05) 4px);}
 
@@ -2659,8 +2665,9 @@ export default function Stats() {
         .h2h-name-b{font-family:'Press Start 2P',monospace;font-size:12px;color:#FFD700;text-shadow:0 0 10px rgba(255,215,0,.5);}
         .h2h-record{font-family:'VT323',monospace;font-size:22px;color:rgba(255,255,255,.5);margin-left:.5rem;letter-spacing:1px;}
 
+        /* Table — page scrolls horizontally via html/body overflow-x:auto */
         .sp-table-outer{width:100%;}
-.sp-table{width:max-content;min-width:100%;border-collapse:collapse;}
+        .sp-table{width:max-content;min-width:100%;border-collapse:collapse;}
         /* Group header row */
         .sp-gh{font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:3px;padding:.5rem .65rem .4rem;text-align:center;border-bottom:2px solid rgba(255,255,255,.1);}
         /* Column header row — sticky top within the page scroll */

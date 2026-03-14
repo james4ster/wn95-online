@@ -47,25 +47,69 @@ function TeamLogo({ code, size = 28 }) {
 
 // ─── Transaction badge ────────────────────────────────────────────────────
 function TxnBadge({ flag, details }) {
+  const [hovered, setHovered] = useState(false);
   if (!flag && !details) return null;
-  const label = details || 'TXN';
+  const label = (details || 'TXN').toUpperCase();
+  const MAX = 18;
+  const truncated = label.length > MAX ? label.slice(0, MAX) + '…' : label;
+  const needsTooltip = label.length > MAX;
   return (
-    <span
+    <div
       style={{
-        fontFamily: "'Press Start 2P', monospace",
-        fontSize: 7,
-        padding: '2px 5px',
-        borderRadius: 3,
-        letterSpacing: 1,
-        background: 'rgba(255,140,0,.18)',
-        border: '1px solid rgba(255,140,0,.45)',
-        color: '#FF8C00',
-        whiteSpace: 'nowrap',
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
         marginLeft: 4,
       }}
+      onMouseEnter={() => needsTooltip && setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      {label.toUpperCase()}
-    </span>
+      <span
+        style={{
+          fontFamily: "'Press Start 2P', monospace",
+          fontSize: 7,
+          padding: '2px 5px',
+          borderRadius: 3,
+          letterSpacing: 1,
+          background: 'rgba(255,140,0,.18)',
+          border: '1px solid rgba(255,140,0,.45)',
+          color: '#FF8C00',
+          whiteSpace: 'nowrap',
+          maxWidth: 140,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          display: 'inline-block',
+          cursor: needsTooltip ? 'help' : 'default',
+        }}
+      >
+        {truncated}
+      </span>
+      {hovered && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            right: 0,
+            background: '#0a0a18',
+            border: '1px solid rgba(255,140,0,.6)',
+            color: '#FF8C00',
+            fontFamily: "'Press Start 2P', monospace",
+            fontSize: 7,
+            letterSpacing: 1,
+            padding: '6px 9px',
+            borderRadius: 5,
+            whiteSpace: 'normal',
+            width: 260,
+            lineHeight: 1.7,
+            boxShadow: '0 4px 16px rgba(0,0,0,.8)',
+            zIndex: 9999,
+            pointerEvents: 'none',
+          }}
+        >
+          {label}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -92,9 +136,9 @@ const POS_COLORS = {
     color: '#00FF88',
   },
   D: {
-    bg: 'rgba(170,110,255,.13)',
-    border: 'rgba(170,110,255,.4)',
-    color: '#BB88FF',
+    bg: 'rgba(135,206,235,.4)',
+    border: 'rgba(135,206,235,.4)',
+    color: '#87CEEB',
   },
   G: {
     bg: 'rgba(255,215,0,.13)',
@@ -223,7 +267,7 @@ function PickRow({ pick, idx }) {
     <div
       style={{
         display: 'grid',
-        gridTemplateColumns: '52px 52px 46px 1fr auto',
+        gridTemplateColumns: '52px 52px 90px 46px 1fr auto',
         alignItems: 'center',
         gap: '0 .5rem',
         padding: '.38rem 1.2rem',
@@ -264,6 +308,21 @@ function PickRow({ pick, idx }) {
       >
         #{pick.pick ?? '–'}
       </span>
+
+      {/* Team logo + code */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem' }}>
+        <TeamLogo code={pick.team} size={22} />
+        <span
+          style={{
+            fontFamily: "'Press Start 2P', monospace",
+            fontSize: 8,
+            color: 'rgba(255,255,255,.7)',
+            letterSpacing: 0.5,
+          }}
+        >
+          {pick.team}
+        </span>
+      </div>
 
       {/* Position */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
@@ -416,10 +475,11 @@ function DraftBySeason({ selectedLeague }) {
           {/* Column headers */}
           <div
             className="txn-draft-colhdr"
-            style={{ gridTemplateColumns: '52px 52px 46px 1fr auto' }}
+            style={{ gridTemplateColumns: '52px 52px 90px 46px 1fr auto' }}
           >
             <span>RND</span>
             <span>#</span>
+            <span>TEAM</span>
             <span>POS</span>
             <span>PLAYER</span>
             <span />
@@ -1047,6 +1107,50 @@ export default function Transactions() {
           color: rgba(255,255,255,.7); letter-spacing: 2px; text-align: center;
         }
         .txn-draft-colhdr span:nth-child(4) { text-align: left; }
+
+        /* ── Transaction badge tooltip ── */
+        .txn-badge-wrap { position: relative; display: flex; align-items: center; }
+        .txn-badge--tip::after {
+          content: attr(data-tip);
+          position: absolute;
+          bottom: calc(100% + 8px);
+          right: 0;
+          left: auto;
+          transform: none;
+          background: #0a0a18;
+          border: 1px solid rgba(255,140,0,.6);
+          color: #FF8C00;
+          font-family: 'Press Start 2P', monospace;
+          font-size: 7px;
+          letter-spacing: 1px;
+          padding: 6px 9px;
+          border-radius: 5px;
+          white-space: normal;
+          width: 260px;
+          line-height: 1.7;
+          text-align: left;
+          box-shadow: 0 4px 16px rgba(0,0,0,.8);
+          z-index: 9999;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity .15s;
+        }
+        .txn-badge--tip::before {
+          content: '';
+          position: absolute;
+          bottom: calc(100% + 3px);
+          right: 12px;
+          left: auto;
+          transform: none;
+          border: 5px solid transparent;
+          border-top-color: rgba(255,140,0,.6);
+          z-index: 9999;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity .15s;
+        }
+        .txn-badge--tip:hover::after,
+        .txn-badge--tip:hover::before { opacity: 1; }
 
         /* ── States ── */
         .txn-state {

@@ -51,6 +51,14 @@ export default function LeagueSubNav() {
         </NavLink>
 
         <NavLink
+          to={`/league/${selectedLeague}/transactions`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
+        >
+          <span className="sni">🔄</span>
+          <span className="snt">TRANSACTIONS</span>
+        </NavLink>
+
+        <NavLink
           to={`/league/${selectedLeague}/managers`}
           className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >
@@ -70,7 +78,7 @@ export default function LeagueSubNav() {
       <style>{`
         .league-subnav {
           position: sticky;
-          top: 76px;   /* MainNav: 72px height + 4px border-bottom */
+          top: 76px;
           z-index: 990;
           width: 100%;
           background: linear-gradient(180deg, #0d0d1f 0%, #040409 100%);
@@ -91,7 +99,6 @@ export default function LeagueSubNav() {
         }
         .subnav-inner::-webkit-scrollbar { display: none; }
 
-        /* ── Individual tab link ── */
         .snl {
           display: flex;
           align-items: center;
@@ -111,7 +118,6 @@ export default function LeagueSubNav() {
           margin-bottom: -3px;
         }
 
-        /* Hover glow line */
         .snl::after {
           content: '';
           position: absolute;
@@ -129,7 +135,6 @@ export default function LeagueSubNav() {
         }
         .snl:hover::after { opacity: 1; }
 
-        /* Active / current page */
         .snl-on {
           color: #FFD700;
           background: rgba(255, 215, 0, 0.07);
@@ -139,8 +144,6 @@ export default function LeagueSubNav() {
           background: linear-gradient(90deg, transparent, #FFD700, transparent);
           opacity: 1;
         }
-
-
 
         .sni {
           font-size: 1rem;

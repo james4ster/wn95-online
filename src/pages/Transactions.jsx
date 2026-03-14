@@ -50,11 +50,12 @@ function TxnBadge({ flag, details }) {
   const [hovered, setHovered] = useState(false);
   if (!flag && !details) return null;
   const label = (details || 'TXN').toUpperCase();
-  const MAX = 18;
+  const MAX = 15;
   const truncated = label.length > MAX ? label.slice(0, MAX) + '…' : label;
   const needsTooltip = label.length > MAX;
   return (
     <div
+      className="txn-badge-wrap"
       style={{
         position: 'relative',
         display: 'inline-flex',
@@ -265,6 +266,7 @@ function PickRow({ pick, idx }) {
   const even = idx % 2 === 0;
   return (
     <div
+      className="txn-pick-row txn-season-row"
       style={{
         display: 'grid',
         gridTemplateColumns: '52px 52px 90px 46px 1fr auto',
@@ -287,6 +289,7 @@ function PickRow({ pick, idx }) {
     >
       {/* Round */}
       <span
+        className="txn-rnd"
         style={{
           fontFamily: "'VT323', monospace",
           fontSize: 20,
@@ -299,6 +302,7 @@ function PickRow({ pick, idx }) {
 
       {/* Pick # */}
       <span
+        className="txn-pick-num"
         style={{
           fontFamily: "'Press Start 2P', monospace",
           fontSize: 10,
@@ -313,6 +317,7 @@ function PickRow({ pick, idx }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem' }}>
         <TeamLogo code={pick.team} size={22} />
         <span
+          className="txn-team-code"
           style={{
             fontFamily: "'Press Start 2P', monospace",
             fontSize: 8,
@@ -331,6 +336,7 @@ function PickRow({ pick, idx }) {
 
       {/* Player name */}
       <span
+        className="txn-player-name"
         style={{
           fontFamily: "'VT323', monospace",
           fontSize: 22,
@@ -474,7 +480,7 @@ function DraftBySeason({ selectedLeague }) {
         <div className="txn-draft-table">
           {/* Column headers */}
           <div
-            className="txn-draft-colhdr"
+            className="txn-draft-colhdr txn-season-colhdr"
             style={{ gridTemplateColumns: '52px 52px 90px 46px 1fr auto' }}
           >
             <span>RND</span>
@@ -511,7 +517,7 @@ function DraftByManager({ selectedLeague }) {
   const [loading, setLoading] = useState(false);
   const prefix = (selectedLeague || '').replace(/[0-9]/g, '').trim();
 
-  // Fetch all coaches from unique_managers_vw
+  // Fetch coaches who have at least one team in this league
   useEffect(() => {
     if (!selectedLeague) {
       setCoaches([]);
@@ -519,14 +525,14 @@ function DraftByManager({ selectedLeague }) {
       return;
     }
     supabase
-      .from('unique_managers_vw')
+      .from('unique_teams_vw')
       .select('coach')
-      .order('coach', { ascending: true })
+      .ilike('lg', `${prefix}%`)
       .then(({ data, error }) => {
         if (error) console.error('[Draft] coaches fetch error:', error.message);
         const list = [
           ...new Set((data || []).map((r) => r.coach).filter(Boolean)),
-        ];
+        ].sort();
         setCoaches(list);
         if (list.length > 0) setSelectedCoach(list[0]);
       });
@@ -742,7 +748,7 @@ function DraftByManager({ selectedLeague }) {
       ) : (
         <div className="txn-draft-table">
           <div
-            className="txn-draft-colhdr"
+            className="txn-draft-colhdr txn-mgr-colhdr"
             style={{ gridTemplateColumns: '52px 52px 46px 1fr auto' }}
           >
             <span>RND</span>
@@ -805,6 +811,7 @@ function DraftByManager({ selectedLeague }) {
                 {seasonPicks.map((p, i) => (
                   <div
                     key={`${p.lg}-${p.round}-${p.pick}-${i}`}
+                    className="txn-pick-row txn-mgr-row"
                     style={{
                       display: 'grid',
                       gridTemplateColumns: '52px 52px 46px 1fr auto',
@@ -826,6 +833,7 @@ function DraftByManager({ selectedLeague }) {
                     }
                   >
                     <span
+                      className="txn-rnd"
                       style={{
                         fontFamily: "'VT323', monospace",
                         fontSize: 20,
@@ -836,6 +844,7 @@ function DraftByManager({ selectedLeague }) {
                       R{p.round}
                     </span>
                     <span
+                      className="txn-pick-num"
                       style={{
                         fontFamily: "'Press Start 2P', monospace",
                         fontSize: 10,
@@ -849,6 +858,7 @@ function DraftByManager({ selectedLeague }) {
                       <PosBadge pos={p.pos} />
                     </div>
                     <span
+                      className="txn-player-name"
                       style={{
                         fontFamily: "'VT323', monospace",
                         fontSize: 22,
@@ -1105,8 +1115,11 @@ export default function Transactions() {
         .txn-draft-colhdr span {
           font-family: 'Press Start 2P', monospace; font-size: 9px;
           color: rgba(255,255,255,.7); letter-spacing: 2px; text-align: center;
+          overflow: hidden; white-space: nowrap;
         }
-        .txn-draft-colhdr span:nth-child(4) { text-align: left; }
+        /* PLAYER header left-aligned — 4th child on season (RND # TEAM POS PLAYER), 4th on mgr (RND # POS PLAYER) */
+        .txn-season-colhdr span:nth-child(5),
+        .txn-mgr-colhdr span:nth-child(4) { text-align: left; }
 
         /* ── Transaction badge tooltip ── */
         .txn-badge-wrap { position: relative; display: flex; align-items: center; }
@@ -1186,6 +1199,38 @@ export default function Transactions() {
           .txn-tab { font-size: 11px; padding: .6rem .9rem; }
           .txn-count { display: none; }
           .led-text { font-size: 1.2rem; letter-spacing: 3px; }
+
+          /* Header labels smaller on mobile */
+          .txn-draft-colhdr span { font-size: 7px !important; letter-spacing: 1px !important; }
+
+          /* Hide txn badge and team code text entirely on mobile */
+          .txn-badge-wrap { display: none !important; }
+          .txn-team-code { display: none !important; }
+
+          /* Tighten padding */
+          .txn-pick-row {
+            gap: 0 .3rem !important;
+            padding-left: .5rem !important;
+            padding-right: .5rem !important;
+          }
+          .txn-draft-colhdr {
+            padding-left: .5rem !important;
+            padding-right: .5rem !important;
+            gap: 0 .3rem !important;
+          }
+
+          /* By Season: RND(40) #(40) TEAM-logo(32) POS(36) PLAYER(1fr) */
+          .txn-season-colhdr { grid-template-columns: 40px 40px 32px 36px 1fr !important; }
+          .txn-season-row    { grid-template-columns: 40px 40px 32px 36px 1fr !important; }
+
+          /* By Manager: RND(40) #(40) POS(36) PLAYER(1fr) */
+          .txn-mgr-colhdr    { grid-template-columns: 40px 40px 36px 1fr !important; }
+          .txn-mgr-row       { grid-template-columns: 40px 40px 36px 1fr !important; }
+
+          /* Bigger player name on mobile */
+          .txn-player-name { font-size: 20px !important; }
+          .txn-rnd { font-size: 17px !important; }
+          .txn-pick-num { font-size: 9px !important; }
         }
       `}</style>
     </div>

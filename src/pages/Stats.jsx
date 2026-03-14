@@ -2613,9 +2613,9 @@ export default function Stats() {
       )}
 
       <style>{`
-        *,*::before,*::after{box-sizing:border-box;}
         html{overflow-x:auto;}
         body{background:#00000a!important;overflow-x:auto;}
+        *,*::before,*::after{box-sizing:border-box;}
         .sp{min-height:100vh;background:radial-gradient(ellipse 100% 35% at 50% 0%,#0a0a22 0%,transparent 55%),#00000a;padding-bottom:80px;overflow-x:visible;}
         .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.05) 2px,rgba(0,0,0,.05) 4px);}
 
@@ -2659,9 +2659,8 @@ export default function Stats() {
         .h2h-name-b{font-family:'Press Start 2P',monospace;font-size:12px;color:#FFD700;text-shadow:0 0 10px rgba(255,215,0,.5);}
         .h2h-record{font-family:'VT323',monospace;font-size:22px;color:rgba(255,255,255,.5);margin-left:.5rem;letter-spacing:1px;}
 
-        /* Table — page scrolls horizontally via html/body overflow-x:auto */
         .sp-table-outer{width:100%;}
-        .sp-table{width:max-content;min-width:100%;border-collapse:collapse;}
+.sp-table{width:max-content;min-width:100%;border-collapse:collapse;}
         /* Group header row */
         .sp-gh{font-family:'Press Start 2P',monospace;font-size:10px;letter-spacing:3px;padding:.5rem .65rem .4rem;text-align:center;border-bottom:2px solid rgba(255,255,255,.1);}
         /* Column header row — sticky top within the page scroll */

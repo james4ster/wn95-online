@@ -1909,15 +1909,7 @@ export default function Home() {
         })
       : '';
   const displayItems =
-    tickerItems.length > 0
-      ? tickerItems
-      : [
-          'LEAGUE NEWS',
-          'TRADE ANNOUNCEMENTS',
-          'DRAFT NEWS',
-          'SEASON EVENTS',
-          'SCHEDULE UPDATES',
-        ];
+    tickerItems.length > 0 ? tickerItems : loading ? [''] : [];
 
   return (
     <div className="hp">
@@ -2091,16 +2083,17 @@ export default function Home() {
           <div className="ht-fade-r" />
           <div className="ht-rail">
             <div className="ht-belt">
-              {displayItems.concat(displayItems).map((item, i) => (
-                <span key={i} className="ht-story">
-                  <span className={`ht-text ht-c${i % 4}`}>{item}</span>
-                  <span className="ht-sep">
-                    <span className="ht-sep-line" />
-                    <span className="ht-sep-gem">◆</span>
-                    <span className="ht-sep-line" />
+              {displayItems.length > 0 &&
+                displayItems.concat(displayItems).map((item, i) => (
+                  <span key={i} className="ht-story">
+                    <span className={`ht-text ht-c${i % 4}`}>{item}</span>
+                    <span className="ht-sep">
+                      <span className="ht-sep-line" />
+                      <span className="ht-sep-gem">◆</span>
+                      <span className="ht-sep-line" />
+                    </span>
                   </span>
-                </span>
-              ))}
+                ))}
             </div>
           </div>
         </div>

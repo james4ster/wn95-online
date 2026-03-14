@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics } from '@vercel/analytics/react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { LeagueProvider } from './components/LeagueContext';
 import MainNavigation from './components/MainNavigation';
@@ -12,15 +12,16 @@ import Managers from './pages/Managers';
 import Players from './pages/Players';
 import Stats from './pages/Stats';
 import Scores from './pages/Scores';
-import ScoresBar from "./components/ScoresBar";
+import ScoresBar from './components/ScoresBar';
 import Media from './pages/Media';
+import Transactions from './pages/Transactions';
 
 function App() {
   useEffect(() => {
     const originalFetch = window.fetch;
     window.fetch = async (...args) => {
-      if (args[0].includes("player_stats")) {
-        console.log("Detected player_stats fetch!", new Error().stack);
+      if (args[0].includes('player_stats')) {
+        console.log('Detected player_stats fetch!', new Error().stack);
       }
       return originalFetch(...args);
     };
@@ -52,21 +53,26 @@ function App() {
 
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/league/:leagueCode/standings" element={<Standings />} />
+            <Route
+              path="/league/:leagueCode/standings"
+              element={<Standings />}
+            />
             <Route path="/league/:leagueCode/stats" element={<Stats />} />
             <Route path="/league/:leagueCode/managers" element={<Managers />} />
             <Route path="/league/:leagueCode/schedule" element={<Schedule />} />
             <Route path="/players" element={<Players />} />
             <Route path="/league/:leagueCode/teams" element={<Teams />} />
             <Route path="/league/:leagueCode/scores" element={<Scores />} />
+            <Route
+              path="/league/:leagueId/transactions"
+              element={<Transactions />}
+            />
             <Route path="/media" element={<Media />} />
-            
           </Routes>
           <Analytics />
         </div>
       </Router>
     </LeagueProvider>
-   
   );
 }
 

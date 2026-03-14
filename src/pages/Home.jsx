@@ -1991,7 +1991,7 @@ export default function Home() {
                 title="UPCOMING EVENTS"
                 action={
                   <a
-                    href="https://discord.gg/YOUR_INVITE"
+                    href="https://discord.gg/cU7EmG4D"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="discord-join"

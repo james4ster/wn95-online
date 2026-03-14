@@ -5,10 +5,10 @@ export default function Layout({ children, setPage }) {
     <div className="sega-bg min-h-screen flex flex-col font-press-start text-white">
       {/* Header */}
       <header className="hero-bar">
-        <img 
-          src="/assets/leagueLogos/mainLogo.png" 
-          alt="NHL '95 Logo" 
-          className="logo clickable-logo" 
+        <img
+          src="/assets/leagueLogos/mainLogo.png"
+          alt="NHL '95 Logo"
+          className="logo clickable-logo"
           onClick={() => setPage('home')}
           style={{ cursor: 'pointer' }}
         />
@@ -44,7 +44,7 @@ export default function Layout({ children, setPage }) {
         className="flex-1 p-6 nhl95-bg crt-curve"
         style={{
           position: 'relative',
-          overflow: 'hidden',
+          overflow: 'visible',
         }}
       >
         {/* Blue Lines */}
@@ -55,13 +55,12 @@ export default function Layout({ children, setPage }) {
         <div className="skate-marks" />
         {/* Content Container - sits above background effects */}
         <div style={{ position: 'relative', zIndex: 3 }}>{children}</div>
+        </div>
       </main>
       {/* Footer */}
       <footer className="p-4 border-t-4 border-neon-red text-center text-sm">
         &copy; {new Date().getFullYear()} Retro Hockey League
       </footer>
-
-    
     </div>
   );
 }

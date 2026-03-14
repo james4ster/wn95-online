@@ -11,7 +11,8 @@ import PlayoffBracket from '../components/PlayoffBracket';
 import { createPortal } from 'react-dom';
 
 function computeH2H(teamA, teamB, games) {
-  let ptsA = 0, ptsB = 0;
+  let ptsA = 0,
+    ptsB = 0;
   (games || []).forEach((g) => {
     const aIsHome = g.home === teamA && g.away === teamB;
     const aIsAway = g.home === teamB && g.away === teamA;
@@ -20,7 +21,10 @@ function computeH2H(teamA, teamB, games) {
     const sB = aIsHome ? g.score_away : g.score_home;
     if (sA > sB) ptsA += 2;
     else if (sB > sA) ptsB += 2;
-    else { ptsA += 1; ptsB += 1; }
+    else {
+      ptsA += 1;
+      ptsB += 1;
+    }
     if (g.ot && sB > sA && aIsHome) ptsA += 1;
     if (g.ot && sA > sB && aIsAway) ptsB += 1;
   });
@@ -32,9 +36,20 @@ function computeStandings(games) {
   const ensureTeam = (code) => {
     if (!teamMap[code]) {
       teamMap[code] = {
-        team: code, coach: '', gp: 0, w: 0, l: 0, t: 0,
-        otl: 0, otw: 0, pts: 0, gf: 0, ga: 0, gd: 0,
-        shutouts: 0, _lastId: -1,
+        team: code,
+        coach: '',
+        gp: 0,
+        w: 0,
+        l: 0,
+        t: 0,
+        otl: 0,
+        otw: 0,
+        pts: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        shutouts: 0,
+        _lastId: -1,
       };
     }
     return teamMap[code];
@@ -45,25 +60,55 @@ function computeStandings(games) {
     const sh = g.score_home ?? 0;
     const sa = g.score_away ?? 0;
     const isOT = !!g.ot;
-    if (g.id > home._lastId) { home.coach = g.coach_home || home.coach; home._lastId = g.id; }
-    if (g.id > away._lastId) { away.coach = g.coach_away || away.coach; away._lastId = g.id; }
-    home.gp++; away.gp++;
-    home.gf += sh; home.ga += sa;
-    away.gf += sa; away.ga += sh;
+    if (g.id > home._lastId) {
+      home.coach = g.coach_home || home.coach;
+      home._lastId = g.id;
+    }
+    if (g.id > away._lastId) {
+      away.coach = g.coach_away || away.coach;
+      away._lastId = g.id;
+    }
+    home.gp++;
+    away.gp++;
+    home.gf += sh;
+    home.ga += sa;
+    away.gf += sa;
+    away.ga += sh;
     if (sh === sa) {
-      home.t++; away.t++; home.pts += 1; away.pts += 1;
+      home.t++;
+      away.t++;
+      home.pts += 1;
+      away.pts += 1;
     } else if (sh > sa) {
-      if (isOT) { home.otw++; home.pts += 2; away.otl++; away.pts += 1; }
-      else { home.w++; home.pts += 2; away.l++; }
+      if (isOT) {
+        home.otw++;
+        home.pts += 2;
+        away.otl++;
+        away.pts += 1;
+      } else {
+        home.w++;
+        home.pts += 2;
+        away.l++;
+      }
     } else {
-      if (isOT) { away.otw++; away.pts += 2; home.otl++; home.pts += 1; }
-      else { away.w++; away.pts += 2; home.l++; }
+      if (isOT) {
+        away.otw++;
+        away.pts += 2;
+        home.otl++;
+        home.pts += 1;
+      } else {
+        away.w++;
+        away.pts += 2;
+        home.l++;
+      }
     }
     if (sa === 0) home.shutouts++;
     if (sh === 0) away.shutouts++;
   });
   return Object.values(teamMap).map(({ _lastId, ...t }) => ({
-    ...t, gd: t.gf - t.ga, pts_pct: t.gp > 0 ? t.pts / (t.gp * 2) : 0,
+    ...t,
+    gd: t.gf - t.ga,
+    pts_pct: t.gp > 0 ? t.pts / (t.gp * 2) : 0,
   }));
 }
 
@@ -91,30 +136,42 @@ function sortWithTiebreakers(teams, games) {
     byPts[p].push(t);
   });
   const result = [];
-  Object.keys(byPts).map(Number).sort((a, b) => b - a).forEach((pts) => {
-    const tier = byPts[pts];
-    if (tier.length === 1) {
-      result.push({ ...tier[0], _h2hPts: 0 });
-    } else {
-      const enriched = withH2H(tier);
-      enriched.sort((a, b) => {
-        if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
-        if (b.w !== a.w) return b.w - a.w;
-        return b.gd - a.gd;
-      });
-      result.push(...enriched);
-    }
-  });
+  Object.keys(byPts)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .forEach((pts) => {
+      const tier = byPts[pts];
+      if (tier.length === 1) {
+        result.push({ ...tier[0], _h2hPts: 0 });
+      } else {
+        const enriched = withH2H(tier);
+        enriched.sort((a, b) => {
+          if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
+          if (b.w !== a.w) return b.w - a.w;
+          return b.gd - a.gd;
+        });
+        result.push(...enriched);
+      }
+    });
   return result;
 }
 
-function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect }) {
-  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect) return null;
+function TiebreakerTooltip({
+  hoveredTeam,
+  tiedStandings,
+  seasonGames,
+  anchorRect,
+}) {
+  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect)
+    return null;
   const tooltipW = 360;
   const fixedLeft = window.innerWidth - tooltipW - 16;
   const tooltipHeight = 200;
   const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
-  const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipHeight - 16));
+  const fixedTop = Math.max(
+    16,
+    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
+  );
   const enriched = tiedStandings.map((s) => {
     let h2hPts = 0;
     tiedStandings.forEach((other) => {
@@ -132,38 +189,223 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
   const baseSeed = Math.min(...tiedStandings.map((s) => s._sortRank ?? 1));
   const maxH2H = Math.max(...ranked.map((r) => r.h2hPts), 1);
   const StatBar = ({ value, max, color }) => (
-    <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,.08)', borderRadius: 2, overflow: 'hidden' }}>
-      <div style={{ height: '100%', width: `${Math.max(0, (value / (max || 1)) * 100)}%`, background: color, borderRadius: 2, boxShadow: `0 0 6px ${color}`, transition: 'width .4s cubic-bezier(.4,0,.2,1)' }} />
+    <div
+      style={{
+        flex: 1,
+        height: 5,
+        background: 'rgba(255,255,255,.08)',
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          height: '100%',
+          width: `${Math.max(0, (value / (max || 1)) * 100)}%`,
+          background: color,
+          borderRadius: 2,
+          boxShadow: `0 0 6px ${color}`,
+          transition: 'width .4s cubic-bezier(.4,0,.2,1)',
+        }}
+      />
     </div>
   );
   return (
-    <div style={{ position: 'fixed', top: fixedTop, left: fixedLeft, zIndex: 9999, width: tooltipW, pointerEvents: 'none' }}>
-      <div style={{ position: 'absolute', inset: -8, background: 'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)', borderRadius: 16, pointerEvents: 'none' }} />
-      <div style={{ background: 'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)', border: '1px solid rgba(255,215,0,.5)', borderRadius: 12, boxShadow: '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)', overflow: 'hidden' }}>
-        <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid rgba(255,215,0,.15)', background: 'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.6rem', color: '#FF8C00', letterSpacing: 2, textShadow: '0 0 8px rgba(255,140,0,.7)' }}>TIEBREAKER</div>
-          <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem', color: 'rgba(255,255,255,.4)', letterSpacing: 1 }}>{ranked.length} TEAMS · {ranked[0].pts} PTS</div>
+    <div
+      style={{
+        position: 'fixed',
+        top: fixedTop,
+        left: fixedLeft,
+        zIndex: 9999,
+        width: tooltipW,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -8,
+          background:
+            'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)',
+          borderRadius: 16,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          background:
+            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
+          border: '1px solid rgba(255,215,0,.5)',
+          borderRadius: 12,
+          boxShadow:
+            '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px 8px',
+            borderBottom: '1px solid rgba(255,215,0,.15)',
+            background:
+              'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.6rem',
+              color: '#FF8C00',
+              letterSpacing: 2,
+              textShadow: '0 0 8px rgba(255,140,0,.7)',
+            }}
+          >
+            TIEBREAKER
+          </div>
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.5rem',
+              color: 'rgba(255,255,255,.4)',
+              letterSpacing: 1,
+            }}
+          >
+            {ranked.length} TEAMS · {ranked[0].pts} PTS
+          </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 56px 56px 56px', gap: '0 6px', padding: '6px 16px 4px', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
-          <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.45rem', color: 'rgba(255,255,255,.3)', textAlign: 'center' }}>SEED</div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '44px 1fr 56px 56px 56px',
+            gap: '0 6px',
+            padding: '6px 16px 4px',
+            borderBottom: '1px solid rgba(255,255,255,.05)',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(255,255,255,.3)',
+              textAlign: 'center',
+            }}
+          >
+            SEED
+          </div>
           <div />
           {['H2H', 'W', 'GD'].map((lbl) => (
-            <div key={lbl} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.65rem', color: 'rgba(135,206,235,.5)', textAlign: 'center', letterSpacing: 1 }}>{lbl}</div>
+            <div
+              key={lbl}
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.65rem',
+                color: 'rgba(135,206,235,.5)',
+                textAlign: 'center',
+                letterSpacing: 1,
+              }}
+            >
+              {lbl}
+            </div>
           ))}
         </div>
         {ranked.map((row, idx) => {
           const seedNum = baseSeed + idx;
           const gdSign = row.gd > 0 ? '+' : '';
           return (
-            <div key={row.team} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 56px 56px 56px', gap: '0 6px', padding: '9px 16px', background: idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent', borderBottom: idx < ranked.length - 1 ? '1px solid rgba(255,255,255,.04)' : 'none', alignItems: 'center' }}>
-              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.6rem', color: '#FF8C00', textAlign: 'center', textShadow: '0 0 8px rgba(255,140,0,.6)', lineHeight: 1 }}>{seedNum}</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-                <span style={{ fontFamily: "'VT323', monospace", fontSize: '1.5rem', color: '#E0E0E0', letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1 }}>{row.team}</span>
+            <div
+              key={row.team}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '44px 1fr 56px 56px 56px',
+                gap: '0 6px',
+                padding: '9px 16px',
+                background:
+                  idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
+                borderBottom:
+                  idx < ranked.length - 1
+                    ? '1px solid rgba(255,255,255,.04)'
+                    : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.6rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 8px rgba(255,140,0,.6)',
+                  lineHeight: 1,
+                }}
+              >
+                {seedNum}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 5,
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'VT323', monospace",
+                    fontSize: '1.5rem',
+                    color: '#E0E0E0',
+                    letterSpacing: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1,
+                  }}
+                >
+                  {row.team}
+                </span>
                 <StatBar value={row.h2hPts} max={maxH2H} color="#FF8C00" />
               </div>
-              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.4rem', color: '#FF8C00', textAlign: 'center', textShadow: '0 0 6px rgba(255,140,0,.5)' }}>{row.h2hPts}</div>
-              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.4rem', color: '#87CEEB', textAlign: 'center', textShadow: '0 0 6px rgba(135,206,235,.4)' }}>{row.w}</div>
-              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.4rem', color: row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888', textAlign: 'center', textShadow: row.gd > 0 ? '0 0 6px rgba(0,255,136,.5)' : row.gd < 0 ? '0 0 6px rgba(255,68,68,.5)' : 'none' }}>{gdSign}{row.gd}</div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(255,140,0,.5)',
+                }}
+              >
+                {row.h2hPts}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#87CEEB',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(135,206,235,.4)',
+                }}
+              >
+                {row.w}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color:
+                    row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888',
+                  textAlign: 'center',
+                  textShadow:
+                    row.gd > 0
+                      ? '0 0 6px rgba(0,255,136,.5)'
+                      : row.gd < 0
+                      ? '0 0 6px rgba(255,68,68,.5)'
+                      : 'none',
+                }}
+              >
+                {gdSign}
+                {row.gd}
+              </div>
             </div>
           );
         })}
@@ -175,11 +417,15 @@ function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect
 function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
   const clinched = new Set();
   const eliminated = new Set();
-  if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0) return { clinched, eliminated };
-  const avgGP = sortedStandings.reduce((sum, t) => sum + (t.gp || 0), 0) / sortedStandings.length;
+  if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0)
+    return { clinched, eliminated };
+  const avgGP =
+    sortedStandings.reduce((sum, t) => sum + (t.gp || 0), 0) /
+    sortedStandings.length;
   if (avgGP < totalGamesPerTeam * 0.5) return { clinched, eliminated };
   const n = sortedStandings.length;
-  const maxPts = (t) => (t.pts || 0) + Math.max(0, totalGamesPerTeam - (t.gp || 0)) * 2;
+  const maxPts = (t) =>
+    (t.pts || 0) + Math.max(0, totalGamesPerTeam - (t.gp || 0)) * 2;
   const bubbleIdx = Math.min(playoffTeams - 1, n - 1);
   const bubblePts = sortedStandings[bubbleIdx]?.pts || 0;
   for (let r = 0; r < Math.min(playoffTeams, n); r++) {
@@ -188,10 +434,12 @@ function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
     for (let j = playoffTeams; j < n; j++) {
       if (maxPts(sortedStandings[j]) > myPts) couldFinishAbove++;
     }
-    if (couldFinishAbove < playoffTeams - r) clinched.add(sortedStandings[r].team);
+    if (couldFinishAbove < playoffTeams - r)
+      clinched.add(sortedStandings[r].team);
   }
   for (let r = playoffTeams; r < n; r++) {
-    if (maxPts(sortedStandings[r]) < bubblePts) eliminated.add(sortedStandings[r].team);
+    if (maxPts(sortedStandings[r]) < bubblePts)
+      eliminated.add(sortedStandings[r].team);
   }
   return { clinched, eliminated };
 }
@@ -206,7 +454,10 @@ export default function Standings() {
   const [divisionMap, setDivisionMap] = useState([]);
   const [activeView, setActiveView] = useState('overall');
   const [playoffGames, setPlayoffGames] = useState([]);
-  const [sortConfig, setSortConfig] = useState({ key: 'default', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState({
+    key: 'default',
+    direction: 'descending',
+  });
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
   const tableContainerRef = useRef(null);
@@ -215,10 +466,20 @@ export default function Standings() {
   const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(52);
 
   useEffect(() => {
-    if (!selectedLeague) { setSeasons([]); setSelectedSeason(''); return; }
+    if (!selectedLeague) {
+      setSeasons([]);
+      setSelectedSeason('');
+      return;
+    }
     (async () => {
-      const { data, error } = await supabase.from('seasons').select('lg, year, end_date, playoff_teams').order('year', { ascending: false });
-      if (error) { console.error('Error fetching seasons:', error); return; }
+      const { data, error } = await supabase
+        .from('seasons')
+        .select('lg, year, end_date, playoff_teams')
+        .order('year', { ascending: false });
+      if (error) {
+        console.error('Error fetching seasons:', error);
+        return;
+      }
       const filtered = data.filter((s) => s.lg.startsWith(selectedLeague));
       setSeasons(filtered);
       if (filtered.length > 0) setSelectedSeason(filtered[0].lg);
@@ -226,25 +487,49 @@ export default function Standings() {
   }, [selectedLeague]);
 
   useEffect(() => {
-    if (!selectedSeason) { setPlayoffTeams(null); return; }
+    if (!selectedSeason) {
+      setPlayoffTeams(null);
+      return;
+    }
     const season = seasons.find((s) => s.lg === selectedSeason);
     setPlayoffTeams(season?.playoff_teams ?? null);
   }, [selectedSeason, seasons]);
 
   useEffect(() => {
-    if (!selectedLeague || !selectedSeason) { setRawGames([]); return; }
+    if (!selectedLeague || !selectedSeason) {
+      setRawGames([]);
+      return;
+    }
     (async () => {
       setLoading(true);
-      const [{ data: gamesData, error }, { data: teamsData }, { data: scheduleData }] = await Promise.all([
-        supabase.from('games').select('id, home, away, score_home, score_away, ot, coach_home, coach_away').eq('lg', selectedSeason).eq('mode', 'Season').not('score_home', 'is', null).order('id', { ascending: true }),
+      const [
+        { data: gamesData, error },
+        { data: teamsData },
+        { data: scheduleData },
+      ] = await Promise.all([
+        supabase
+          .from('games')
+          .select(
+            'id, home, away, score_home, score_away, ot, coach_home, coach_away'
+          )
+          .eq('lg', selectedSeason)
+          .eq('mode', 'Season')
+          .not('score_home', 'is', null)
+          .order('id', { ascending: true }),
         supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
-        supabase.from('games').select('home').eq('lg', selectedSeason).eq('mode', 'Season'),
+        supabase
+          .from('games')
+          .select('home')
+          .eq('lg', selectedSeason)
+          .eq('mode', 'Season'),
       ]);
       if (error) console.error('Error fetching games:', error);
       setRawGames(gamesData || []);
       setSeasonTeams(teamsData || []);
       const homeCounts = {};
-      (scheduleData || []).forEach((g) => { homeCounts[g.home] = (homeCounts[g.home] || 0) + 1; });
+      (scheduleData || []).forEach((g) => {
+        homeCounts[g.home] = (homeCounts[g.home] || 0) + 1;
+      });
       const counts = Object.values(homeCounts);
       const gamesPerTeam = counts.length > 0 ? Math.max(...counts) * 2 : 52;
       setTotalGamesPerTeam(gamesPerTeam);
@@ -253,19 +538,37 @@ export default function Standings() {
   }, [selectedLeague, selectedSeason]);
 
   useEffect(() => {
-    if (!selectedSeason) { setDivisionMap([]); setActiveView('overall'); return; }
+    if (!selectedSeason) {
+      setDivisionMap([]);
+      setActiveView('overall');
+      return;
+    }
     (async () => {
-      const { data, error } = await supabase.from('historical_division_map').select('*').eq('season', selectedSeason);
-      if (error) { console.error('Error fetching division map:', error); setDivisionMap([]); }
-      else setDivisionMap(data || []);
+      const { data, error } = await supabase
+        .from('historical_division_map')
+        .select('*')
+        .eq('season', selectedSeason);
+      if (error) {
+        console.error('Error fetching division map:', error);
+        setDivisionMap([]);
+      } else setDivisionMap(data || []);
       setActiveView('overall');
     })();
   }, [selectedSeason]);
 
   useEffect(() => {
-    if (!selectedSeason) { setPlayoffGames([]); return; }
+    if (!selectedSeason) {
+      setPlayoffGames([]);
+      return;
+    }
     (async () => {
-      const { data, error } = await supabase.from('playoff_games').select('lg,round,series_number,game_number,team_code_a,team_code_b,team_a_score,team_b_score,game_date,seed_a,seed_b').eq('lg', selectedSeason).order('game_number', { ascending: true });
+      const { data, error } = await supabase
+        .from('playoff_games')
+        .select(
+          'lg,round,series_number,game_number,team_code_a,team_code_b,team_a_score,team_b_score,game_date,seed_a,seed_b'
+        )
+        .eq('lg', selectedSeason)
+        .order('game_number', { ascending: true });
       if (error) console.error('Error fetching playoff_games:', error);
       setPlayoffGames(data || []);
     })();
@@ -274,21 +577,41 @@ export default function Standings() {
   const computedStandings = useMemo(() => {
     const standings = computeStandings(rawGames);
     const playedTeams = new Set(standings.map((s) => s.team));
-    const zeroed = seasonTeams.filter(({ abr }) => !playedTeams.has(abr)).map(({ abr, coach }) => ({
-      team: abr, coach: coach || '', gp: 0, w: 0, l: 0, t: 0, otl: 0, otw: 0,
-      pts: 0, gf: 0, ga: 0, gd: 0, shutouts: 0, pts_pct: 0,
-    }));
+    const zeroed = seasonTeams
+      .filter(({ abr }) => !playedTeams.has(abr))
+      .map(({ abr, coach }) => ({
+        team: abr,
+        coach: coach || '',
+        gp: 0,
+        w: 0,
+        l: 0,
+        t: 0,
+        otl: 0,
+        otw: 0,
+        pts: 0,
+        gf: 0,
+        ga: 0,
+        gd: 0,
+        shutouts: 0,
+        pts_pct: 0,
+      }));
     return [...standings, ...zeroed];
   }, [rawGames, seasonTeams]);
 
   const defaultSorted = useMemo(
-    () => sortWithTiebreakers(computedStandings, rawGames).map((s, idx) => ({ ...s, _sortRank: idx + 1 })),
+    () =>
+      sortWithTiebreakers(computedStandings, rawGames).map((s, idx) => ({
+        ...s,
+        _sortRank: idx + 1,
+      })),
     [computedStandings, rawGames]
   );
 
   const sortedStandings = useMemo(() => {
     if (sortConfig.key === 'default' || sortConfig.key === 'pts') {
-      return sortConfig.direction === 'descending' ? defaultSorted : [...defaultSorted].reverse();
+      return sortConfig.direction === 'descending'
+        ? defaultSorted
+        : [...defaultSorted].reverse();
     }
     if (sortConfig.key === 'season_rank') return defaultSorted;
     return [...defaultSorted].sort((a, b) => {
@@ -296,7 +619,9 @@ export default function Standings() {
       if (a[key] === null || a[key] === undefined) return 1;
       if (b[key] === null || b[key] === undefined) return -1;
       if (typeof a[key] === 'string') {
-        return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
+        return direction === 'ascending'
+          ? a[key].localeCompare(b[key])
+          : b[key].localeCompare(a[key]);
       }
       return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
     });
@@ -317,7 +642,9 @@ export default function Standings() {
     const result = new Set();
     Object.entries(ptsCounts).forEach(([p, teams]) => {
       if (teams.length < 2) return;
-      const anyNearEnd = teams.some((t) => totalGamesPerTeam - (t.gp || 0) < 10);
+      const anyNearEnd = teams.some(
+        (t) => totalGamesPerTeam - (t.gp || 0) < 10
+      );
       if (anyNearEnd) result.add(Number(p));
     });
     return result;
@@ -328,12 +655,18 @@ export default function Standings() {
     const sticky = stickyScrollRef.current;
     if (!container || !sticky) return;
     const inner = sticky.querySelector('.sticky-scroll-inner');
-    const syncWidth = () => { inner.style.width = container.scrollWidth + 'px'; };
+    const syncWidth = () => {
+      inner.style.width = container.scrollWidth + 'px';
+    };
     syncWidth();
     const ro = new ResizeObserver(syncWidth);
     ro.observe(container);
-    const onContainerScroll = () => { sticky.scrollLeft = container.scrollLeft; };
-    const onStickyScroll = () => { container.scrollLeft = sticky.scrollLeft; };
+    const onContainerScroll = () => {
+      sticky.scrollLeft = container.scrollLeft;
+    };
+    const onStickyScroll = () => {
+      container.scrollLeft = sticky.scrollLeft;
+    };
     container.addEventListener('scroll', onContainerScroll);
     sticky.addEventListener('scroll', onStickyScroll);
     return () => {
@@ -344,27 +677,55 @@ export default function Standings() {
   }, [sortedStandings, activeView, divisionMap]);
 
   const handleSort = (key) => {
-    if (key === 'season_rank') { setSortConfig({ key: 'default', direction: 'descending' }); return; }
+    if (key === 'season_rank') {
+      setSortConfig({ key: 'default', direction: 'descending' });
+      return;
+    }
     let direction = 'ascending';
     if (sortConfig.key === key) {
-      direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+      direction =
+        sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
       direction = reverseSortColumns.includes(key) ? 'ascending' : 'descending';
     }
     setSortConfig({ key, direction });
   };
 
-  const handleRowMouseEnter = useCallback((e, team, pts) => {
-    const tiedTeams = sortedStandings.filter((s) => Number(s.pts) === Number(pts));
-    if (tiedTeams.length < 2) { setTiebreakerInfo(null); return; }
-    const anyNearEnd = tiedTeams.some((t) => totalGamesPerTeam - (t.gp || 0) < 10);
-    if (!anyNearEnd) { setTiebreakerInfo(null); return; }
-    const el = e.currentTarget;
-    const r = el.getBoundingClientRect();
-    setTiebreakerInfo({ hoveredTeam: team, tiedStandings: tiedTeams, anchorRect: { top: r.top, right: r.right, left: r.left, height: r.height } });
-  }, [sortedStandings, totalGamesPerTeam]);
+  const handleRowMouseEnter = useCallback(
+    (e, team, pts) => {
+      const tiedTeams = sortedStandings.filter(
+        (s) => Number(s.pts) === Number(pts)
+      );
+      if (tiedTeams.length < 2) {
+        setTiebreakerInfo(null);
+        return;
+      }
+      const anyNearEnd = tiedTeams.some(
+        (t) => totalGamesPerTeam - (t.gp || 0) < 10
+      );
+      if (!anyNearEnd) {
+        setTiebreakerInfo(null);
+        return;
+      }
+      const el = e.currentTarget;
+      const r = el.getBoundingClientRect();
+      setTiebreakerInfo({
+        hoveredTeam: team,
+        tiedStandings: tiedTeams,
+        anchorRect: {
+          top: r.top,
+          right: r.right,
+          left: r.left,
+          height: r.height,
+        },
+      });
+    },
+    [sortedStandings, totalGamesPerTeam]
+  );
 
-  const handleRowMouseLeave = useCallback(() => { setTiebreakerInfo(null); }, []);
+  const handleRowMouseLeave = useCallback(() => {
+    setTiebreakerInfo(null);
+  }, []);
 
   const hasConferences = divisionMap.some((d) => d.conference != null);
   const hasDivisions = divisionMap.some((d) => d.division != null);
@@ -380,45 +741,75 @@ export default function Standings() {
       return [{ title: null, subtitle: null, teams: sortedStandings }];
     }
     const sortGroup = (teams) => {
-      if (sortConfig.key !== 'default' && sortConfig.key !== 'pts' && sortConfig.key !== 'season_rank') {
+      if (
+        sortConfig.key !== 'default' &&
+        sortConfig.key !== 'pts' &&
+        sortConfig.key !== 'season_rank'
+      ) {
         return [...teams].sort((a, b) => {
           const { key, direction } = sortConfig;
           if (a[key] === null || a[key] === undefined) return 1;
           if (b[key] === null || b[key] === undefined) return -1;
           if (typeof a[key] === 'string') {
-            return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
+            return direction === 'ascending'
+              ? a[key].localeCompare(b[key])
+              : b[key].localeCompare(a[key]);
           }
           return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
         });
       }
-      return sortWithTiebreakers(teams, rawGames).map((s, idx) => ({ ...s, _sortRank: idx + 1 }));
+      return sortWithTiebreakers(teams, rawGames).map((s, idx) => ({
+        ...s,
+        _sortRank: idx + 1,
+      }));
     };
     if (activeView === 'conference' && hasConferences) {
-      const conferences = [...new Set(divisionMap.map((d) => d.conference).filter(Boolean))];
+      const conferences = [
+        ...new Set(divisionMap.map((d) => d.conference).filter(Boolean)),
+      ];
       return conferences.map((conf) => {
-        const teams = sortedStandings.filter((s) => divisionMap.find((d) => d.team === s.team)?.conference === conf);
+        const teams = sortedStandings.filter(
+          (s) => divisionMap.find((d) => d.team === s.team)?.conference === conf
+        );
         return { title: conf, subtitle: null, teams: sortGroup(teams) };
       });
     }
     if (activeView === 'division' && hasDivisions) {
       if (hasConferences) {
         const result = [];
-        const conferences = [...new Set(divisionMap.map((d) => d.conference).filter(Boolean))];
+        const conferences = [
+          ...new Set(divisionMap.map((d) => d.conference).filter(Boolean)),
+        ];
         conferences.forEach((conf) => {
-          const divs = [...new Set(divisionMap.filter((d) => d.conference === conf).map((d) => d.division).filter(Boolean))];
+          const divs = [
+            ...new Set(
+              divisionMap
+                .filter((d) => d.conference === conf)
+                .map((d) => d.division)
+                .filter(Boolean)
+            ),
+          ];
           divs.forEach((div) => {
             const teams = sortedStandings.filter((s) => {
               const ti = divisionMap.find((d) => d.team === s.team);
               return ti?.conference === conf && ti?.division === div;
             });
-            result.push({ title: conf, subtitle: div, teams: sortGroup(teams) });
+            result.push({
+              title: conf,
+              subtitle: div,
+              teams: sortGroup(teams),
+            });
           });
         });
         return result;
       } else {
-        const divisions = [...new Set(divisionMap.map((d) => d.division).filter(Boolean))];
+        const divisions = [
+          ...new Set(divisionMap.map((d) => d.division).filter(Boolean)),
+        ];
         return divisions.map((div) => {
-          const teams = sortedStandings.filter((s) => divisionMap.find((d) => d.team === s.team)?.division === div);
+          const teams = sortedStandings.filter(
+            (s) => divisionMap.find((d) => d.team === s.team)?.division === div
+          );
           return { title: div, subtitle: null, teams: sortGroup(teams) };
         });
       }
@@ -460,12 +851,17 @@ export default function Standings() {
           <select
             className="arcade-select"
             value={selectedSeason}
-            onChange={(e) => { setSelectedSeason(e.target.value); setSortConfig({ key: 'default', direction: 'descending' }); }}
+            onChange={(e) => {
+              setSelectedSeason(e.target.value);
+              setSortConfig({ key: 'default', direction: 'descending' });
+            }}
             disabled={!selectedLeague || seasons.length === 0}
           >
             <option value="">SELECT SEASON</option>
             {seasons.map((s) => (
-              <option key={s.lg} value={s.lg}>{s.lg} ({s.year})</option>
+              <option key={s.lg} value={s.lg}>
+                {s.lg} ({s.year})
+              </option>
             ))}
           </select>
         </div>
@@ -474,22 +870,46 @@ export default function Standings() {
       {computedStandings.length > 0 && (
         <div className="view-tabs-container">
           <div className="view-tabs">
-            <button className={`tab-button ${activeView === 'overall' ? 'active' : ''}`} onClick={() => setActiveView('overall')}>
-              <span className="tab-icon">⚡</span><span className="tab-text">OVERALL</span>
+            <button
+              className={`tab-button ${
+                activeView === 'overall' ? 'active' : ''
+              }`}
+              onClick={() => setActiveView('overall')}
+            >
+              <span className="tab-icon">⚡</span>
+              <span className="tab-text">OVERALL</span>
             </button>
             {availableViews.conference && (
-              <button className={`tab-button ${activeView === 'conference' ? 'active' : ''}`} onClick={() => setActiveView('conference')}>
-                <span className="tab-icon">🏆</span><span className="tab-text">CONFERENCE</span>
+              <button
+                className={`tab-button ${
+                  activeView === 'conference' ? 'active' : ''
+                }`}
+                onClick={() => setActiveView('conference')}
+              >
+                <span className="tab-icon">🏆</span>
+                <span className="tab-text">CONFERENCE</span>
               </button>
             )}
             {availableViews.division && (
-              <button className={`tab-button ${activeView === 'division' ? 'active' : ''}`} onClick={() => setActiveView('division')}>
-                <span className="tab-icon">🎯</span><span className="tab-text">DIVISION</span>
+              <button
+                className={`tab-button ${
+                  activeView === 'division' ? 'active' : ''
+                }`}
+                onClick={() => setActiveView('division')}
+              >
+                <span className="tab-icon">🎯</span>
+                <span className="tab-text">DIVISION</span>
               </button>
             )}
             {availableViews.playoffs && (
-              <button className={`tab-button playoffs-tab ${activeView === 'playoffs' ? 'active' : ''}`} onClick={() => setActiveView('playoffs')}>
-                <span className="tab-icon">🏅</span><span className="tab-text">PLAYOFFS</span>
+              <button
+                className={`tab-button playoffs-tab ${
+                  activeView === 'playoffs' ? 'active' : ''
+                }`}
+                onClick={() => setActiveView('playoffs')}
+              >
+                <span className="tab-icon">🏅</span>
+                <span className="tab-text">PLAYOFFS</span>
               </button>
             )}
           </div>
@@ -502,28 +922,41 @@ export default function Standings() {
           <div className="loading-text">LOADING DATA...</div>
         </div>
       ) : !selectedLeague ? (
-        <div className="no-data"><div className="no-data-text">SELECT A LEAGUE FROM THE MENU</div></div>
+        <div className="no-data">
+          <div className="no-data-text">SELECT A LEAGUE FROM THE MENU</div>
+        </div>
       ) : computedStandings.length === 0 ? (
-        <div className="no-data"><div className="no-data-text">SELECT A SEASON</div></div>
+        <div className="no-data">
+          <div className="no-data-text">SELECT A SEASON</div>
+        </div>
       ) : activeView === 'playoffs' ? (
         playoffGames?.length ? (
           <div style={{ overflowX: 'auto', width: '100%' }}>
-            <PlayoffBracket playoffGames={playoffGames} seasonGames={rawGames} selectedSeason={selectedSeason} selectedLeague={selectedLeague} />
+            <PlayoffBracket
+              playoffGames={playoffGames}
+              seasonGames={rawGames}
+              selectedSeason={selectedSeason}
+              selectedLeague={selectedLeague}
+            />
           </div>
         ) : (
-          <div className="no-data"><div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div></div>
+          <div className="no-data">
+            <div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div>
+          </div>
         )
       ) : (
         <>
-          {tiebreakerInfo && tiebreakerInfo.anchorRect && createPortal(
-            <TiebreakerTooltip
-              hoveredTeam={tiebreakerInfo.hoveredTeam}
-              tiedStandings={tiebreakerInfo.tiedStandings}
-              seasonGames={rawGames}
-              anchorRect={tiebreakerInfo.anchorRect}
-            />,
-            document.body
-          )}
+          {tiebreakerInfo &&
+            tiebreakerInfo.anchorRect &&
+            createPortal(
+              <TiebreakerTooltip
+                hoveredTeam={tiebreakerInfo.hoveredTeam}
+                tiedStandings={tiebreakerInfo.tiedStandings}
+                seasonGames={rawGames}
+                anchorRect={tiebreakerInfo.anchorRect}
+              />,
+              document.body
+            )}
 
           <div className="table-container" ref={tableContainerRef}>
             {groupedStandings.map((group, groupIdx) => (
@@ -532,12 +965,19 @@ export default function Standings() {
                   <div className="group-header">
                     <div className="group-title">
                       {group.title}
-                      {group.subtitle && <span className="group-subtitle"> - {group.subtitle}</span>}
+                      {group.subtitle && (
+                        <span className="group-subtitle">
+                          {' '}
+                          - {group.subtitle}
+                        </span>
+                      )}
                     </div>
                   </div>
                 )}
                 {!group.title && group.subtitle && (
-                  <div className="group-header"><div className="group-title">{group.subtitle}</div></div>
+                  <div className="group-header">
+                    <div className="group-title">{group.subtitle}</div>
+                  </div>
                 )}
                 <div className="scoreboard-frame">
                   <table className="arcade-table">
@@ -548,12 +988,20 @@ export default function Standings() {
                             key={col.key}
                             onClick={() => handleSort(col.key)}
                             style={{ width: col.width }}
-                            className={`${activeSortKey === col.key ? 'sorted-column' : ''} ${col.key === 'season_rank' ? 'rank-column' : ''}`}
+                            className={`${
+                              activeSortKey === col.key ? 'sorted-column' : ''
+                            } ${
+                              col.key === 'season_rank' ? 'rank-column' : ''
+                            }`}
                           >
                             <div className="th-content">
                               <span>{col.label}</span>
                               {activeSortKey === col.key && (
-                                <span className="sort-indicator">{sortConfig.direction === 'ascending' ? '▲' : '▼'}</span>
+                                <span className="sort-indicator">
+                                  {sortConfig.direction === 'ascending'
+                                    ? '▲'
+                                    : '▼'}
+                                </span>
                               )}
                             </div>
                           </th>
@@ -567,67 +1015,195 @@ export default function Standings() {
                         const isElim = eliminated.has(s.team);
                         const rowClass = [
                           idx % 2 === 0 ? 'even-row' : 'odd-row',
-                          playoffTeams && s._sortRank <= playoffTeams ? 'playoff-team' : 'non-playoff-team',
+                          playoffTeams && s._sortRank <= playoffTeams
+                            ? 'playoff-team'
+                            : 'non-playoff-team',
                           isTied ? 'tied-row' : '',
                           isClinched ? 'clinched-row' : '',
                           isElim ? 'eliminated-row' : '',
-                        ].filter(Boolean).join(' ');
+                        ]
+                          .filter(Boolean)
+                          .join(' ');
                         return (
                           <React.Fragment key={`${s.team}-${idx}`}>
                             <tr
                               className={rowClass}
-                              onMouseEnter={isTied ? (e) => handleRowMouseEnter(e, s.team, Number(s.pts)) : undefined}
-                              onMouseLeave={isTied ? handleRowMouseLeave : undefined}
+                              onMouseEnter={
+                                isTied
+                                  ? (e) =>
+                                      handleRowMouseEnter(
+                                        e,
+                                        s.team,
+                                        Number(s.pts)
+                                      )
+                                  : undefined
+                              }
+                              onMouseLeave={
+                                isTied ? handleRowMouseLeave : undefined
+                              }
                             >
                               <td className="rank-cell">{idx + 1}</td>
                               <td className="team-cell">
                                 <div className="row-banner-overlay">
-                                  <img src={`/assets/banners/${s.team}.png`} alt="" className="banner-image" onError={(e) => { e.target.style.display = 'none'; }} />
+                                  <img
+                                    src={`/assets/banners/${s.team}.png`}
+                                    alt=""
+                                    className="banner-image"
+                                    onError={(e) => {
+                                      e.target.style.display = 'none';
+                                    }}
+                                  />
                                 </div>
                                 <div className="team-info">
-                                  <div className={`logo-container${isClinched ? ' logo-clinched' : isElim ? ' logo-elim' : ''}`}>
+                                  <div
+                                    className={`logo-container${
+                                      isClinched
+                                        ? ' logo-clinched'
+                                        : isElim
+                                        ? ' logo-elim'
+                                        : ''
+                                    }`}
+                                  >
                                     <img
                                       src={`/assets/teamLogos/${s.team}.png`}
                                       alt={s.team}
                                       className="team-logo"
-                                      onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = 'flex'; }}
+                                      onError={(e) => {
+                                        e.target.style.display = 'none';
+                                        e.target.nextElementSibling.style.display =
+                                          'flex';
+                                      }}
                                     />
-                                    <div className="logo-fallback" style={{ display: 'none' }}>{s.team}</div>
+                                    <div
+                                      className="logo-fallback"
+                                      style={{ display: 'none' }}
+                                    >
+                                      {s.team}
+                                    </div>
                                   </div>
                                   <span className="team-code">{s.team}</span>
                                 </div>
                               </td>
                               <td className="coach-cell">{s.coach}</td>
-                              <td className={`stat-cell ${activeSortKey === 'gp' ? 'sorted-cell' : ''}`}>{s.gp}</td>
-                              <td className={`stat-cell ${activeSortKey === 'w' ? 'sorted-cell' : ''}`}>{s.w}</td>
-                              <td className={`stat-cell ${activeSortKey === 'l' ? 'sorted-cell' : ''}`}>{s.l}</td>
-                              <td className={`stat-cell ${activeSortKey === 't' ? 'sorted-cell' : ''}`}>{s.t}</td>
-                              <td className={`stat-cell ${activeSortKey === 'otl' ? 'sorted-cell' : ''}`}>{s.otl}</td>
-                              <td className={`stat-cell pts-cell ${activeSortKey === 'pts' ? 'sorted-cell' : ''} ${isTied ? 'tied-pts' : ''}`}>{s.pts}</td>
-                              <td className={`stat-cell pts-pct-cell ${activeSortKey === 'pts_pct' ? 'sorted-cell' : ''}`}>
-                                {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'gp' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.gp}
                               </td>
-                              <td className={`stat-cell ${activeSortKey === 'gf' ? 'sorted-cell' : ''}`}>{s.gf}</td>
-                              <td className={`stat-cell ${activeSortKey === 'ga' ? 'sorted-cell' : ''}`}>{s.ga}</td>
-                              <td className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${activeSortKey === 'gd' ? 'sorted-cell' : ''}`}>
-                                {s.gd > 0 ? '+' : ''}{s.gd}
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'w' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.w}
                               </td>
-                              <td className={`stat-cell ${activeSortKey === 'otw' ? 'sorted-cell' : ''}`}>{s.otw}</td>
-                              <td className={`stat-cell ${activeSortKey === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'l' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.l}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 't' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.t}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'otl' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.otl}
+                              </td>
+                              <td
+                                className={`stat-cell pts-cell ${
+                                  activeSortKey === 'pts' ? 'sorted-cell' : ''
+                                } ${isTied ? 'tied-pts' : ''}`}
+                              >
+                                {s.pts}
+                              </td>
+                              <td
+                                className={`stat-cell pts-pct-cell ${
+                                  activeSortKey === 'pts_pct'
+                                    ? 'sorted-cell'
+                                    : ''
+                                }`}
+                              >
+                                {s.gp > 0
+                                  ? (s.pts / (s.gp * 2)).toFixed(3)
+                                  : '.000'}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'gf' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.gf}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'ga' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.ga}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  s.gd > 0
+                                    ? 'positive-gd'
+                                    : s.gd < 0
+                                    ? 'negative-gd'
+                                    : ''
+                                } ${
+                                  activeSortKey === 'gd' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.gd > 0 ? '+' : ''}
+                                {s.gd}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'otw' ? 'sorted-cell' : ''
+                                }`}
+                              >
+                                {s.otw}
+                              </td>
+                              <td
+                                className={`stat-cell ${
+                                  activeSortKey === 'shutouts'
+                                    ? 'sorted-cell'
+                                    : ''
+                                }`}
+                              >
+                                {s.shutouts}
+                              </td>
                             </tr>
                             {playoffTeams && idx === playoffTeams - 1 && (
                               <tr className="playoff-cutoff-row">
-                                <td colSpan={columns.length} className="playoff-cutoff-cell">
+                                <td
+                                  colSpan={columns.length}
+                                  className="playoff-cutoff-cell"
+                                >
                                   <div className="playoff-cutoff-line">
                                     <div className="cutoff-glow" />
                                     <div className="cutoff-content">
                                       <div className="cutoff-diamond" />
-                                      <span className="cutoff-text">PLAYOFF LINE</span>
+                                      <span className="cutoff-text">
+                                        PLAYOFF LINE
+                                      </span>
                                       <div className="cutoff-diamond" />
                                     </div>
                                     <div className="cutoff-particles">
                                       {[1, 2, 3, 4, 5].map((n) => (
-                                        <div key={n} className={`particle particle-${n}`} />
+                                        <div
+                                          key={n}
+                                          className={`particle particle-${n}`}
+                                        />
                                       ))}
                                     </div>
                                   </div>
@@ -643,8 +1219,6 @@ export default function Standings() {
               </div>
             ))}
           </div>
-
-          
         </>
       )}
 
@@ -655,7 +1229,7 @@ export default function Standings() {
           overflow-x: visible;
         }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
-        .table-container { overflow-x: visible; border-radius:12px; scrollbar-width: none; }
+        .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
         .table-container::-webkit-scrollbar { display: none; }
         .arcade-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
@@ -694,7 +1268,7 @@ export default function Standings() {
         .arcade-table td,.arcade-table th { box-sizing:border-box; }
         .arcade-table thead { background:linear-gradient(180deg,#FFD700 0%,#FF6347 100%); }
         .arcade-table th { padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease; position:relative; border-right:1px solid rgba(255,255,255,.2); }
-        .arcade-table td { padding:.25rem .5rem; text-align:center; font-size:1.2rem; color:#E0E0E0; border-bottom:1px solid rgba(255,140,0,.2); letter-spacing:1px; position:relative; z-index:1; }
+        .arcade-table td { padding:.25rem .5rem; text-align:center; font-size:1.2rem; color:#E0E0E0; border-bottom:1px solid rgba(255,140,0,.2); letter-spacing:1px; position:relative; }
         .arcade-table .rank-cell { font-family:'Press Start 2P',monospace; font-size:.9rem; color:#FF8C00; font-weight:bold; text-shadow:0 0 5px #FF8C00; position:relative; z-index:10; white-space:nowrap; }
         .arcade-table th:last-child { border-right:none; }
         .arcade-table th:hover:not(.rank-column) { background:linear-gradient(180deg,#FF8C00 0%,#FF8C00 100%); transform:translateY(-2px); }
@@ -703,14 +1277,14 @@ export default function Standings() {
         .th-content { display:flex; align-items:center; justify-content:center; gap:.3rem; }
         .sort-indicator { font-size:.5rem; animation:bounce .5s ease; }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
-        .arcade-table tbody tr { transition:all .2s ease; position:relative; }
+        .arcade-table tbody tr { transition:all .2s ease; position:relative; overflow:hidden; }
         .playoff-team .rank-cell::before { content:''; position:absolute; left:-8px; top:-1px; bottom:-1px; width:4px; background:linear-gradient(180deg,#00FF00 0%,#00CC00 100%); box-shadow:0 0 10px rgba(0,255,0,.6); z-index:100; }
         .tied-pts { position:relative; animation:tied-pulse 2s ease-in-out infinite; }
         .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); animation:triangle-pulse 2s ease-in-out infinite; }
         @keyframes triangle-pulse { 0%,100%{border-color:transparent rgba(255,140,0,.6) transparent transparent} 50%{border-color:transparent rgba(255,215,0,1) transparent transparent; filter:drop-shadow(0 0 5px rgba(255,215,0,.9))} }
         @keyframes tied-pulse { 0%,100%{text-shadow:0 0 8px rgba(255,140,0,.4)} 50%{text-shadow:0 0 16px rgba(255,140,0,.9),0 0 24px rgba(255,215,0,.4)} }
         .tied-row { cursor:default; }
-        .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:400px; pointer-events:none; z-index:0; overflow:hidden; opacity:.15; transition:all .3s ease; }
+        .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:100%; pointer-events:none; z-index:0; overflow:hidden; opacity:.15; transition:all .3s ease; }
         .arcade-table tbody tr:hover .row-banner-overlay { opacity:.25; width:450px; }
         .banner-image { position:absolute; left:-20px; top:50%; transform:translateY(-50%); height:140%; width:auto; object-fit:contain; filter:blur(1px) brightness(1.2); mask-image:linear-gradient(to right,rgba(0,0,0,.8) 0%,rgba(0,0,0,.7) 20%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.3) 60%,rgba(0,0,0,.15) 75%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.8) 0%,rgba(0,0,0,.7) 20%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.3) 60%,rgba(0,0,0,.15) 75%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); }
         .arcade-table tbody tr:hover .banner-image { filter:blur(.5px) brightness(1.4); transform:translateY(-50%) scale(1.05); }
@@ -763,6 +1337,7 @@ export default function Standings() {
         .no-data { display:flex; justify-content:center; align-items:center; min-height:400px; }
         .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FFD700; letter-spacing:3px; }
         @media(max-width:768px){
+          .row-banner-overlay { display: none; }
           .led-text{font-size:1.2rem;letter-spacing:3px}
           .view-tabs{flex-direction:column;gap:.5rem;padding:.5rem}
           .tab-button{padding:.6rem 1rem;font-size:.55rem;justify-content:center}

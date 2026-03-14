@@ -1621,9 +1621,9 @@ function StatsTable({
     const ths = tableRef.current.querySelectorAll('thead tr:last-child th');
     if (ths.length >= 2) {
       const w0 = ths[0].getBoundingClientRect().width;
-      setStickyLeftPx([0, w0]);
+      setStickyLeftPx((prev) => (prev[1] === w0 ? prev : [0, w0]));
     }
-  });
+  }, [hasStickyCols, rows, cols]);
 
   const stickyLeft = useMemo(() => {
     if (!hasStickyCols) return new Map();

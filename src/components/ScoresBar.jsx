@@ -11,7 +11,7 @@ import { supabase } from '../utils/supabaseClient';
 import { useLeague } from './LeagueContext';
 import DefendingChampion from './DefendingChampion';
 
-const lgPrefix = lg => (lg || '').replace(/[0-9]/g, '').trim();
+const lgPrefix = (lg) => (lg || '').replace(/[0-9]/g, '').trim();
 
 const LEAGUE_CFG = {
   W: { color: '#87CEEB' },
@@ -20,42 +20,78 @@ const LEAGUE_CFG = {
 };
 
 // ─── H2H data fetch ───────────────────────────────────────────────────────────
-async function fetchH2H(teamA, teamB) {
-  const { data } = await supabase
-    .from('games')
-    .select('legacy_game_id, home, away, result_home, result_away, ot, lg')
-    .or(`and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`)
-    .order('legacy_game_id', { ascending: false })
-    .limit(10);
+async function fetchH2H(teamA, teamB, isPlayoff = false) {
+  if (isPlayoff) {
+    const { data } = await supabase
+      .from('playoff_games')
+      .select(
+        'id, team_code_a, team_code_b, team_a_score, team_b_score, lg, round, game_number'
+      )
+      .or(
+        `and(team_code_a.eq.${teamA},team_code_b.eq.${teamB}),and(team_code_a.eq.${teamB},team_code_b.eq.${teamA})`
+      )
+      .not('team_a_score', 'is', null)
+      .order('id', { ascending: false })
+      .limit(10);
 
-  const games = data || [];
-  if (!games.length) return null;
+    const games = (data || []).map((g) => ({
+      home: g.team_code_a,
+      away: g.team_code_b,
+      result_home: g.team_a_score > g.team_b_score ? 'W' : 'L',
+      result_away: g.team_b_score > g.team_a_score ? 'W' : 'L',
+      ot: 0,
+      lg: g.lg,
+      _isPlayoff: true,
+    }));
 
+    if (!games.length) return null;
+    return buildH2HResult(games, teamA, teamB);
+  } else {
+    const { data } = await supabase
+      .from('games')
+      .select('legacy_game_id, home, away, result_home, result_away, ot, lg')
+      .or(
+        `and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`
+      )
+      .not('score_home', 'is', null)
+      .order('legacy_game_id', { ascending: false })
+      .limit(10);
+
+    const games = data || [];
+    if (!games.length) return null;
+    return buildH2HResult(games, teamA, teamB);
+  }
+}
+
+function buildH2HResult(games, teamA, teamB) {
   const getResult = (g, team) => {
     const isHome = g.home === team;
     const r = ((isHome ? g.result_home : g.result_away) || '').toUpperCase();
     return r === 'W' || r === 'OTW' ? 'W' : 'L';
   };
 
-  let winsA = 0, winsB = 0;
-  games.forEach(g => {
-    if (getResult(g, teamA) === 'W') winsA++; else winsB++;
+  let winsA = 0,
+    winsB = 0;
+  games.forEach((g) => {
+    if (getResult(g, teamA) === 'W') winsA++;
+    else winsB++;
   });
 
-  // Current h2h streak (positive = win, negative = loss)
   const calcStreak = (team) => {
     if (!games.length) return 0;
     const first = getResult(games[0], team);
     let n = 0;
     for (const g of games) {
-      if (getResult(g, team) === first) n++; else break;
+      if (getResult(g, team) === first) n++;
+      else break;
     }
     return first === 'W' ? n : -n;
   };
 
   return {
     games,
-    winsA, winsB,
+    winsA,
+    winsB,
     streakA: calcStreak(teamA),
     streakB: calcStreak(teamB),
     total: games.length,
@@ -66,10 +102,11 @@ async function fetchH2H(teamA, teamB) {
 function StreakBadge({ val }) {
   if (!val) return <span className="sc-streak sc-streak-none">–</span>;
   const isWin = val > 0;
-  const n     = Math.abs(val);
+  const n = Math.abs(val);
   return (
     <span className={`sc-streak ${isWin ? 'sc-streak-w' : 'sc-streak-l'}`}>
-      {isWin ? 'W' : 'L'}{n}
+      {isWin ? 'W' : 'L'}
+      {n}
     </span>
   );
 }
@@ -77,10 +114,10 @@ function StreakBadge({ val }) {
 // ─── Individual card ──────────────────────────────────────────────────────────
 function ScoreCard({ game, index }) {
   const [flipped, setFlipped] = useState(false);
-  const [h2h,     setH2h]     = useState(null);
+  const [h2h, setH2h] = useState(null);
   const [h2hLoad, setH2hLoad] = useState(false);
-  const fetchedRef             = useRef(false);
-  const hoverTimerRef          = useRef(null);
+  const fetchedRef = useRef(false);
+  const hoverTimerRef = useRef(null);
 
   // Hover handlers — 150 ms delay prevents accidental flips
   const handleMouseEnter = () => {
@@ -90,7 +127,7 @@ function ScoreCard({ game, index }) {
       if (!fetchedRef.current) {
         fetchedRef.current = true;
         setH2hLoad(true);
-        const result = await fetchH2H(game.away, game.home);
+        const result = await fetchH2H(game.away, game.home, !!game._isPlayoff);
         setH2h(result);
         setH2hLoad(false);
       }
@@ -107,19 +144,29 @@ function ScoreCard({ game, index }) {
 
   if (!game) {
     return (
-      <div className="sc-wrap sc-wrap-skel" style={{ animationDelay: `${index * 0.04}s` }}>
+      <div
+        className="sc-wrap sc-wrap-skel"
+        style={{ animationDelay: `${index * 0.04}s` }}
+      >
         <div className="sc-front">
-          <div className="sc-skel-row"><div className="sc-skel-logo"/><div className="sc-skel-score"/></div>
-          <div className="sc-div-line"/>
-          <div className="sc-skel-row"><div className="sc-skel-logo"/><div className="sc-skel-score"/></div>
+          <div className="sc-skel-row">
+            <div className="sc-skel-logo" />
+            <div className="sc-skel-score" />
+          </div>
+          <div className="sc-div-line" />
+          <div className="sc-skel-row">
+            <div className="sc-skel-logo" />
+            <div className="sc-skel-score" />
+          </div>
         </div>
       </div>
     );
   }
 
-  const isOT    = Number(game.ot) === 1 ||
-                  (game.result_home || '').toUpperCase().includes('OT') ||
-                  (game.result_away || '').toUpperCase().includes('OT');
+  const isOT =
+    Number(game.ot) === 1 ||
+    (game.result_home || '').toUpperCase().includes('OT') ||
+    (game.result_away || '').toUpperCase().includes('OT');
   const homeWin = Number(game.score_home) > Number(game.score_away);
   const awayWin = Number(game.score_away) > Number(game.score_home);
 
@@ -133,22 +180,48 @@ function ScoreCard({ game, index }) {
       {/* ── FRONT ── */}
       <div className="sc-card sc-front">
         {/* OT badge — top-right, clear of logos */}
-        {isOT && <span className="sc-ot">OT</span>}
+        {game._isPlayoff && (
+          <span
+            className="sc-ot"
+            style={{ color: '#FFD700', borderColor: 'rgba(255,215,0,.55)' }}
+          >
+            PO
+          </span>
+        )}
+        {!game._isPlayoff && isOT && <span className="sc-ot">OT</span>}
 
         <div className="sc-team-row">
-          <img src={`/assets/teamLogos/${game.away}.png`} alt={game.away} className="sc-logo"
-            onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.display='flex'; }} />
-          <div className="sc-logo-fb">{(game.away||'').slice(0,3)}</div>
-          <span className={`sc-score ${awayWin ? 'sc-win' : ''}`}>{game.score_away ?? '–'}</span>
+          <img
+            src={`/assets/teamLogos/${game.away}.png`}
+            alt={game.away}
+            className="sc-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling.style.display = 'flex';
+            }}
+          />
+          <div className="sc-logo-fb">{(game.away || '').slice(0, 3)}</div>
+          <span className={`sc-score ${awayWin ? 'sc-win' : ''}`}>
+            {game.score_away ?? '–'}
+          </span>
         </div>
 
         <div className="sc-div-line" />
 
         <div className="sc-team-row">
-          <img src={`/assets/teamLogos/${game.home}.png`} alt={game.home} className="sc-logo"
-            onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextElementSibling.style.display='flex'; }} />
-          <div className="sc-logo-fb">{(game.home||'').slice(0,3)}</div>
-          <span className={`sc-score ${homeWin ? 'sc-win' : ''}`}>{game.score_home ?? '–'}</span>
+          <img
+            src={`/assets/teamLogos/${game.home}.png`}
+            alt={game.home}
+            className="sc-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+              e.currentTarget.nextElementSibling.style.display = 'flex';
+            }}
+          />
+          <div className="sc-logo-fb">{(game.home || '').slice(0, 3)}</div>
+          <span className={`sc-score ${homeWin ? 'sc-win' : ''}`}>
+            {game.score_home ?? '–'}
+          </span>
         </div>
       </div>
 
@@ -156,30 +229,60 @@ function ScoreCard({ game, index }) {
       <div className="sc-card sc-back">
         {h2hLoad ? (
           <div className="sc-back-loading">
-            <span className="sc-bl"/><span className="sc-bl"/><span className="sc-bl"/>
+            <span className="sc-bl" />
+            <span className="sc-bl" />
+            <span className="sc-bl" />
           </div>
         ) : h2h ? (
           <>
             {/* Away team row */}
             <div className="sc-h2h-team-row">
-              <img src={`/assets/teamLogos/${game.away}.png`} alt={game.away} className="sc-h2h-logo"
-                onError={e => { e.currentTarget.style.display='none'; }} />
-              <span className="sc-h2h-record">{h2h.winsA}–{h2h.winsB}</span>
+              <img
+                src={`/assets/teamLogos/${game.away}.png`}
+                alt={game.away}
+                className="sc-h2h-logo"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <span className="sc-h2h-record">
+                {h2h.winsA}–{h2h.winsB}
+              </span>
               <StreakBadge val={h2h.streakA} />
             </div>
 
             {/* VS divider with game count */}
             <div className="sc-h2h-vs-row">
-              <div className="sc-h2h-line"/>
-              <span className="sc-h2h-vs">L{h2h.total}</span>
-              <div className="sc-h2h-line"/>
+              <div className="sc-h2h-line" />
+              <span
+                className="sc-h2h-vs"
+                style={
+                  game._isPlayoff
+                    ? {
+                        color: '#FFD700',
+                        textShadow: '0 0 8px rgba(255,215,0,.6)',
+                      }
+                    : {}
+                }
+              >
+                {game._isPlayoff ? 'L10-PO' : `L${h2h.total}`}
+              </span>
+              <div className="sc-h2h-line" />
             </div>
 
             {/* Home team row */}
             <div className="sc-h2h-team-row">
-              <img src={`/assets/teamLogos/${game.home}.png`} alt={game.home} className="sc-h2h-logo"
-                onError={e => { e.currentTarget.style.display='none'; }} />
-              <span className="sc-h2h-record">{h2h.winsB}–{h2h.winsA}</span>
+              <img
+                src={`/assets/teamLogos/${game.home}.png`}
+                alt={game.home}
+                className="sc-h2h-logo"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+              <span className="sc-h2h-record">
+                {h2h.winsB}–{h2h.winsA}
+              </span>
               <StreakBadge val={h2h.streakB} />
             </div>
 
@@ -187,12 +290,19 @@ function ScoreCard({ game, index }) {
             <div className="sc-dots-row">
               {h2h.games.slice(0, 8).map((g, i) => {
                 const aIsHome = g.home === game.away;
-                const r = ((aIsHome ? g.result_home : g.result_away) || '').toUpperCase();
+                const r = (
+                  (aIsHome ? g.result_home : g.result_away) || ''
+                ).toUpperCase();
                 const win = r === 'W' || r === 'OTW';
-                return <span key={i} className={`sc-mini-dot ${win ? 'sc-md-w' : 'sc-md-l'}`} title={win ? 'W' : 'L'} />;
+                return (
+                  <span
+                    key={i}
+                    className={`sc-mini-dot ${win ? 'sc-md-w' : 'sc-md-l'}`}
+                    title={win ? 'W' : 'L'}
+                  />
+                );
               })}
             </div>
-
           </>
         ) : (
           <div className="sc-no-h2h">NO HISTORY</div>
@@ -205,29 +315,76 @@ function ScoreCard({ game, index }) {
 // ─── ScoresBar ────────────────────────────────────────────────────────────────
 export default function ScoresBar() {
   const { selectedLeague } = useLeague();
-  const [games,   setGames]   = useState([]);
+  const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const color = LEAGUE_CFG[selectedLeague]?.color ?? '#aaa';
 
   useEffect(() => {
     if (!selectedLeague) return;
-    setLoading(true); setGames([]);
+    setLoading(true);
+    setGames([]);
     (async () => {
       const { data: seasons } = await supabase
-        .from('seasons').select('lg, end_date, year')
-        .order('year', { ascending: false }).limit(20);
-      const ps = (seasons || []).filter(s => lgPrefix(s.lg) === selectedLeague);
-      if (!ps.length) { setLoading(false); return; }
+        .from('seasons')
+        .select('lg, end_date, year')
+        .order('year', { ascending: false })
+        .limit(20);
+      const ps = (seasons || []).filter(
+        (s) => lgPrefix(s.lg) === selectedLeague
+      );
+      if (!ps.length) {
+        setLoading(false);
+        return;
+      }
       const latest = ps.reduce((b, s) =>
-        new Date(s.end_date) > new Date(b.end_date) ? s : b);
-      const { data } = await supabase
-        .from('games')
-        .select('lg, legacy_game_id, home, away, score_home, score_away, ot, result_home, result_away')
-        .eq('lg', latest.lg)
-        .order('legacy_game_id', { ascending: false })
-        .limit(8);
-      setGames(data || []);
+        new Date(s.end_date) > new Date(b.end_date) ? s : b
+      );
+
+      // Fetch season games and playoff games in parallel
+      const [{ data: seasonData }, { data: playoffData }] = await Promise.all([
+        supabase
+          .from('games')
+          .select(
+            'lg, legacy_game_id, home, away, score_home, score_away, ot, result_home, result_away'
+          )
+          .eq('lg', latest.lg)
+          .not('score_home', 'is', null)
+          .order('legacy_game_id', { ascending: false })
+          .limit(8),
+        supabase
+          .from('playoff_games')
+          .select(
+            'id, lg, team_code_a, team_code_b, team_a_score, team_b_score, game_date, round, series_number, game_number'
+          )
+          .eq('lg', latest.lg)
+          .not('team_a_score', 'is', null)
+          .order('id', { ascending: false })
+          .limit(8),
+      ]);
+
+      // Normalize playoff rows to same shape as games rows
+      const playoffRows = (playoffData || []).map((g) => ({
+        lg: g.lg,
+        legacy_game_id: g.id + 1000000, // offset so they sort above season games
+        home: g.team_code_a,
+        away: g.team_code_b,
+        score_home: g.team_a_score,
+        score_away: g.team_b_score,
+        ot: 0,
+        result_home: g.team_a_score > g.team_b_score ? 'W' : 'L',
+        result_away: g.team_b_score > g.team_a_score ? 'W' : 'L',
+        _isPlayoff: true,
+        round: g.round,
+        game_number: g.game_number,
+      }));
+
+      // Merge, sort by recency (playoff rows float to top via offset), take 8
+      const all = [...playoffRows, ...(seasonData || [])]
+        .sort((a, b) => (b.legacy_game_id || 0) - (a.legacy_game_id || 0))
+        .slice(0, 8);
+
+      setGames(all);
       setLoading(false);
     })();
   }, [selectedLeague]);
@@ -237,7 +394,6 @@ export default function ScoresBar() {
   return (
     <>
       <div className="sb-root" style={{ '--sb': color }}>
-
         {/* Scrollable cards area */}
         <div className="sb-track-wrap">
           <div className="sb-cards">
@@ -246,7 +402,7 @@ export default function ScoresBar() {
             ))}
           </div>
           {/* Edge fade masks */}
-          <div className="sb-fade-left"  />
+          <div className="sb-fade-left" />
           <div className="sb-fade-right" />
         </div>
 
@@ -481,9 +637,9 @@ export default function ScoresBar() {
         .sc-h2h-vs {
           font-family: 'Press Start 2P', monospace;
           font-size: .26rem;
-          color: rgba(255,255,255,.2);
           letter-spacing: 1px;
           white-space: nowrap;
+          color: rgba(255,255,255,.2);
         }
 
         /* Mini dot history row */

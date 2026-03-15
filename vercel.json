@@ -9,5 +9,8 @@
       "path": "/api/gazette-cron",
       "schedule": "0 4 * * *"
     }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

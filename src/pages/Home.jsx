@@ -362,7 +362,7 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
    LEAGUE GAZETTE — Daily AI-Generated Newspaper
 ═══════════════════════════════════════════════════════════════ */
 
-const GAZETTE_CACHE_KEY = 'league_gazette_v5';
+const GAZETTE_CACHE_KEY = 'league_gazette_v6';
 function todayStamp() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -395,15 +395,22 @@ async function fetchGazetteEdition({
   teamNameMap,
   topScorers,
   recentGames,
+  isPlayoffActive,
+  playoffSeriesData,
+  gameStats,
 }) {
   const today = todayStamp();
 
-  // ── 1. Check DB cache first ───────────────────────────────
+  // Use a different cache key during playoffs so it never serves
+  // a regular-season edition when playoffs are active
+  const cacheKey = isPlayoffActive ? `${leagueLabel}_playoff` : leagueLabel;
+
+  // ── 1. Check DB cache ─────────────────────────────────────
   try {
     const { data: cached } = await supabase
       .from('gazette_cache')
       .select('data, date')
-      // .eq('league', leagueLabel) // uncomment if you ever want league-specific editions
+      .eq('league', cacheKey) // ← use cacheKey not leagueLabel
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -498,8 +505,37 @@ async function fetchGazetteEdition({
   ];
   const angleHint = angles[new Date().getDate() % angles.length];
 
+  // ── Build playoff series summary ───────────────────────────
+  const playoffBlock =
+    isPlayoffActive && playoffSeriesData?.length
+      ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏒 PLAYOFF MODE — ACTIVE
+${playoffSeriesData
+  .map((s) => {
+    const teamA = teamNameMap[s.team_code_a]?.full || s.team_code_a;
+    const teamB = teamNameMap[s.team_code_b]?.full || s.team_code_b;
+    const winsA = s.wins_a ?? 0;
+    const winsB = s.wins_b ?? 0;
+    const needed = Math.ceil((s.series_length ?? 7) / 2);
+    const leader = winsA > winsB ? teamA : winsB > winsA ? teamB : null;
+    const advanced = winsA >= needed ? teamA : winsB >= needed ? teamB : null;
+    const statusLine = advanced
+      ? `🏆 ${advanced} ADVANCES to Round ${s.round + 1}!`
+      : leader
+      ? `${leader} leads ${Math.max(winsA, winsB)}-${Math.min(winsA, winsB)}`
+      : `Series tied ${winsA}-${winsB}`;
+    return `Round ${s.round} | ${teamA} vs ${teamB} | ${statusLine}`;
+  })
+  .join('\n')}
+- If a team just clinched a series (ADVANCES), that is THE lead story — cover_line must reflect it.
+- Use story_type "milestone" for a clinch, "playoff_push" for a close series lead.
+- Reference round numbers and series scores in your writing.`
+      : '';
+
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
-Today's story angle: "${angleHint}".
+Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
+${playoffBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEAM NAME REFERENCE
@@ -518,6 +554,11 @@ ${
     ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}`
     : 'No games in last 24 hours.'
 }
+${
+  gameStats
+    ? `\nDetailed game stats (USE THESE ONLY — never invent stats not listed here):\n${gameStats}`
+    : ''
+}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING RULES
@@ -527,6 +568,7 @@ WRITING RULES
 - If a scorer has ⭐ BIG NIGHT, mention them prominently in a blurb.
 - Pull quote: if a hat trick or 4-goal game happened, quote that player or their coach.
 - Be dramatic and hyperbolic — this is a sports magazine.
+- NEVER invent statistics. Only mention saves, shots, hits, faceoffs, or power play numbers if they appear in the game stats block above.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Respond ONLY with valid JSON, zero other text:
@@ -561,7 +603,7 @@ Respond ONLY with valid JSON, zero other text:
   // ── 3. Write back to DB so next user gets it from cache ───
   try {
     await supabase.from('gazette_cache').upsert({
-      league: leagueLabel,
+      league: cacheKey,
       date: today,
       data,
     });
@@ -639,6 +681,9 @@ function LeagueGazette({
   teamNameMap,
   topScorers,
   recentGames,
+  isPlayoffActive,
+  playoffSeriesData,
+  gameStats,
 }) {
   const [edition, setEdition] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -648,10 +693,14 @@ function LeagueGazette({
   const load = useCallback(
     async (force = false) => {
       const today = todayStamp();
+      const effectiveCacheKey = isPlayoffActive
+        ? `${leagueLabel}_playoff`
+        : leagueLabel;
+
       if (!force) {
         try {
           const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-          if (c.date === today && c.league === leagueLabel && c.data) {
+          if (c.date === today && c.league === effectiveCacheKey && c.data) {
             setEdition(c.data);
             return;
           }
@@ -669,10 +718,13 @@ function LeagueGazette({
           teamNameMap,
           topScorers,
           recentGames,
+          isPlayoffActive,
+          playoffSeriesData,
+          gameStats,
         });
         localStorage.setItem(
           GAZETTE_CACHE_KEY,
-          JSON.stringify({ date: today, league: leagueLabel, data })
+          JSON.stringify({ date: today, league: effectiveCacheKey, data })
         );
         setEdition(data);
       } catch (e) {
@@ -691,11 +743,14 @@ function LeagueGazette({
       currentSeason,
       teamNameMap,
       topScorers,
+      isPlayoffActive,
+      playoffSeriesData,
+      gameStats,
     ]
   );
 
   useEffect(() => {
-    if (!dataLoading && recentForm.hot.length > 0) load();
+    if (!dataLoading) load();
   }, [dataLoading, leagueLabel]);
 
   const handleRefresh = () => {
@@ -1395,11 +1450,10 @@ export default function Home() {
   const [tickerItems, setTickerItems] = useState([]);
   const [teams, setTeams] = useState([]);
   const [recentGames, setRecentGames] = useState([]);
-
-  // ── NEW: team name map (abr → { city, nickname, full }) ──────────────────
+  const [isPlayoffActive, setIsPlayoffActive] = useState(false);
+  const [playoffSeriesData, setPlayoffSeriesData] = useState([]);
+  const [gameStats, setGameStats] = useState('');
   const [teamNameMap, setTeamNameMap] = useState({});
-
-  // ── NEW: top scorers from most recent game(s) in this season ─────────────
   const [topScorers, setTopScorers] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason);
@@ -1424,6 +1478,9 @@ export default function Home() {
     setTeamNameMap({});
     setTopScorers([]);
     setRecentGames([]);
+    setIsPlayoffActive(false);
+    setPlayoffSeriesData([]);
+    setGameStats('');
 
     // ── Seasons ──────────────────────────────────────────────────────────
     const { data: seasons } = await supabase
@@ -1454,26 +1511,42 @@ export default function Home() {
     });
     setTeamNameMap(nameMap);
 
-    // ── Games ─────────────────────────────────────────────────────────────
-    const { data: allGames } = await supabase
-      .from('games')
-      .select(
-        'id,lg,legacy_game_id,home,away,score_home,score_away,result_home,result_away,ot'
-      )
-      .eq('lg', latest.lg)
-      .order('id', { ascending: false });
-    const games = allGames || [];
+    // ── Games (season + playoff merged) ──────────────────────────────────
+    const [{ data: allGames }, { data: allPlayoffGames }] = await Promise.all([
+      supabase
+        .from('games')
+        .select(
+          'id,lg,legacy_game_id,home,away,score_home,score_away,result_home,result_away,ot'
+        )
+        .eq('lg', latest.lg)
+        .order('id', { ascending: false }),
+      supabase
+        .from('playoff_games')
+        .select(
+          'id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length'
+        )
+        .eq('lg', latest.lg)
+        .not('team_a_score', 'is', null)
+        .order('id', { ascending: false }),
+    ]);
 
-    // ── Recent games (last 24 hrs) for gazette ────────────────────────────────
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const { data: recentGamesData } = await supabase
-      .from('games')
-      .select('home, away, score_home, score_away, ot')
-      .eq('lg', latest.lg)
-      .eq('mode', 'Season')
-      .not('score_home', 'is', null)
-      .gte('updated_at', yesterday);
-    setRecentGames(recentGamesData || []);
+    // Normalize playoff rows to same shape as games rows
+    const playoffGamesNorm = (allPlayoffGames || []).map((g) => ({
+      id: g.id + 1000000, // offset so they sort above older season games
+      lg: g.lg,
+      legacy_game_id: g.id + 1000000,
+      home: g.team_code_a,
+      away: g.team_code_b,
+      score_home: g.team_a_score,
+      score_away: g.team_b_score,
+      result_home: g.team_a_score > g.team_b_score ? 'W' : 'L',
+      result_away: g.team_b_score > g.team_a_score ? 'W' : 'L',
+      ot: 0,
+      _isPlayoff: true,
+    }));
+
+    // Merge — playoff games float to top (most recent activity)
+    const games = [...playoffGamesNorm, ...(allGames || [])];
 
     // ── Win/loss streaks ──────────────────────────────────────────────────
     const teamHist = {};
@@ -1512,6 +1585,7 @@ export default function Home() {
         [g.home, hW],
         [g.away, aW],
       ].forEach(([t, w]) => {
+        if (!t) return;
         if (!last10[t]) last10[t] = [];
         if (last10[t].length < 10) last10[t].push(w);
       });
@@ -1529,125 +1603,231 @@ export default function Home() {
     });
     setLoading(false);
 
-    // ── Top scorers from the most recent id ───────────────────
-    // Find the highest id (most recent batch of games)
-    if (games.length > 0) {
-      const maxGameId = games[0].id; // already sorted desc
-      // Get all game IDs that share this id
-      const recentGameIds = games
-        .filter((g) => g.id === maxGameId)
-        .map((g) => g.id);
+    // ── Recent games for gazette ──────────────────────────────────────────
+    // Playoff games are "more recent" by definition once playoffs start.
+    // Strategy: if any playoff games exist for this season, use those exclusively.
+    // Only fall back to regular-season games when there are zero playoff games.
 
-      if (recentGameIds.length > 0) {
-        const { data: scoringData } = await supabase
+    const isPlayoffActive = (allPlayoffGames || []).length > 0;
+
+    // Recent playoff games (last 5 by id, already fetched above)
+    const recentPlayoffNorm = (allPlayoffGames || []).slice(0, 5).map((g) => ({
+      home: g.team_code_a,
+      away: g.team_code_b,
+      score_home: g.team_a_score,
+      score_away: g.team_b_score,
+      ot: 0,
+      _isPlayoff: true,
+      round: g.round,
+      game_number: g.game_number,
+    }));
+
+    // Only pull recent season games when no playoff games exist at all
+    let recentSeasonNorm = [];
+    if (!isPlayoffActive) {
+      const yesterday = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
+      const { data: recentSeasonData } = await supabase
+        .from('games')
+        .select('home, away, score_home, score_away, ot')
+        .eq('lg', latest.lg)
+        .not('score_home', 'is', null)
+        .gte('updated_at', yesterday);
+      recentSeasonNorm = recentSeasonData || [];
+    }
+
+    setRecentGames([...recentPlayoffNorm, ...recentSeasonNorm]);
+    setIsPlayoffActive(isPlayoffActive);
+
+    // ── Compute series standings for gazette ──────────────────────────────
+    const seriesMap = {};
+    (allPlayoffGames || []).forEach((g) => {
+      const key = `${g.round}-${g.series_number}`;
+      if (!seriesMap[key]) {
+        seriesMap[key] = {
+          round: g.round,
+          series_number: g.series_number,
+          team_code_a: g.team_code_a,
+          team_code_b: g.team_code_b,
+          series_length: g.series_length ?? 7,
+          wins_a: 0,
+          wins_b: 0,
+        };
+      }
+      if ((g.team_a_score ?? 0) > (g.team_b_score ?? 0))
+        seriesMap[key].wins_a++;
+      else seriesMap[key].wins_b++;
+    });
+    const computedSeriesData = Object.values(seriesMap).sort(
+      (a, b) => b.round - a.round || a.series_number - b.series_number
+    );
+    setPlayoffSeriesData(computedSeriesData);
+
+    // ── Top scorers — playoff takes priority over regular season ──────────────
+    // Use playoff_game_id from recentPlayoffNorm; only use season IDs as fallback.
+    const recentPlayoffIds = (allPlayoffGames || [])
+      .slice(0, 5)
+      .map((g) => g.id);
+    const recentSeasonIds = isPlayoffActive
+      ? [] // suppress season scoring when playoffs are active
+      : (allGames || []).slice(0, 5).map((g) => g.id);
+
+    const scoringQueries = [];
+    if (recentPlayoffIds.length > 0) {
+      scoringQueries.push(
+        supabase
           .from('game_raw_scoring')
           .select(
-            'game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team'
+            'game_id, playoff_game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team'
           )
-          .in('game_id', recentGameIds);
+          .in('playoff_game_id', recentPlayoffIds)
+      );
+    }
+    if (recentSeasonIds.length > 0) {
+      scoringQueries.push(
+        supabase
+          .from('game_raw_scoring')
+          .select(
+            'game_id, playoff_game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team'
+          )
+          .in('game_id', recentSeasonIds)
+          .is('playoff_game_id', null)
+      );
+    }
 
-        if (scoringData && scoringData.length > 0) {
-          // Track per-player, per-game stats to detect hat tricks & big nights
-          // Structure: { playerName: { g_team, totalGoals, totalAssists, gameBreakdown: {gameId: {g,a}} } }
-          const playerMap = {};
+    const scoringResults = await Promise.all(scoringQueries);
+    // Playoff scoring takes priority — put it first
+    const scoringData = scoringResults.flatMap((r) => r.data || []);
 
-          const ensurePlayer = (name, team, gameId) => {
-            if (!name) return;
-            if (!playerMap[name])
-              playerMap[name] = {
-                goal_player_name: name,
-                g_team: team,
-                totalGoals: 0,
-                totalAssists: 0,
-                gameBreakdown: {},
-              };
-            if (!playerMap[name].gameBreakdown[gameId])
-              playerMap[name].gameBreakdown[gameId] = { g: 0, a: 0 };
-          };
+    // ── Fetch game stats for the gazette prompt ───────────────────────────
+    let gameStatsLines = '';
+    if (recentPlayoffIds.length > 0) {
+      const { data: statsData } = await supabase
+        .from('game_stats_team')
+        .select('*')
+        .in('playoff_game_id', recentPlayoffIds);
 
-          scoringData.forEach((play) => {
-            // Goals
-            if (play.goal_player_name) {
-              ensurePlayer(play.goal_player_name, play.g_team, play.game_id);
-              playerMap[play.goal_player_name].totalGoals++;
-              playerMap[play.goal_player_name].gameBreakdown[play.game_id].g++;
-              // Keep the scorer's own team (not the assister's team)
-              playerMap[play.goal_player_name].g_team = play.g_team;
-            }
-            // Primary assist — team attributed to g_team of the goal (same game)
-            if (play.assist_primary_name) {
-              ensurePlayer(play.assist_primary_name, play.g_team, play.game_id);
-              playerMap[play.assist_primary_name].totalAssists++;
-              playerMap[play.assist_primary_name].gameBreakdown[play.game_id]
-                .a++;
-            }
-            // Secondary assist
-            if (play.assist_secondary_name) {
-              ensurePlayer(
-                play.assist_secondary_name,
-                play.g_team,
-                play.game_id
-              );
-              playerMap[play.assist_secondary_name].totalAssists++;
-              playerMap[play.assist_secondary_name].gameBreakdown[play.game_id]
-                .a++;
-            }
-          });
-
-          // Build final scorer list with achievement flags
-          const scorerList = Object.values(playerMap)
-            .filter((p) => p.totalGoals > 0 || p.totalAssists > 0)
-            .map((p) => {
-              const points = p.totalGoals + p.totalAssists;
-              // Check for hat trick (3+ goals in a single game)
-              const hatTrick = Object.values(p.gameBreakdown).some(
-                (gb) => gb.g >= 3
-              );
-              // Check for big night (5+ points across all games in this batch)
-              const bigNight = points >= 5;
-              // Check for 4-goal game
-              const fourGoalGame = Object.values(p.gameBreakdown).some(
-                (gb) => gb.g >= 4
-              );
-              // Best single-game line (most points)
-              const bestGame = Object.values(p.gameBreakdown).reduce(
-                (best, gb) => {
-                  const pts = gb.g + gb.a;
-                  return pts > best.g + best.a ? gb : best;
-                },
-                { g: 0, a: 0 }
-              );
-
-              return {
-                goal_player_name: p.goal_player_name,
-                g_team: p.g_team,
-                goals: p.totalGoals,
-                assists: p.totalAssists,
-                points,
-                hatTrick,
-                fourGoalGame,
-                bigNight,
-                bestGame, // { g, a } in single game
-              };
-            })
-            .sort((a, b) => {
-              // Prioritize hat tricks and big nights to the top
-              const aScore =
-                (a.fourGoalGame ? 100 : 0) +
-                (a.hatTrick ? 50 : 0) +
-                (a.bigNight ? 20 : 0) +
-                a.points;
-              const bScore =
-                (b.fourGoalGame ? 100 : 0) +
-                (b.hatTrick ? 50 : 0) +
-                (b.bigNight ? 20 : 0) +
-                b.points;
-              return bScore - aScore;
-            });
-
-          setTopScorers(scorerList.slice(0, 8));
-        }
+      if (statsData?.length) {
+        gameStatsLines = statsData
+          .map((s) => {
+            const hName = nameMap[s.home]?.full || s.home;
+            const aName = nameMap[s.away]?.full || s.away;
+            const homeSaves = (s.away_shots || 0) - (s.away_score || 0);
+            const awaySaves = (s.home_shots || 0) - (s.home_score || 0);
+            const foTotal = (s.home_fow || 0) + (s.away_fow || 0) || 1;
+            const homeFoPct = (((s.home_fow || 0) / foTotal) * 100).toFixed(0);
+            const awayFoPct = (((s.away_fow || 0) / foTotal) * 100).toFixed(0);
+            return [
+              `GAME: ${hName} ${s.home_score}-${s.away_score} ${aName}`,
+              `  Shots: ${hName} ${s.home_shots} | ${aName} ${s.away_shots}`,
+              `  Saves: ${hName} goalie ${homeSaves} saves | ${aName} goalie ${awaySaves} saves`,
+              `  Checks: ${hName} ${s.home_chk || 0} | ${aName} ${
+                s.away_chk || 0
+              }`,
+              `  Faceoffs: ${hName} ${
+                s.home_fow || 0
+              } won (${homeFoPct}%) | ${aName} ${
+                s.away_fow || 0
+              } won (${awayFoPct}%)`,
+              `  Power play: ${hName} ${s.home_pp_g || 0}/${
+                s.home_pp_amt || 0
+              } | ${aName} ${s.away_pp_g || 0}/${s.away_pp_amt || 0}`,
+              `  Breakaways: ${hName} ${s.home_break_goals || 0}/${
+                s.home_break_attempts || 0
+              } | ${aName} ${s.away_break_goals || 0}/${
+                s.away_break_attempts || 0
+              }`,
+            ].join('\n');
+          })
+          .join('\n\n');
       }
+    }
+    setGameStats(gameStatsLines);
+
+    if (scoringData.length > 0) {
+      const playerMap = {};
+
+      const ensurePlayer = (name, team, gameKey) => {
+        if (!name) return;
+        if (!playerMap[name])
+          playerMap[name] = {
+            goal_player_name: name,
+            g_team: team,
+            totalGoals: 0,
+            totalAssists: 0,
+            gameBreakdown: {},
+          };
+        if (!playerMap[name].gameBreakdown[gameKey])
+          playerMap[name].gameBreakdown[gameKey] = { g: 0, a: 0 };
+      };
+
+      scoringData.forEach((play) => {
+        // Use playoff_game_id if present, otherwise game_id as the unique game key
+        const gameKey = play.playoff_game_id
+          ? `po-${play.playoff_game_id}`
+          : `s-${play.game_id}`;
+
+        if (play.goal_player_name) {
+          ensurePlayer(play.goal_player_name, play.g_team, gameKey);
+          playerMap[play.goal_player_name].totalGoals++;
+          playerMap[play.goal_player_name].gameBreakdown[gameKey].g++;
+          playerMap[play.goal_player_name].g_team = play.g_team;
+        }
+        if (play.assist_primary_name) {
+          ensurePlayer(play.assist_primary_name, play.g_team, gameKey);
+          playerMap[play.assist_primary_name].totalAssists++;
+          playerMap[play.assist_primary_name].gameBreakdown[gameKey].a++;
+        }
+        if (play.assist_secondary_name) {
+          ensurePlayer(play.assist_secondary_name, play.g_team, gameKey);
+          playerMap[play.assist_secondary_name].totalAssists++;
+          playerMap[play.assist_secondary_name].gameBreakdown[gameKey].a++;
+        }
+      });
+
+      const scorerList = Object.values(playerMap)
+        .filter((p) => p.totalGoals > 0 || p.totalAssists > 0)
+        .map((p) => {
+          const points = p.totalGoals + p.totalAssists;
+          const hatTrick = Object.values(p.gameBreakdown).some(
+            (gb) => gb.g >= 3
+          );
+          const bigNight = points >= 5;
+          const fourGoalGame = Object.values(p.gameBreakdown).some(
+            (gb) => gb.g >= 4
+          );
+          const bestGame = Object.values(p.gameBreakdown).reduce(
+            (best, gb) => (gb.g + gb.a > best.g + best.a ? gb : best),
+            { g: 0, a: 0 }
+          );
+          return {
+            goal_player_name: p.goal_player_name,
+            g_team: p.g_team,
+            goals: p.totalGoals,
+            assists: p.totalAssists,
+            points,
+            hatTrick,
+            fourGoalGame,
+            bigNight,
+            bestGame,
+          };
+        })
+        .sort((a, b) => {
+          const aScore =
+            (a.fourGoalGame ? 100 : 0) +
+            (a.hatTrick ? 50 : 0) +
+            (a.bigNight ? 20 : 0) +
+            a.points;
+          const bScore =
+            (b.fourGoalGame ? 100 : 0) +
+            (b.hatTrick ? 50 : 0) +
+            (b.bigNight ? 20 : 0) +
+            b.points;
+          return bScore - aScore;
+        });
+
+      setTopScorers(scorerList.slice(0, 8));
     }
 
     // ── Ticker items ──────────────────────────────────────────────────────────
@@ -1830,10 +2010,17 @@ export default function Home() {
     }
 
     // ── 5. Recent form callouts (last 10) ────────────────────────────────────
-    form.slice(0, 2).forEach((t) => {
+    const formList = Object.entries(last10)
+      .filter(([, a]) => a.length >= 3)
+      .map(([team, arr]) => {
+        const w = arr.filter(Boolean).length;
+        return { team, w, l: arr.length - w, pct: w / arr.length };
+      })
+      .sort((a, b) => b.pct - a.pct);
+    formList.slice(0, 2).forEach((t) => {
       push(`🔥 ${getName(t.team)} — ${t.w}-${t.l} IN LAST 10`);
     });
-    const coldTeam = [...form].sort((a, b) => a.pct - b.pct)[0];
+    const coldTeam = [...formList].sort((a, b) => a.pct - b.pct)[0];
     if (coldTeam && coldTeam.l >= 6) {
       push(
         `🥶 ${getName(coldTeam.team)} STRUGGLING — ${coldTeam.w}-${
@@ -1962,6 +2149,9 @@ export default function Home() {
             teamNameMap={teamNameMap}
             topScorers={topScorers}
             recentGames={recentGames}
+            isPlayoffActive={isPlayoffActive}
+            playoffSeriesData={playoffSeriesData}
+            gameStats={gameStats}
           />
         </div>
 

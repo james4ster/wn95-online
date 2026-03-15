@@ -1912,17 +1912,6 @@ export default function Stats() {
   const teamSortKey = teamSort.key;
   const teamSortDir = teamSort.dir;
 
-  // ── Fetch managers ───────────────────────────────────────────────────────
-  useEffect(() => {
-    supabase
-      .from('managers')
-      .select('id,coach_name,discord_id,discord_username,discord_url')
-      .then(({ data, error }) => {
-        if (error) console.warn('[Stats] managers error:', error.message);
-        setManagers(data || []);
-      });
-  }, []);
-
   const mgrMeta = useMemo(() => {
     const m = new Map();
     for (const mgr of managers) {
@@ -1936,27 +1925,74 @@ export default function Stats() {
     return m;
   }, [managers]);
 
-  // ── Fetch all games ──────────────────────────────────────────────────────
+  // ── Fetch all games (season + playoff) ───────────────────────────────────
+  // ── Fetch all games (season + playoff) ───────────────────────────────────
   useEffect(() => {
     setLoading(true);
     setAllGames([]);
     setModeValues([]);
-    supabase
-      .from('games')
-      .select(
-        'id,lg,mode,home,away,coach_home,coach_away,score_home,score_away,ot'
-      )
-      .then(({ data, error }) => {
-        if (error) {
-          console.error('[Stats] games error:', error.message);
-          setLoading(false);
-          return;
+    Promise.all([
+      supabase
+        .from('games')
+        .select(
+          'id,lg,mode,home,away,coach_home,coach_away,score_home,score_away,ot'
+        ),
+      supabase
+        .from('playoff_games')
+        .select(
+          'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score'
+        )
+        .not('team_a_score', 'is', null),
+      supabase.from('managers').select('id,coach_name'),
+      supabase
+        .from('teams')
+        .select('abr,lg,manager_id')
+        .not('manager_id', 'is', null)
+        .order('lg', { ascending: false }),
+    ]).then(([gamesRes, playoffRes, managersRes, teamsRes]) => {
+      // Build manager_id → coach_name lookup
+      const mgrIdToName = new Map();
+      for (const m of managersRes.data || []) {
+        if (m.id && m.coach_name) mgrIdToName.set(m.id, m.coach_name.trim());
+      }
+
+      // Build team abr → coach name (most recent season wins due to order desc)
+      const teamCoachMap = new Map();
+      for (const t of teamsRes.data || []) {
+        const abr = t.abr?.trim().toUpperCase();
+        if (abr && t.manager_id && !teamCoachMap.has(abr)) {
+          const coachName = mgrIdToName.get(t.manager_id);
+          if (coachName) teamCoachMap.set(abr, coachName);
         }
-        const rows = data || [];
-        setAllGames(rows);
-        setModeValues([...new Set(rows.map((g) => g.mode).filter(Boolean))]);
-        setLoading(false);
-      });
+      }
+
+      // Normalize playoff rows
+      const playoffRows = (playoffRes.data || []).map((g) => ({
+        id: g.id,
+        lg: g.lg,
+        mode: 'playoff',
+        home: g.team_code_a,
+        away: g.team_code_b,
+        coach_home: teamCoachMap.get(g.team_code_a?.trim().toUpperCase()) || '',
+        coach_away: teamCoachMap.get(g.team_code_b?.trim().toUpperCase()) || '',
+        score_home: g.team_a_score,
+        score_away: g.team_b_score,
+        ot: 0,
+        _isPlayoff: true,
+        round: g.round,
+        series_number: g.series_number,
+        game_number: g.game_number,
+      }));
+
+      const seasonRows = gamesRes.data || [];
+      const allRows = [...seasonRows, ...playoffRows];
+      setAllGames(allRows);
+      setManagers(managersRes.data || []); // reuse the managers fetch
+      setModeValues([
+        ...new Set(seasonRows.map((g) => g.mode).filter(Boolean)),
+      ]);
+      setLoading(false);
+    });
   }, []);
 
   const leagueGames = useMemo(() => {
@@ -2057,16 +2093,16 @@ export default function Stats() {
           return;
         }
 
-        // Also filter by mode if needed
         let rows = data || [];
         if (modeFilter === 'SEASON')
-          rows = rows.filter((g) =>
-            SEASON_VALS.has((g.type || '').trim().toUpperCase())
+          rows = rows.filter(
+            (g) =>
+              SEASON_VALS.has((g.type || '').trim().toUpperCase()) &&
+              !g.playoff_game_id
           );
-        if (modeFilter === 'PLAYOFFS')
-          rows = rows.filter((g) =>
-            PLAYOFF_VALS.has((g.type || '').trim().toUpperCase())
-          );
+        else if (modeFilter === 'PLAYOFFS')
+          rows = rows.filter((g) => g.playoff_game_id != null);
+        // ALL — include everything
 
         setTeamStatsData(rows);
         setTeamStatsLoading(false);

@@ -68,6 +68,8 @@ function computeStandings(games) {
       away.coach = g.coach_away || away.coach;
       away._lastId = g.id;
     }
+    if (!home._results) home._results = [];
+    if (!away._results) away._results = [];
     home.gp++;
     away.gp++;
     home.gf += sh;
@@ -79,16 +81,22 @@ function computeStandings(games) {
       away.t++;
       home.pts += 1;
       away.pts += 1;
+      home._results.push('T');
+      away._results.push('T');
     } else if (sh > sa) {
       if (isOT) {
         home.otw++;
         home.pts += 2;
         away.otl++;
         away.pts += 1;
+        home._results.push('OTW');
+        away._results.push('OTL');
       } else {
         home.w++;
         home.pts += 2;
         away.l++;
+        home._results.push('W');
+        away._results.push('L');
       }
     } else {
       if (isOT) {
@@ -96,20 +104,60 @@ function computeStandings(games) {
         away.pts += 2;
         home.otl++;
         home.pts += 1;
+        away._results.push('OTW');
+        home._results.push('OTL');
       } else {
         away.w++;
         away.pts += 2;
         home.l++;
+        away._results.push('W');
+        home._results.push('L');
       }
     }
     if (sa === 0) home.shutouts++;
     if (sh === 0) away.shutouts++;
   });
-  return Object.values(teamMap).map(({ _lastId, ...t }) => ({
-    ...t,
-    gd: t.gf - t.ga,
-    pts_pct: t.gp > 0 ? t.pts / (t.gp * 2) : 0,
-  }));
+
+  // ── Compute current streak per team ──────────────────────────────────────
+  // Games are already processed in ascending id order so _streakResults
+  // holds results oldest→newest; we walk backwards to find the current run.
+  const streakMap = {};
+  Object.entries(teamMap).forEach(([code, t]) => {
+    streakMap[code] = t._results || [];
+  });
+
+  return Object.values(teamMap).map(({ _lastId, _results, ...t }) => {
+    const results = _results || [];
+    let streakType = null;
+    let streakCount = 0;
+    for (let i = results.length - 1; i >= 0; i--) {
+      if (streakType === null) {
+        streakType = results[i];
+        streakCount = 1;
+      } else if (results[i] === streakType) {
+        streakCount++;
+      } else {
+        break;
+      }
+    }
+    const streak = streakType ? `${streakType}${streakCount}` : '';
+    // Positive = winning streak, negative = losing streak, for sort purposes
+    const streakVal =
+      streakType === 'W' || streakType === 'OTW'
+        ? streakCount
+        : streakType === 'L' || streakType === 'OTL'
+        ? -streakCount
+        : 0;
+    return {
+      ...t,
+      gd: t.gf - t.ga,
+      pts_pct: t.gp > 0 ? t.pts / (t.gp * 2) : 0,
+      streak,
+      streakType,
+      streakCount,
+      streakVal,
+    };
+  });
 }
 
 function sortWithTiebreakers(teams, games) {
@@ -834,6 +882,7 @@ export default function Standings() {
     { label: 'GD', key: 'gd', width: '10px' },
     { label: 'OTW', key: 'otw', width: '5px' },
     { label: 'SO', key: 'shutouts', width: '5px' },
+    { label: 'STRK', key: 'streakVal', width: '5px' },
   ];
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
 
@@ -1042,7 +1091,9 @@ export default function Standings() {
                                 isTied ? handleRowMouseLeave : undefined
                               }
                             >
-                              <td className="rank-cell">{idx + 1}</td>
+                              <td className="rank-cell">
+                                <span className="rank-badge">{idx + 1}</span>
+                              </td>
                               <td className="team-cell">
                                 <div className="row-banner-overlay">
                                   <img
@@ -1182,6 +1233,22 @@ export default function Standings() {
                               >
                                 {s.shutouts}
                               </td>
+                              <td
+                                className={`stat-cell streak-cell ${
+                                  activeSortKey === 'streakVal'
+                                    ? 'sorted-cell'
+                                    : ''
+                                } ${
+                                  s.streakType === 'W' || s.streakType === 'OTW'
+                                    ? 'streak-w'
+                                    : s.streakType === 'L' ||
+                                      s.streakType === 'OTL'
+                                    ? 'streak-l'
+                                    : 'streak-t'
+                                }`}
+                              >
+                                {s.streak}
+                              </td>
                             </tr>
                             {playoffTeams && idx === playoffTeams - 1 && (
                               <tr className="playoff-cutoff-row">
@@ -1270,6 +1337,7 @@ export default function Standings() {
         .arcade-table th { padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease; position:relative; border-right:1px solid rgba(255,255,255,.2); }
         .arcade-table td { padding:.25rem .5rem; text-align:center; font-size:1.2rem; color:#E0E0E0; border-bottom:1px solid rgba(255,140,0,.2); letter-spacing:1px; position:relative; }
         .arcade-table .rank-cell { font-family:'Press Start 2P',monospace; font-size:.9rem; color:#FF8C00; font-weight:bold; text-shadow:0 0 5px #FF8C00; position:relative; z-index:10; white-space:nowrap; }
+        .rank-badge { display:inline-block; min-width:34px; text-align:center; background:rgba(0,0,0,.82); border:1px solid rgba(255,140,0,.45); border-radius:6px; padding:.38rem .65rem; box-shadow:inset 0 0 8px rgba(0,0,0,.7), 0 0 6px rgba(255,140,0,.2); }
         .arcade-table th:last-child { border-right:none; }
         .arcade-table th:hover:not(.rank-column) { background:linear-gradient(180deg,#FF8C00 0%,#FF8C00 100%); transform:translateY(-2px); }
         .arcade-table th.sorted-column { background:linear-gradient(180deg,#FF8C00 0%,#FFA500 100%); }
@@ -1277,17 +1345,20 @@ export default function Standings() {
         .th-content { display:flex; align-items:center; justify-content:center; gap:.3rem; }
         .sort-indicator { font-size:.5rem; animation:bounce .5s ease; }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
-        .arcade-table tbody tr { transition:all .2s ease; position:relative; overflow:hidden; }
+        .arcade-table tbody tr { transition:all .2s ease; position:relative; }
+        .team-cell { overflow: visible !important; }.arcade-table tbody tr { transition:all .2s ease; position:relative; overflow:hidden; }
         .playoff-team .rank-cell::before { content:''; position:absolute; left:-8px; top:-1px; bottom:-1px; width:4px; background:linear-gradient(180deg,#00FF00 0%,#00CC00 100%); box-shadow:0 0 10px rgba(0,255,0,.6); z-index:100; }
         .tied-pts { position:relative; animation:tied-pulse 2s ease-in-out infinite; }
         .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); animation:triangle-pulse 2s ease-in-out infinite; }
         @keyframes triangle-pulse { 0%,100%{border-color:transparent rgba(255,140,0,.6) transparent transparent} 50%{border-color:transparent rgba(255,215,0,1) transparent transparent; filter:drop-shadow(0 0 5px rgba(255,215,0,.9))} }
         @keyframes tied-pulse { 0%,100%{text-shadow:0 0 8px rgba(255,140,0,.4)} 50%{text-shadow:0 0 16px rgba(255,140,0,.9),0 0 24px rgba(255,215,0,.4)} }
         .tied-row { cursor:default; }
-        .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:100%; pointer-events:none; z-index:0; overflow:hidden; opacity:.15; transition:all .3s ease; }
-        .arcade-table tbody tr:hover .row-banner-overlay { opacity:.25; width:450px; }
-        .banner-image { position:absolute; left:-20px; top:50%; transform:translateY(-50%); height:140%; width:auto; object-fit:contain; filter:blur(1px) brightness(1.2); mask-image:linear-gradient(to right,rgba(0,0,0,.8) 0%,rgba(0,0,0,.7) 20%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.3) 60%,rgba(0,0,0,.15) 75%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.8) 0%,rgba(0,0,0,.7) 20%,rgba(0,0,0,.5) 40%,rgba(0,0,0,.3) 60%,rgba(0,0,0,.15) 75%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); }
-        .arcade-table tbody tr:hover .banner-image { filter:blur(.5px) brightness(1.4); transform:translateY(-50%) scale(1.05); }
+        .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:380px; pointer-events:none; z-index:0; overflow:hidden; opacity:.18; transition:opacity .3s ease; }
+        .arcade-table tbody tr:hover .row-banner-overlay { opacity:.28; }
+        .banner-image { position:absolute; left:0; top:50%; transform:translateY(-50%); height:150%; width:auto; object-fit:contain; filter:blur(1px) brightness(1.3); mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); }
+        .arcade-table tbody tr { position: relative; }
+        .team-cell { position: static !important; overflow: visible !important; }
+        .arcade-table tbody tr:hover .banner-image { filter:blur(.5px) brightness(1.5); transform:translateY(-50%) scale(1.03); }
         .arcade-table tbody tr.even-row { background:rgba(0,30,60,.4); }
         .arcade-table tbody tr.odd-row { background:rgba(0,20,40,.6); }
         .arcade-table tbody tr:hover { background:rgba(255,140,0,.15)!important; transform:scale(1.01); box-shadow:0 0 15px rgba(255,140,0,.4); z-index:2; }
@@ -1325,6 +1396,10 @@ export default function Standings() {
         .coach-cell { color:#FFF; text-align:left; padding-left:1rem; }
         .pts-cell { font-weight:bold; color:#FFD700; }
         .pts-pct-cell { font-size:1.1rem; color:#87CEEB; }
+        .streak-cell { font-family:'VT323',monospace; font-size:1.4rem; font-weight:bold; letter-spacing:1px; }
+        .streak-w { color:#00FF88; text-shadow:0 0 8px rgba(0,255,136,.6); }
+        .streak-l { color:#FF4444; text-shadow:0 0 8px rgba(255,68,68,.6); }
+        .streak-t { color:#FFD700; text-shadow:0 0 8px rgba(255,215,0,.5); }
         .positive-gd { color:#00FF00; font-weight:bold; text-shadow:0 0 8px #00FF00; }
         .negative-gd { color:#FF0000; font-weight:bold; text-shadow:0 0 8px #FF0000; }
         .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }

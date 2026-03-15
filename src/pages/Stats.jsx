@@ -1950,6 +1950,8 @@ export default function Stats() {
         .not('manager_id', 'is', null)
         .order('lg', { ascending: false }),
     ]).then(([gamesRes, playoffRes, managersRes, teamsRes]) => {
+      const seasonRows = gamesRes.data || [];
+
       // Build manager_id → coach_name lookup
       const mgrIdToName = new Map();
       for (const m of managersRes.data || []) {
@@ -1966,7 +1968,12 @@ export default function Stats() {
         }
       }
 
-      // Normalize playoff rows
+      // Determine which seasons have data in playoff_games
+      const seasonsInPlayoffTable = new Set(
+        (playoffRes.data || []).map((g) => g.lg).filter(Boolean)
+      );
+
+      // Normalize playoff rows from playoff_games
       const playoffRows = (playoffRes.data || []).map((g) => ({
         id: g.id,
         lg: g.lg,
@@ -1984,10 +1991,18 @@ export default function Stats() {
         game_number: g.game_number,
       }));
 
-      const seasonRows = gamesRes.data || [];
-      const allRows = [...seasonRows, ...playoffRows];
+      // Strip playoff rows from games table for seasons covered by playoff_games
+      const filteredSeasonRows = seasonRows.filter((g) => {
+        const isPlayoffMode = PLAYOFF_VALS.has(
+          (g.mode || '').trim().toUpperCase()
+        );
+        if (isPlayoffMode && seasonsInPlayoffTable.has(g.lg)) return false;
+        return true;
+      });
+
+      const allRows = [...filteredSeasonRows, ...playoffRows];
       setAllGames(allRows);
-      setManagers(managersRes.data || []); // reuse the managers fetch
+      setManagers(managersRes.data || []);
       setModeValues([
         ...new Set(seasonRows.map((g) => g.mode).filter(Boolean)),
       ]);
@@ -2094,14 +2109,26 @@ export default function Stats() {
         }
 
         let rows = data || [];
-        if (modeFilter === 'SEASON')
+        if (modeFilter === 'SEASON') {
           rows = rows.filter(
             (g) =>
               SEASON_VALS.has((g.type || '').trim().toUpperCase()) &&
-              !g.playoff_game_id
+              g.playoff_game_id == null
           );
-        else if (modeFilter === 'PLAYOFFS')
+        } else if (modeFilter === 'PLAYOFFS') {
           rows = rows.filter((g) => g.playoff_game_id != null);
+        } else {
+          // ALL — exclude rows that have a game_id AND a playoff type to avoid doubles
+          // Keep: season rows (game_id set, not playoff type) + new playoff rows (playoff_game_id set)
+          // Drop: old playoff rows that were inserted into games table before playoff_games existed
+          rows = rows.filter((g) => {
+            const isPlayoffType = PLAYOFF_VALS.has(
+              (g.type || '').trim().toUpperCase()
+            );
+            if (isPlayoffType && g.playoff_game_id == null) return false; // old duplicate
+            return true;
+          });
+        }
         // ALL — include everything
 
         setTeamStatsData(rows);

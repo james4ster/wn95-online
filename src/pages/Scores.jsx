@@ -6,19 +6,20 @@ import { useLeague } from '../components/LeagueContext';
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 /// ─── Format "HH:MM:SS" → "Xm YYs" ─────────────────────────────────────────
 function fmtTime(timeStr) {
-    // timeStr = "HH:MM:SS"
-    const [hh, mm, ss] = timeStr.split(':');
-    return `${hh}:${mm}`;  // HH becomes MM, MM becomes SS
-  }
+  // timeStr = "HH:MM:SS"
+  const [hh, mm, ss] = timeStr.split(':');
+  return `${hh}:${mm}`; // HH becomes MM, MM becomes SS
+}
 
 const isBetter = (a, h, lowerWins = false) => {
-  const av = parseFloat(a), hv = parseFloat(h);
+  const av = parseFloat(a),
+    hv = parseFloat(h);
   if (isNaN(av) || isNaN(hv) || av === hv) return null;
   return lowerWins ? av < hv : av > hv;
 };
 
 // score_type badge config
-const TYPE_TAG  = { PP: 'PP', SH: 'SH', EN: 'EN', PS: 'PS' }; // EV intentionally omitted
+const TYPE_TAG = { PP: 'PP', SH: 'SH', EN: 'EN', PS: 'PS' }; // EV intentionally omitted
 const PERIOD_LABEL = { 1: '1ST', 2: '2ND', 3: '3RD', 4: 'OT', 5: 'OT2' };
 
 // ─── Shared logo component ────────────────────────────────────────────────────
@@ -26,8 +27,16 @@ const Logo = ({ team, size = 32 }) => (
   <img
     src={`/assets/teamLogos/${team}.png`}
     alt={team}
-    style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0, display: 'block' }}
-    onError={e => { e.currentTarget.style.opacity = '0'; }}
+    style={{
+      width: size,
+      height: size,
+      objectFit: 'contain',
+      flexShrink: 0,
+      display: 'block',
+    }}
+    onError={(e) => {
+      e.currentTarget.style.opacity = '0';
+    }}
   />
 );
 
@@ -37,30 +46,79 @@ function StatBar({ label, awayVal, homeVal, lowerWins = false }) {
   const h = parseFloat(homeVal) || 0;
   const total = a + h;
   const awayPct = total > 0 ? (a / total) * 100 : 50;
-  const winner  = isBetter(awayVal, homeVal, lowerWins);
+  const winner = isBetter(awayVal, homeVal, lowerWins);
   return (
     <div className="sb">
-      <span className={`sb-v sb-a${winner === true ? ' sb-w' : winner === false ? ' sb-d' : ''}`}>{awayVal ?? '—'}</span>
+      <span
+        className={`sb-v sb-a${
+          winner === true ? ' sb-w' : winner === false ? ' sb-d' : ''
+        }`}
+      >
+        {awayVal ?? '—'}
+      </span>
       <div className="sb-m">
         <div className="sb-track">
-          <div className={`sb-fill sb-fa${winner === true  ? ' sb-bright' : ''}`} style={{ width: `${awayPct}%` }} />
-          <div className={`sb-fill sb-fh${winner === false ? ' sb-bright' : ''}`} style={{ width: `${100 - awayPct}%` }} />
+          <div
+            className={`sb-fill sb-fa${winner === true ? ' sb-bright' : ''}`}
+            style={{ width: `${awayPct}%` }}
+          />
+          <div
+            className={`sb-fill sb-fh${winner === false ? ' sb-bright' : ''}`}
+            style={{ width: `${100 - awayPct}%` }}
+          />
         </div>
         <span className="sb-lbl">{label}</span>
       </div>
-      <span className={`sb-v sb-h${winner === false ? ' sb-w' : winner === true ? ' sb-d' : ''}`}>{homeVal ?? '—'}</span>
+      <span
+        className={`sb-v sb-h${
+          winner === false ? ' sb-w' : winner === true ? ' sb-d' : ''
+        }`}
+      >
+        {homeVal ?? '—'}
+      </span>
     </div>
   );
 }
 
 // ─── Period / shots table with team logo banners ──────────────────────────────
 function PeriodTable({ stats, awayTeam, homeTeam }) {
-  const hasOT = stats.ot_flag === 1 || (stats.away_ot_g ?? 0) > 0 || (stats.home_ot_g ?? 0) > 0;
+  const hasOT =
+    stats.ot_flag === 1 ||
+    (stats.away_ot_g ?? 0) > 0 ||
+    (stats.home_ot_g ?? 0) > 0;
   const periods = [
-    { lbl: '1ST', ag: stats.away_1p_g, hg: stats.home_1p_g, as: stats.away_1p_s, hs: stats.home_1p_s },
-    { lbl: '2ND', ag: stats.away_2p_g, hg: stats.home_2p_g, as: stats.away_2p_s, hs: stats.home_2p_s },
-    { lbl: '3RD', ag: stats.away_3p_g, hg: stats.home_3p_g, as: stats.away_3p_s, hs: stats.home_3p_s },
-    ...(hasOT ? [{ lbl: 'OT', ag: stats.away_ot_g, hg: stats.home_ot_g, as: stats.away_ot_s, hs: stats.home_ot_s }] : []),
+    {
+      lbl: '1ST',
+      ag: stats.away_1p_g,
+      hg: stats.home_1p_g,
+      as: stats.away_1p_s,
+      hs: stats.home_1p_s,
+    },
+    {
+      lbl: '2ND',
+      ag: stats.away_2p_g,
+      hg: stats.home_2p_g,
+      as: stats.away_2p_s,
+      hs: stats.home_2p_s,
+    },
+    {
+      lbl: '3RD',
+      ag: stats.away_3p_g,
+      hg: stats.home_3p_g,
+      as: stats.away_3p_s,
+      hs: stats.home_3p_s,
+    },
+    ...(hasOT
+      ? [
+          {
+            lbl: 'OT',
+            ag: stats.away_ot_g,
+            hg: stats.home_ot_g,
+            as: stats.away_ot_s,
+            hs: stats.home_ot_s,
+          },
+        ]
+      : []),
   ];
   const colSpan = periods.length + 2;
 
@@ -69,12 +127,15 @@ function PeriodTable({ stats, awayTeam, homeTeam }) {
       <thead>
         <tr>
           <th className="pt-th pt-name-col" />
-          {periods.map(p => <th key={p.lbl} className="pt-th pt-p-col">{p.lbl}</th>)}
+          {periods.map((p) => (
+            <th key={p.lbl} className="pt-th pt-p-col">
+              {p.lbl}
+            </th>
+          ))}
           <th className="pt-th pt-tot-col">TOT</th>
         </tr>
       </thead>
       <tbody>
-
         {/* ══ AWAY BANNER ══ */}
         <tr>
           <td colSpan={colSpan} style={{ padding: 0 }}>
@@ -87,16 +148,30 @@ function PeriodTable({ stats, awayTeam, homeTeam }) {
         </tr>
         <tr className="pt-data-row">
           <td className="pt-row-lbl">GOALS</td>
-          {periods.map(p => <td key={p.lbl} className="pt-cell pt-g">{p.ag ?? 0}</td>)}
-          <td className="pt-cell pt-g pt-tot pt-away-tot">{stats.away_score}</td>
+          {periods.map((p) => (
+            <td key={p.lbl} className="pt-cell pt-g">
+              {p.ag ?? 0}
+            </td>
+          ))}
+          <td className="pt-cell pt-g pt-tot pt-away-tot">
+            {stats.away_score}
+          </td>
         </tr>
         <tr className="pt-data-row pt-sog-row">
           <td className="pt-row-lbl pt-sog-lbl">SHOTS</td>
-          {periods.map(p => <td key={p.lbl} className="pt-cell pt-s">{p.as ?? 0}</td>)}
-          <td className="pt-cell pt-s pt-tot pt-away-tot">{stats.away_shots}</td>
+          {periods.map((p) => (
+            <td key={p.lbl} className="pt-cell pt-s">
+              {p.as ?? 0}
+            </td>
+          ))}
+          <td className="pt-cell pt-s pt-tot pt-away-tot">
+            {stats.away_shots}
+          </td>
         </tr>
 
-        <tr className="pt-spacer"><td colSpan={colSpan} /></tr>
+        <tr className="pt-spacer">
+          <td colSpan={colSpan} />
+        </tr>
 
         {/* ══ HOME BANNER ══ */}
         <tr>
@@ -110,15 +185,26 @@ function PeriodTable({ stats, awayTeam, homeTeam }) {
         </tr>
         <tr className="pt-data-row">
           <td className="pt-row-lbl">GOALS</td>
-          {periods.map(p => <td key={p.lbl} className="pt-cell pt-g">{p.hg ?? 0}</td>)}
-          <td className="pt-cell pt-g pt-tot pt-home-tot">{stats.home_score}</td>
+          {periods.map((p) => (
+            <td key={p.lbl} className="pt-cell pt-g">
+              {p.hg ?? 0}
+            </td>
+          ))}
+          <td className="pt-cell pt-g pt-tot pt-home-tot">
+            {stats.home_score}
+          </td>
         </tr>
         <tr className="pt-data-row pt-sog-row">
           <td className="pt-row-lbl pt-sog-lbl">SHOTS</td>
-          {periods.map(p => <td key={p.lbl} className="pt-cell pt-s">{p.hs ?? 0}</td>)}
-          <td className="pt-cell pt-s pt-tot pt-home-tot">{stats.home_shots}</td>
+          {periods.map((p) => (
+            <td key={p.lbl} className="pt-cell pt-s">
+              {p.hs ?? 0}
+            </td>
+          ))}
+          <td className="pt-cell pt-s pt-tot pt-home-tot">
+            {stats.home_shots}
+          </td>
         </tr>
-
       </tbody>
     </table>
   );
@@ -126,12 +212,28 @@ function PeriodTable({ stats, awayTeam, homeTeam }) {
 
 // ─── Team stats left column ───────────────────────────────────────────────────
 function TeamStatsCol({ stats, awayTeam, homeTeam }) {
-  const a = k => stats[`away_${k}`] ?? '—';
-  const h = k => stats[`home_${k}`] ?? '—';
-  const awayPP   = stats.away_pp_amt > 0 ? `${Math.round((stats.away_pp_g / stats.away_pp_amt) * 100)}%` : '0%';
-  const homePP   = stats.home_pp_amt > 0 ? `${Math.round((stats.home_pp_g / stats.home_pp_amt) * 100)}%` : '0%';
-  const awayPass = stats.away_pass_attempts > 0 ? `${Math.round((stats.away_pass_complete / stats.away_pass_attempts) * 100)}%` : '—';
-  const homePass = stats.home_pass_attempts > 0 ? `${Math.round((stats.home_pass_complete / stats.home_pass_attempts) * 100)}%` : '—';
+  const a = (k) => stats[`away_${k}`] ?? '—';
+  const h = (k) => stats[`home_${k}`] ?? '—';
+  const awayPP =
+    stats.away_pp_amt > 0
+      ? `${Math.round((stats.away_pp_g / stats.away_pp_amt) * 100)}%`
+      : '0%';
+  const homePP =
+    stats.home_pp_amt > 0
+      ? `${Math.round((stats.home_pp_g / stats.home_pp_amt) * 100)}%`
+      : '0%';
+  const awayPass =
+    stats.away_pass_attempts > 0
+      ? `${Math.round(
+          (stats.away_pass_complete / stats.away_pass_attempts) * 100
+        )}%`
+      : '—';
+  const homePass =
+    stats.home_pass_attempts > 0
+      ? `${Math.round(
+          (stats.home_pass_complete / stats.home_pass_attempts) * 100
+        )}%`
+      : '—';
 
   return (
     <div className="tsc">
@@ -156,39 +258,105 @@ function TeamStatsCol({ stats, awayTeam, homeTeam }) {
       {/* Stat sections */}
       <div className="tsc-sec">
         <div className="tsc-sec-ttl">SHOOTING</div>
-        <StatBar label="SHOTS ON GOAL"         awayVal={a('shots')}          homeVal={h('shots')} />
-        <StatBar label="EXPECTED GOALS (xG)"   awayVal={a('1xg')}            homeVal={h('1xg')} />
-        <StatBar label="EXPECTED ASSISTS (xA)" awayVal={a('1xa')}            homeVal={h('1xa')} />
-        <StatBar label="BREAKAWAY ATTEMPTS"    awayVal={a('break_attempts')}  homeVal={h('break_attempts')} />
-        <StatBar label="BREAKAWAY GOALS"       awayVal={a('break_goals')}     homeVal={h('break_goals')} />
+        <StatBar
+          label="SHOTS ON GOAL"
+          awayVal={a('shots')}
+          homeVal={h('shots')}
+        />
+        <StatBar
+          label="EXPECTED GOALS (xG)"
+          awayVal={a('1xg')}
+          homeVal={h('1xg')}
+        />
+        <StatBar
+          label="EXPECTED ASSISTS (xA)"
+          awayVal={a('1xa')}
+          homeVal={h('1xa')}
+        />
+        <StatBar
+          label="BREAKAWAY ATTEMPTS"
+          awayVal={a('break_attempts')}
+          homeVal={h('break_attempts')}
+        />
+        <StatBar
+          label="BREAKAWAY GOALS"
+          awayVal={a('break_goals')}
+          homeVal={h('break_goals')}
+        />
       </div>
 
       <div className="tsc-sec">
         <div className="tsc-sec-ttl">SPECIAL TEAMS</div>
-        <StatBar label="POWER PLAY (G/OPP)"  awayVal={`${a('pp_g')}/${a('pp_amt')}`} homeVal={`${h('pp_g')}/${h('pp_amt')}`} />
-        <StatBar label="PP %"               awayVal={awayPP}               homeVal={homePP} />
-        <StatBar label="PP SHOTS"           awayVal={a('pp_shots')}         homeVal={h('pp_shots')} />
-        <StatBar label="PP TIME"            awayVal={fmtTime(a('pp_mins'))} homeVal={fmtTime(h('pp_mins'))} />
-        <StatBar label="SHORTHANDED GOALS"  awayVal={a('shg')}              homeVal={h('shg')} />
+        <StatBar
+          label="POWER PLAY (G/OPP)"
+          awayVal={`${a('pp_g')}/${a('pp_amt')}`}
+          homeVal={`${h('pp_g')}/${h('pp_amt')}`}
+        />
+        <StatBar label="PP %" awayVal={awayPP} homeVal={homePP} />
+        <StatBar
+          label="PP SHOTS"
+          awayVal={a('pp_shots')}
+          homeVal={h('pp_shots')}
+        />
+        <StatBar
+          label="PP TIME"
+          awayVal={fmtTime(a('pp_mins'))}
+          homeVal={fmtTime(h('pp_mins'))}
+        />
+        <StatBar
+          label="SHORTHANDED GOALS"
+          awayVal={a('shg')}
+          homeVal={h('shg')}
+        />
         {(stats.away_ps > 0 || stats.home_ps > 0) && (
-          <StatBar label="SHOOTOUT (G/ATT)" awayVal={`${a('psg')}/${a('ps')}`} homeVal={`${h('psg')}/${h('ps')}`} />
+          <StatBar
+            label="SHOOTOUT (G/ATT)"
+            awayVal={`${a('psg')}/${a('ps')}`}
+            homeVal={`${h('psg')}/${h('ps')}`}
+          />
         )}
       </div>
 
       <div className="tsc-sec">
         <div className="tsc-sec-ttl">POSSESSION</div>
-        <StatBar label="ATTACK TIME"         awayVal={fmtTime(a('attack'))} homeVal={fmtTime(h('attack'))} />
-        <StatBar label="FACEOFFS WON"        awayVal={a('fow')}             homeVal={h('fow')} />
-        <StatBar label="PASS COMPLETION %"   awayVal={awayPass}             homeVal={homePass} />
-        <StatBar label="PASSES COMPLETED"    awayVal={a('pass_complete')}   homeVal={h('pass_complete')} />
-        <StatBar label="PASS ATTEMPTS"       awayVal={a('pass_attempts')}   homeVal={h('pass_attempts')} />
-        <StatBar label="CHECKS"              awayVal={a('chk')}             homeVal={h('chk')} />
+        <StatBar
+          label="ATTACK TIME"
+          awayVal={fmtTime(a('attack'))}
+          homeVal={fmtTime(h('attack'))}
+        />
+        <StatBar label="FACEOFFS WON" awayVal={a('fow')} homeVal={h('fow')} />
+        <StatBar
+          label="PASS COMPLETION %"
+          awayVal={awayPass}
+          homeVal={homePass}
+        />
+        <StatBar
+          label="PASSES COMPLETED"
+          awayVal={a('pass_complete')}
+          homeVal={h('pass_complete')}
+        />
+        <StatBar
+          label="PASS ATTEMPTS"
+          awayVal={a('pass_attempts')}
+          homeVal={h('pass_attempts')}
+        />
+        <StatBar label="CHECKS" awayVal={a('chk')} homeVal={h('chk')} />
       </div>
 
       <div className="tsc-sec">
         <div className="tsc-sec-ttl">DISCIPLINE</div>
-        <StatBar label="PENALTIES"       awayVal={a('pens')} homeVal={h('pens')} lowerWins />
-        <StatBar label="PENALTY MINUTES" awayVal={a('pim')}  homeVal={h('pim')}  lowerWins />
+        <StatBar
+          label="PENALTIES"
+          awayVal={a('pens')}
+          homeVal={h('pens')}
+          lowerWins
+        />
+        <StatBar
+          label="PENALTY MINUTES"
+          awayVal={a('pim')}
+          homeVal={h('pim')}
+          lowerWins
+        />
       </div>
     </div>
   );
@@ -197,22 +365,23 @@ function TeamStatsCol({ stats, awayTeam, homeTeam }) {
 // ─── Single scoring play ──────────────────────────────────────────────────────
 function GoalRow({ play, awayTeam, runningAway, runningHome }) {
   const isAway = play.g_team === awayTeam;
-  const tag    = TYPE_TAG[play.score_type];
+  const tag = TYPE_TAG[play.score_type];
 
   return (
     <div className={`gr gr-${isAway ? 'away' : 'home'}`}>
-
       {/* Left: time + type pill */}
       <div className="gr-time-col">
         <span className="gr-time">{play.g_time}</span>
-        {tag && <span className={`gr-tag gr-tag-${play.score_type}`}>{tag}</span>}
+        {tag && (
+          <span className={`gr-tag gr-tag-${play.score_type}`}>{tag}</span>
+        )}
       </div>
 
       {/* Middle: logo + scorer + assists */}
       <div className="gr-body">
-      <div className="gr-logo-wrap">
-            <Logo team={play.g_team} size={36} />
-            </div>
+        <div className="gr-logo-wrap">
+          <Logo team={play.g_team} size={36} />
+        </div>
         <div className="gr-text">
           <div className="gr-scorer">{play.goal_player_name}</div>
           <div className="gr-assists">
@@ -237,17 +406,21 @@ function GoalRow({ play, awayTeam, runningAway, runningHome }) {
 
       {/* Right: running score bubble */}
       <div className="gr-score">
-        <span className={`gr-rs${isAway ? ' gr-rs-lit' : ''}`}>{runningAway}</span>
+        <span className={`gr-rs${isAway ? ' gr-rs-lit' : ''}`}>
+          {runningAway}
+        </span>
         <span className="gr-rs-dash">–</span>
-        <span className={`gr-rs${!isAway ? ' gr-rs-lit' : ''}`}>{runningHome}</span>
+        <span className={`gr-rs${!isAway ? ' gr-rs-lit' : ''}`}>
+          {runningHome}
+        </span>
       </div>
     </div>
   );
 }
 
 // ─── Scoring / play-by-play right column ─────────────────────────────────────
-function ScoringCol({ gameId, awayTeam, homeTeam }) {
-  const [plays, setPlays]     = useState(null);
+function ScoringCol({ gameId, awayTeam, homeTeam, isPlayoff = false }) {
+  const [plays, setPlays] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -255,30 +428,36 @@ function ScoringCol({ gameId, awayTeam, homeTeam }) {
     let cancelled = false;
     setLoading(true);
     (async () => {
+      const col = isPlayoff ? 'playoff_game_id' : 'game_id';
       const { data, error } = await supabase
         .from('game_raw_scoring')
         .select('*')
-        .eq('game_id', Number(gameId))
+        .eq(col, Number(gameId))
         .order('goal_num', { ascending: true });
       if (cancelled) return;
       if (error) console.error('Scoring fetch error:', error);
       setPlays(data ?? []);
       setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [gameId]);
 
   // Build running score per play and group by period
   const grouped = {};
-  let rAway = 0, rHome = 0;
-  (plays || []).forEach(p => {
+  let rAway = 0,
+    rHome = 0;
+  (plays || []).forEach((p) => {
     if (p.g_team === awayTeam) rAway++;
     else rHome++;
     const key = p.period;
     if (!grouped[key]) grouped[key] = [];
     grouped[key].push({ ...p, rAway, rHome });
   });
-  const periodNums = Object.keys(grouped).map(Number).sort((a, b) => a - b);
+  const periodNums = Object.keys(grouped)
+    .map(Number)
+    .sort((a, b) => a - b);
 
   return (
     <div className="sc-col">
@@ -296,24 +475,30 @@ function ScoringCol({ gameId, awayTeam, homeTeam }) {
       </div>
 
       {loading ? (
-        <div className="sc-spinner"><span className="dot"/><span className="dot"/><span className="dot"/></div>
+        <div className="sc-spinner">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
       ) : !plays || plays.length === 0 ? (
         <div className="sc-empty">
-          <div style={{ fontSize: '2.5rem', opacity: .25 }}>🏒</div>
+          <div style={{ fontSize: '2.5rem', opacity: 0.25 }}>🏒</div>
           <div className="sc-empty-txt">NO SCORING DATA</div>
         </div>
       ) : (
         <div className="sc-plays">
-          {periodNums.map(per => (
+          {periodNums.map((per) => (
             <div key={per} className="sc-period">
               {/* Period divider */}
               <div className="sc-per-hdr">
                 <div className="sc-per-line" />
-                <span className="sc-per-name">{PERIOD_LABEL[per] ?? `P${per}`} PERIOD</span>
+                <span className="sc-per-name">
+                  {PERIOD_LABEL[per] ?? `P${per}`} PERIOD
+                </span>
                 <div className="sc-per-line" />
               </div>
               {/* Goals in this period */}
-              {grouped[per].map(p => (
+              {grouped[per].map((p) => (
                 <GoalRow
                   key={p.id}
                   play={p}
@@ -331,8 +516,8 @@ function ScoringCol({ gameId, awayTeam, homeTeam }) {
 }
 
 // ─── Full expanded panel (fetches team stats + scoring in parallel) ───────────
-function GameStatsPanel({ gameId, awayTeam, homeTeam }) {
-  const [stats,   setStats]   = useState(null);
+function GameStatsPanel({ gameId, awayTeam, homeTeam, isPlayoff = false }) {
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -340,28 +525,44 @@ function GameStatsPanel({ gameId, awayTeam, homeTeam }) {
     let cancelled = false;
     setLoading(true);
     (async () => {
+      const col = isPlayoff ? 'playoff_game_id' : 'game_id';
       const { data, error } = await supabase
-        .from('game_stats_team').select('*')
-        .eq('game_id', Number(gameId)).limit(1);
+        .from('game_stats_team')
+        .select('*')
+        .eq(col, Number(gameId))
+        .limit(1);
       if (cancelled) return;
       if (error) console.error('Stats fetch error:', error);
       setStats(data?.[0] ?? null);
       setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [gameId]);
 
-  if (loading) return (
-    <div className="gsp-loader"><span className="dot"/><span className="dot"/><span className="dot"/></div>
-  );
+  if (loading)
+    return (
+      <div className="gsp-loader">
+        <span className="dot" />
+        <span className="dot" />
+        <span className="dot" />
+      </div>
+    );
 
   return (
     <div className="gsp-2col">
-      {stats
-        ? <TeamStatsCol stats={stats} awayTeam={awayTeam} homeTeam={homeTeam} />
-        : <div className="gsp-no-stats">NO TEAM STATS AVAILABLE</div>
-      }
-      <ScoringCol gameId={gameId} awayTeam={awayTeam} homeTeam={homeTeam} />
+      {stats ? (
+        <TeamStatsCol stats={stats} awayTeam={awayTeam} homeTeam={homeTeam} />
+      ) : (
+        <div className="gsp-no-stats">NO TEAM STATS AVAILABLE</div>
+      )}
+      <ScoringCol
+        gameId={gameId}
+        awayTeam={awayTeam}
+        homeTeam={homeTeam}
+        isPlayoff={isPlayoff}
+      />
     </div>
   );
 }
@@ -370,64 +571,133 @@ function GameStatsPanel({ gameId, awayTeam, homeTeam }) {
 function GameCard({ game, selectedTeam, index }) {
   const [open, setOpen] = useState(false);
 
-  const isHome  = selectedTeam === game.home;
+  const isHome = selectedTeam === game.home;
   const myScore = isHome ? game.score_home : game.score_away;
   const opScore = isHome ? game.score_away : game.score_home;
-  const isOT    = Number(game.ot) === 1;
+  const isOT = Number(game.ot) === 1;
 
   let result = 'tie';
-  if      (myScore > opScore)         result = 'win';
+  if (myScore > opScore) result = 'win';
   else if (myScore < opScore && isOT) result = 'otl';
-  else if (myScore < opScore)         result = 'loss';
+  else if (myScore < opScore) result = 'loss';
 
   const BADGE = { win: 'W', loss: 'L', otl: 'OTL', tie: 'T' };
   const RC = {
-    win:  { c: '#00CC55', g: 'rgba(0,204,85,.13)',    s: '#00CC55' },
-    loss: { c: '#5588FF', g: 'rgba(85,136,255,.08)',  s: '#3B6FE8' },
-    otl:  { c: '#FF8C00', g: 'rgba(255,140,0,.10)',   s: '#FF8C00' },
-    tie:  { c: '#888',    g: 'rgba(128,128,128,.05)', s: '#555'    },
+    win: { c: '#00CC55', g: 'rgba(0,204,85,.13)', s: '#00CC55' },
+    loss: { c: '#5588FF', g: 'rgba(85,136,255,.08)', s: '#3B6FE8' },
+    otl: { c: '#FF8C00', g: 'rgba(255,140,0,.10)', s: '#FF8C00' },
+    tie: { c: '#888', g: 'rgba(128,128,128,.05)', s: '#555' },
   }[result];
 
   return (
-    <div className={`gc gc-${result}${open ? ' gc-open' : ''}`}
-      style={{ '--stripe': RC.s, '--glow': RC.g, animationDelay: `${index * 0.04}s` }}>
-
-      <button className="gc-row" onClick={() => setOpen(o => !o)}>
+    <div
+      className={`gc gc-${result}${open ? ' gc-open' : ''}`}
+      style={{
+        '--stripe': RC.s,
+        '--glow': RC.g,
+        animationDelay: `${index * 0.04}s`,
+      }}
+    >
+      <button className="gc-row" onClick={() => setOpen((o) => !o)}>
         {/* Result badge */}
-        <div className="gc-badge" style={{ color: RC.c, borderColor: `${RC.c}60`, background: `${RC.c}14` }}>
-          {BADGE[result]}
+        <div
+          className="gc-badge"
+          style={{
+            color: RC.c,
+            borderColor: `${RC.c}60`,
+            background: `${RC.c}14`,
+          }}
+        >
+          {game.isPlayoff ? (
+            <>
+              <div>{BADGE[result]}</div>
+              <div
+                style={{
+                  fontSize: '.42rem',
+                  opacity: 0.85,
+                  marginTop: 3,
+                  letterSpacing: 1,
+                }}
+              >
+                R{game.round}·G{game.game_number}
+              </div>
+            </>
+          ) : (
+            BADGE[result]
+          )}
         </div>
 
         {/* Away team */}
         <div className="gc-side gc-away">
           <Logo team={game.away} size={42} />
-          <span className={`gc-code${game.away === selectedTeam ? ' gc-sel' : ''}`}>{game.away}</span>
+          <span
+            className={`gc-code${game.away === selectedTeam ? ' gc-sel' : ''}`}
+          >
+            {game.away}
+          </span>
         </div>
 
         {/* Score pill */}
         <div className="gc-score-pill">
-          <span className={`gc-num${game.score_away > game.score_home ? ' gc-hi' : ''}`}>{game.score_away ?? '—'}</span>
+          <span
+            className={`gc-num${
+              game.score_away > game.score_home ? ' gc-hi' : ''
+            }`}
+          >
+            {game.score_away ?? '—'}
+          </span>
           <div className="gc-sep">
-            {isOT ? <span className="gc-ot">OT</span> : <span className="gc-dash">–</span>}
+            {isOT ? (
+              <span className="gc-ot">OT</span>
+            ) : (
+              <span className="gc-dash">–</span>
+            )}
           </div>
-          <span className={`gc-num${game.score_home > game.score_away ? ' gc-hi' : ''}`}>{game.score_home ?? '—'}</span>
+          <span
+            className={`gc-num${
+              game.score_home > game.score_away ? ' gc-hi' : ''
+            }`}
+          >
+            {game.score_home ?? '—'}
+          </span>
         </div>
 
         {/* Home team */}
         <div className="gc-side gc-home">
-          <span className={`gc-code${game.home === selectedTeam ? ' gc-sel' : ''}`}>{game.home}</span>
+          <span
+            className={`gc-code${game.home === selectedTeam ? ' gc-sel' : ''}`}
+          >
+            {game.home}
+          </span>
           <Logo team={game.home} size={42} />
         </div>
 
         {/* Chevron */}
-        <svg className={`gc-chev${open ? ' up' : ''}`} width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <svg
+          className={`gc-chev${open ? ' up' : ''}`}
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          fill="none"
+        >
+          <path
+            d="M3 5l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
         </svg>
       </button>
 
       {open && (
         <div className="gc-panel">
-          <GameStatsPanel gameId={game.id} awayTeam={game.away} homeTeam={game.home} />
+          <GameStatsPanel
+            gameId={game.id}
+            awayTeam={game.away}
+            homeTeam={game.home}
+            isPlayoff={!!game.isPlayoff}
+          />
         </div>
       )}
     </div>
@@ -438,32 +708,42 @@ function GameCard({ game, selectedTeam, index }) {
 export default function Scores() {
   const { selectedLeague } = useLeague();
   const [seasons, setSeasons] = useState([]);
-  const [season,  setSeason]  = useState('');
-  const [mode,    setMode]    = useState('Season');
-  const [teams,   setTeams]   = useState([]);
-  const [team,    setTeam]    = useState('');
-  const [games,   setGames]   = useState([]);
+  const [season, setSeason] = useState('');
+  const [mode, setMode] = useState('Season');
+  const [teams, setTeams] = useState([]);
+  const [team, setTeam] = useState('');
+  const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!selectedLeague) return;
     (async () => {
       const { data } = await supabase
-        .from('seasons').select('lg,year')
-        .ilike('lg', `${selectedLeague}%`).order('year', { ascending: false });
-      const codes = (data || []).map(r => r.lg);
-      setSeasons(codes); setSeason(codes[0] ?? '');
+        .from('seasons')
+        .select('lg,year')
+        .ilike('lg', `${selectedLeague}%`)
+        .order('year', { ascending: false });
+      const codes = (data || []).map((r) => r.lg);
+      setSeasons(codes);
+      setSeason(codes[0] ?? '');
     })();
   }, [selectedLeague]);
 
   useEffect(() => {
-    if (!season) { setTeams([]); setTeam(''); return; }
+    if (!season) {
+      setTeams([]);
+      setTeam('');
+      return;
+    }
     (async () => {
       const { data } = await supabase
-        .from('teams').select('abr,team').eq('lg', season).order('team', { ascending: true });
-      const list = (data || []).map(r => ({ abr: r.abr, name: r.team }));
+        .from('teams')
+        .select('abr,team')
+        .eq('lg', season)
+        .order('team', { ascending: true });
+      const list = (data || []).map((r) => ({ abr: r.abr, name: r.team }));
       setTeams(list);
-      setTeam(t => list.find(x => x.abr === t) ? t : (list[0]?.abr ?? ''));
+      setTeam((t) => (list.find((x) => x.abr === t) ? t : list[0]?.abr ?? ''));
     })();
   }, [season]);
 
@@ -471,29 +751,69 @@ export default function Scores() {
     if (!season || !team) return;
     setLoading(true);
     (async () => {
-      const { data, error } = await supabase
-        .from('games')
-        .select('id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot')
-        .eq('lg', season)
-        .or(`mode.eq.Season,mode.eq.season`)
-        .or(`home.eq.${team},away.eq.${team}`)
-        .not('score_home', 'is', null)
-        .order('game_number', { ascending: true, nullsFirst: false })
+      let data, error;
+      if (mode === 'Playoffs') {
+        // Query playoff_games — normalize to same shape as games rows
+        const res = await supabase
+          .from('playoff_games')
+          .select(
+            'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score'
+          )
+          .eq('lg', season)
+          .or(`team_code_a.eq.${team},team_code_b.eq.${team}`)
+          .not('team_a_score', 'is', null)
+          .order('round', { ascending: true })
+          .order('series_number', { ascending: true })
+          .order('game_number', { ascending: true });
+        error = res.error;
+        // Normalize playoff rows to match the shape GameCard expects
+        data = (res.data || []).map((g) => ({
+          id: g.id,
+          lg: g.lg,
+          mode: 'Playoffs',
+          home: g.team_code_a, // team_code_a = home (lower seed)
+          away: g.team_code_b, // team_code_b = away (higher seed)
+          score_home: g.team_a_score,
+          score_away: g.team_b_score,
+          ot: 0, // playoff_games doesn't store OT flag yet
+          round: g.round,
+          series_number: g.series_number,
+          game_number: g.game_number,
+          isPlayoff: true, // flag for stats/scoring lookups
+        }));
+      } else {
+        const res = await supabase
+          .from('games')
+          .select(
+            'id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot'
+          )
+          .eq('lg', season)
+          .or(`mode.eq.Season,mode.eq.season`)
+          .or(`home.eq.${team},away.eq.${team}`)
+          .not('score_home', 'is', null)
+          .order('game_number', { ascending: true, nullsFirst: false });
+        error = res.error;
+        data = res.data;
+      }
       if (error) console.error(error);
-      setGames(data ?? []); setLoading(false);
+      setGames(data ?? []);
+      setLoading(false);
     })();
   }, [season, mode, team]);
 
-  const rec = games.reduce((acc, g) => {
-    const isHome = team === g.home;
-    const my = isHome ? g.score_home : g.score_away;
-    const op = isHome ? g.score_away : g.score_home;
-    if (my > op)                      acc.w++;
-    else if (my < op && Number(g.ot)) acc.otl++;
-    else if (my < op)                 acc.l++;
-    else                              acc.t++;
-    return acc;
-  }, { w: 0, l: 0, otl: 0, t: 0 });
+  const rec = games.reduce(
+    (acc, g) => {
+      const isHome = team === g.home;
+      const my = isHome ? g.score_home : g.score_away;
+      const op = isHome ? g.score_away : g.score_home;
+      if (my > op) acc.w++;
+      else if (my < op && Number(g.ot)) acc.otl++;
+      else if (my < op) acc.l++;
+      else acc.t++;
+      return acc;
+    },
+    { w: 0, l: 0, otl: 0, t: 0 }
+  );
 
   return (
     <div className="sp">
@@ -853,28 +1173,50 @@ export default function Scores() {
 
       {/* ── HEADER ── */}
       <div className="sp-hw">
-        <div className="sp-hb"><div className="sp-led">SCORES</div></div>
+        <div className="sp-hb">
+          <div className="sp-led">SCORES</div>
+        </div>
       </div>
 
       {/* ── FILTERS ── */}
       <div className="sp-fx">
         <div className="sp-fg">
           <span className="sp-flbl">SEASON</span>
-          <select className="sp-sel" value={season} onChange={e => setSeason(e.target.value)}>
-            {seasons.map(s => <option key={s} value={s}>{s}</option>)}
+          <select
+            className="sp-sel"
+            value={season}
+            onChange={(e) => setSeason(e.target.value)}
+          >
+            {seasons.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </div>
         <div className="sp-fg">
           <span className="sp-flbl">MODE</span>
-          <select className="sp-sel" value={mode} onChange={e => setMode(e.target.value)}>
+          <select
+            className="sp-sel"
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
+          >
             <option value="Season">Season</option>
             <option value="Playoffs">Playoffs</option>
           </select>
         </div>
         <div className="sp-fg">
           <span className="sp-flbl">TEAM</span>
-          <select className="sp-sel" value={team} onChange={e => setTeam(e.target.value)}>
-            {teams.map(t => <option key={t.abr} value={t.abr}>{t.name} ({t.abr})</option>)}
+          <select
+            className="sp-sel"
+            value={team}
+            onChange={(e) => setTeam(e.target.value)}
+          >
+            {teams.map((t) => (
+              <option key={t.abr} value={t.abr}>
+                {t.name} ({t.abr})
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -882,21 +1224,43 @@ export default function Scores() {
       {/* ── RECORD STRIP ── */}
       {!loading && games.length > 0 && (
         <div className="sp-record">
-          <div className="sp-rec w"><span className="sp-rec-num">{rec.w}</span><span className="sp-rec-lbl">WINS</span></div>
-          <div className="sp-rec l"><span className="sp-rec-num">{rec.l}</span><span className="sp-rec-lbl">LOSSES</span></div>
-          {rec.otl > 0 && <div className="sp-rec otl"><span className="sp-rec-num">{rec.otl}</span><span className="sp-rec-lbl">OTL</span></div>}
-          {rec.t   > 0 && <div className="sp-rec t"  ><span className="sp-rec-num">{rec.t}</span>  <span className="sp-rec-lbl">TIES</span></div>}
+          <div className="sp-rec w">
+            <span className="sp-rec-num">{rec.w}</span>
+            <span className="sp-rec-lbl">WINS</span>
+          </div>
+          <div className="sp-rec l">
+            <span className="sp-rec-num">{rec.l}</span>
+            <span className="sp-rec-lbl">LOSSES</span>
+          </div>
+          {rec.otl > 0 && (
+            <div className="sp-rec otl">
+              <span className="sp-rec-num">{rec.otl}</span>
+              <span className="sp-rec-lbl">OTL</span>
+            </div>
+          )}
+          {rec.t > 0 && (
+            <div className="sp-rec t">
+              <span className="sp-rec-num">{rec.t}</span>{' '}
+              <span className="sp-rec-lbl">TIES</span>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── GAME LIST ── */}
       {loading ? (
-        <div className="sp-loading"><span className="dot"/><span className="dot"/><span className="dot"/></div>
+        <div className="sp-loading">
+          <span className="dot" />
+          <span className="dot" />
+          <span className="dot" />
+        </div>
       ) : games.length === 0 ? (
         <div className="sp-empty-page">NO GAMES FOUND</div>
       ) : (
         <div className="sp-list">
-          {games.map((g, i) => <GameCard key={g.id} game={g} selectedTeam={team} index={i} />)}
+          {games.map((g, i) => (
+            <GameCard key={g.id} game={g} selectedTeam={team} index={i} />
+          ))}
         </div>
       )}
     </div>

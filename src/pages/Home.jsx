@@ -1157,8 +1157,8 @@ function LeagueGazette({
           line-height:1.55; text-transform:uppercase;
         }
         .si-cover-sub {
-          font-family:'VT323',monospace; font-size:18px;
-          color:var(--si-muted); margin:0; line-height:1.35;
+          font-family:'VT323',monospace; font-size:22px;
+          color:rgba(210,205,190,.75); margin:0; line-height:1.35;
           font-style:italic; letter-spacing:.4px; max-width:66ch;
         }
 
@@ -1191,13 +1191,13 @@ function LeagueGazette({
           text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
         }
         .si-blurb-hed {
-          font-family:'VT323',monospace; font-size:17px;
-          color:rgba(228,222,205,.82); line-height:1.3; margin-bottom:.1rem;
+          font-family:'VT323',monospace; font-size:20px;
+          color:rgba(235,228,210,.92); line-height:1.3; margin-bottom:.1rem;
           letter-spacing:.3px;
         }
         .si-blurb-dek {
-          font-family:'VT323',monospace; font-size:14px;
-          color:var(--si-muted); line-height:1.3;
+          font-family:'VT323',monospace; font-size:17px;
+          color:rgba(190,184,168,.65); line-height:1.3;
         }
 
         .si-col-center { display:flex; align-items:stretch; }
@@ -1299,8 +1299,8 @@ function LeagueGazette({
           line-height:1; pointer-events:none;
         }
         .si-quote-text {
-          font-family:'VT323',monospace; font-size:16px;
-          color:rgba(230,222,205,.68); font-style:italic;
+          font-family:'VT323',monospace; font-size:19px;
+          color:rgba(230,222,205,.82); font-style:italic;
           margin:0 0 .22rem; line-height:1.4; letter-spacing:.3px;
         }
         .si-quote-attr {
@@ -1362,8 +1362,8 @@ function LeagueGazette({
           text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
         }
         .si-footer-text {
-          font-family:'VT323',monospace; font-size:16px;
-          color:var(--si-muted); letter-spacing:.4px; font-style:italic;
+          font-family:'VT323',monospace; font-size:19px;
+          color:rgba(190,184,168,.65); letter-spacing:.4px; font-style:italic;
           flex-shrink:0;
         }
 

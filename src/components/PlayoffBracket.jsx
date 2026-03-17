@@ -1399,6 +1399,7 @@ export default function PlayoffBracket({
         //minWidth: 2000,
         overflowX: 'auto',
         overflowY: 'hidden',
+        border: '2px solid red',
       }}
     >
       <div

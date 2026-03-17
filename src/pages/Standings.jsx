@@ -1443,11 +1443,18 @@ export default function Standings() {
         .pts-cell { font-weight:bold; color:#FFD700; }
         .pts-pct-cell { font-size:1.1rem; color:#87CEEB; }
         .streak-cell { font-family:'VT323',monospace; font-size:1.4rem; font-weight:bold; letter-spacing:1px; }
-        .streak-w { color:#00FF88; text-shadow:0 0 8px rgba(0,255,136,.6); }
-        .streak-l { color:#FF4444; text-shadow:0 0 8px rgba(255,68,68,.6); }
-        .streak-t { color:#FFD700; text-shadow:0 0 8px rgba(255,215,0,.5); }
-        .positive-gd { color:#00FF00; font-weight:bold; text-shadow:0 0 8px #00FF00; }
-        .negative-gd { color:#FF0000; font-weight:bold; text-shadow:0 0 8px #FF0000; }
+        
+        /* STREAK FORMATTING */
+        .arcade-table td.streak-cell.streak-w { color:#00c853; }
+        .arcade-table td.streak-cell.streak-l { color:#ff0000; }
+        .arcade-table td.streak-cell.streak-t { color:#888; }
+       
+        /* GD FORMATTING */
+
+        .arcade-table td.positive-gd { color:#00c853; }
+        .arcade-table td.negative-gd { color:#ff0000; }
+        .positive-gd {
+       
         .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }
         .arcade-table td:not(.sorted-cell) { background:transparent; }
         .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:2rem; }

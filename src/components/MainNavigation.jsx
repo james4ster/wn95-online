@@ -118,6 +118,12 @@ export default function MainNavigation() {
               </div>
             )}
           </div>
+          {/* DRAFT LINK */}
+          <Link to="/draft" className="nav-link nav-link-draft">
+            <span className="nav-icon">🎯</span>
+            <span className="link-label">DRAFT</span>
+            <span className="draft-live-badge">LIVE</span>
+          </Link>
         </div>
 
         {/* RIGHT — DISCORD, pinned to match home grid right edge */}
@@ -432,9 +438,48 @@ export default function MainNavigation() {
           animation: live-blink 2.5s ease-in-out infinite;
         }
 
+        /* ── DRAFT BUTTON ── */
         @keyframes live-blink {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.4; }
+        }
+
+        .nav-link-draft {
+          border-color: rgba(255, 60, 60, .4);
+          color: #FF6B6B;
+          background: rgba(255, 60, 60, .06);
+          box-shadow: 0 0 18px rgba(255, 60, 60, .2), inset 0 0 10px rgba(255, 60, 60, .05);
+          animation: draftPulse 2.5s ease-in-out infinite;
+        }
+        
+        .nav-link-draft:hover {
+          border-color: #FF6B6B !important;
+          color: #fff !important;
+          box-shadow: 0 0 28px rgba(255, 60, 60, .55), inset 0 0 14px rgba(255, 60, 60, .15) !important;
+        }
+        
+        .draft-live-badge {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.42rem;
+          color: #FF6B6B;
+          background: rgba(255, 60, 60, .15);
+          border: 1px solid rgba(255, 60, 60, .4);
+          border-radius: 3px;
+          padding: .12rem .28rem;
+          letter-spacing: 1.5px;
+          animation: badgeBlink 1.2s ease-in-out infinite;
+          position: relative;
+          z-index: 1;
+        }
+        
+        @keyframes draftPulse {
+          0%, 100% { box-shadow: 0 0 18px rgba(255,60,60,.2), inset 0 0 10px rgba(255,60,60,.05); }
+          50%       { box-shadow: 0 0 28px rgba(255,60,60,.45), inset 0 0 14px rgba(255,60,60,.12); }
+        }
+        
+        @keyframes badgeBlink {
+          0%, 100% { opacity: 1; }
+          50%       { opacity: .35; }
         }
 
         /* ── MOBILE ── */

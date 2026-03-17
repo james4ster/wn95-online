@@ -1297,7 +1297,6 @@ export default function Standings() {
         }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
-        .table-container::-webkit-scrollbar { display: none; }
         .arcade-table { width:max-content; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }

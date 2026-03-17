@@ -1353,22 +1353,8 @@ export default function Standings() {
         @keyframes triangle-pulse { 0%,100%{border-color:transparent rgba(255,140,0,.6) transparent transparent} 50%{border-color:transparent rgba(255,215,0,1) transparent transparent; filter:drop-shadow(0 0 5px rgba(255,215,0,.9))} }
         @keyframes tied-pulse { 0%,100%{text-shadow:0 0 8px rgba(255,140,0,.4)} 50%{text-shadow:0 0 16px rgba(255,140,0,.9),0 0 24px rgba(255,215,0,.4)} }
         .tied-row { cursor:default; }
-        .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:380px; pointer-events:none; z-index:0; overflow:hidden; opacity:.18; transition:opacity .3s ease; }
-        .arcade-table tbody tr:hover .row-banner-overlay { opacity:.28; }
-        .banner-image {
-          position: absolute;
-          left: 0;
-          top: 50%;
-        
-          transform: translateY(-50%) translateZ(0);
-          backface-visibility: hidden;
-          will-change: transform;
-        
-          height: 150%;
-          width: auto;
-          object-fit: contain;
-        
-          filter: brightness(1.3);
+        .row-banner-overlay {
+          position: relative;
         
           -webkit-mask-image: linear-gradient(
             to right,
@@ -1383,9 +1369,25 @@ export default function Standings() {
           -webkit-mask-repeat: no-repeat;
           -webkit-mask-size: 100% 100%;
         }
+        .arcade-table tbody tr:hover .row-banner-overlay { opacity:.28; }
+        .banner-image {
+          position: absolute;
+          left: 0;
+          top: 50%;
+        
+          transform: translateY(-50%);
+          backface-visibility: hidden;
+          will-change: transform;
+        
+          height: 150%;
+          width: auto;
+          object-fit: contain;
+        
+          filter: brightness(1.3);
+        }
         .arcade-table tbody tr { position: relative; }
         .team-cell { position: static !important; overflow: visible !important; }
-        .arcade-table tbody tr:hover .banner-image { filter:blur(.5px) brightness(1.5); transform:translateY(-50%) scale(1.03); }
+        .arcade-table tbody tr:hover .banner-image { filter: brightness(1.5); transform:translateY(-50%) scale(1.03); }
         .arcade-table tbody tr.even-row { background:rgba(0,30,60,.4); }
         .arcade-table tbody tr.odd-row { background:rgba(0,20,40,.6); }
         .arcade-table tbody tr:hover { background:rgba(255,140,0,.15)!important; transform:scale(1.01); box-shadow:0 0 15px rgba(255,140,0,.4); z-index:2; }

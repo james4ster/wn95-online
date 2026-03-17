@@ -1404,7 +1404,7 @@ export default function PlayoffBracket({
       <div
         ref={containerRef}
         style={{
-          display: 'flex',
+          display: 'inline-flex',
           alignItems: 'center',
           //justifyContent: 'flex-start',
           gap: `${COL_GAP}px`,
@@ -1412,7 +1412,7 @@ export default function PlayoffBracket({
           position: 'relative',
           // minHeight: 10,
           //minWidth: 1400,
-          minWidth: 'max-content',
+          width: 'max-content',
         }}
       >
         <BracketLines

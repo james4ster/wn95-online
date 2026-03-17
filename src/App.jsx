@@ -15,6 +15,8 @@ import Scores from './pages/Scores';
 import ScoresBar from './components/ScoresBar';
 import Media from './pages/Media';
 import Transactions from './pages/Transactions';
+import DraftPortal from './pages/DraftPortal';
+import DraftAdmin from './pages/DraftAdmin';
 
 function App() {
   useEffect(() => {
@@ -68,6 +70,8 @@ function App() {
               element={<Transactions />}
             />
             <Route path="/media" element={<Media />} />
+            <Route path="/draft" element={<DraftPortal />} />
+            <Route path="/draft/admin" element={<DraftAdmin />} />
           </Routes>
           <Analytics />
         </div>

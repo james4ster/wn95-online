@@ -1290,10 +1290,15 @@ export default function Standings() {
       )}
 
       <style>{`
-       
+        html { overflow-x: auto; }
+        body { overflow-x: auto; }
+        .standings-page {
+          overflow-x: visible;
+        }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
-        .arcade-table { width:max-content; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
+        .table-container::-webkit-scrollbar { display: none; }
+        .arcade-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }
         .scoreboard-header::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px); pointer-events:none; }
@@ -1326,7 +1331,7 @@ export default function Standings() {
         .arcade-select:hover:not(:disabled) { border-color:#FFD700; color:#FFD700; transform:translateY(-2px); }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }
         .arcade-select option { background:#1a1a2e; color:#87CEEB; }
-        .scoreboard-frame { background:linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%); border:4px solid #FF0000; border-radius:12px; box-shadow:0 0 20px rgba(255,0,0,.4),0 0 40px rgba(255,0,0,.2),inset 0 0 20px rgba(255,0,0,.1); display: inline-block; min-width: max-content; }
+        .scoreboard-frame { background:linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%); border:4px solid #FF0000; border-radius:12px; box-shadow:0 0 20px rgba(255,0,0,.4),0 0 40px rgba(255,0,0,.2),inset 0 0 20px rgba(255,0,0,.1); }
         .arcade-table td,.arcade-table th { box-sizing:border-box; }
         .arcade-table thead { background:linear-gradient(180deg,#FFD700 0%,#FF6347 100%); }
         .arcade-table th { padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease; position:relative; border-right:1px solid rgba(255,255,255,.2); }
@@ -1446,18 +1451,11 @@ export default function Standings() {
        
         /* GD FORMATTING */
 
+        .arcade-table td.positive-gd { color:#00c853; }
+        .arcade-table td.negative-gd { color:#ff0000; }
         .positive-gd {
-          color:#00c853; 
-        }
-        
-        .negative-gd {
-          color:#ff0000;
-        }
-        
-        .sorted-cell {
-          background: rgba(255,215,0,.15) !important;
-          box-shadow: inset 0 0 8px rgba(255,215,0,.3) !important;
-        }
+       
+        .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }
         .arcade-table td:not(.sorted-cell) { background:transparent; }
         .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:2rem; }
         .loading-spinner { width:60px; height:60px; border:6px solid rgba(255,140,0,.2); border-top:6px solid #FFD700; border-radius:50%; animation:spin 1s linear infinite; }

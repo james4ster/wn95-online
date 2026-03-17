@@ -5,150 +5,164 @@ import { useLeague } from './LeagueContext';
 export default function LeagueSubNav() {
   const { selectedLeague } = useLeague();
 
-  if (!selectedLeague) {
-    return null;
-  }
+  if (!selectedLeague) return null;
 
   return (
-    <div className="league-subnav">
-      <div className="subnav-container">
-        <NavLink 
-          to={`/league/${selectedLeague}/Standings`} 
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+    <div id="league-subnav" className="league-subnav">
+      <div className="subnav-inner">
+        <NavLink
+          to={`/league/${selectedLeague}/standings`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >
-          <span className="subnav-icon">📊</span>
-          <span>STANDINGS</span>
+          <span className="sni">📈</span>
+          <span className="snt">STANDINGS</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/stats`} 
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+        <NavLink
+          to={`/league/${selectedLeague}/scores`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >
-          <span className="subnav-icon">⭐</span>
-          <span>PLAYER STATS</span>
+          <span className="sni">🚨</span>
+          <span className="snt">SCORES</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/managers`} 
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+        <NavLink
+          to={`/league/${selectedLeague}/schedule`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >
-          <span className="subnav-icon">👔</span>
-          <span>MANAGERS</span>
+          <span className="sni">📅</span>
+          <span className="snt">SCHEDULE</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/schedule`} 
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+        <NavLink
+          to={`/league/${selectedLeague}/teams`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >
-          <span className="subnav-icon">📅</span>
-          <span>SCHEDULE</span>
+          <span className="sni">🛡️</span>
+          <span className="snt">ROSTERS</span>
         </NavLink>
 
-        <NavLink 
-          to={`/league/${selectedLeague}/teams`} 
-          className={({ isActive }) => `subnav-link ${isActive ? 'active' : ''}`}
+        <NavLink
+          to={`/league/${selectedLeague}/stats`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >
-          <span className="subnav-icon">🛡️</span>
-          <span>TEAMS</span>
+          <span className="sni">📊</span>
+          <span className="snt">STATS</span>
+        </NavLink>
+
+        <NavLink
+          to={`/league/${selectedLeague}/transactions`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
+        >
+          <span className="sni">🔄</span>
+          <span className="snt">TRANSACTIONS</span>
+        </NavLink>
+
+        <NavLink
+          to={`/league/${selectedLeague}/managers`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
+        >
+          <span className="sni">👔</span>
+          <span className="snt">MANAGERS</span>
+        </NavLink>
+
+        <NavLink
+          to="/media"
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
+        >
+          <span className="sni">🎬</span>
+          <span className="snt">MEDIA</span>
         </NavLink>
       </div>
 
       <style>{`
         .league-subnav {
-          background: linear-gradient(180deg, #0f0f1a 0%, #05050a 100%);
-          border-bottom: 3px solid #87CEEB;
-          box-shadow: 
-            0 4px 15px rgba(135, 206, 235, 0.3),
-            inset 0 -2px 10px rgba(135, 206, 235, 0.15);
           position: sticky;
-          top: 70px;
-          z-index: 999;
+          top: 76px;
+          z-index: 990;
+          width: 100%;
+          background: linear-gradient(180deg, #0d0d1f 0%, #040409 100%);
+          border-bottom: 3px solid #87CEEB;
+          box-shadow:
+            0 3px 16px rgba(135, 206, 235, 0.22),
+            inset 0 -1px 8px rgba(135, 206, 235, 0.08);
+          transform: translateZ(0);
         }
 
-        .subnav-container {
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: 0 2rem;
+        .subnav-inner {
           display: flex;
-          gap: 0.5rem;
+          align-items: stretch;
+          justify-content: center;
+          padding: 0 14px;
           overflow-x: auto;
+          scrollbar-width: none;
         }
+        .subnav-inner::-webkit-scrollbar { display: none; }
 
-        .subnav-link {
+        .snl {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          padding: 1rem 1.5rem;
-          background: transparent;
-          border: none;
-          border-bottom: 3px solid transparent;
-          color: #87CEEB;
+          padding: 0 1.6rem;
+          height: 48px;
+          color: rgba(135, 206, 235, 0.65);
           font-family: 'VT323', monospace;
-          font-size: 1.1rem;
+          font-size: 1.15rem;
+          letter-spacing: 1.5px;
           text-decoration: none;
-          cursor: pointer;
-          transition: all 0.3s ease;
-          letter-spacing: 1px;
           white-space: nowrap;
+          flex-shrink: 0;
           position: relative;
+          transition: color 0.15s, background 0.15s;
+          border-bottom: 3px solid transparent;
+          margin-bottom: -3px;
         }
 
-        .subnav-link::before {
+        .snl::after {
           content: '';
           position: absolute;
-          bottom: 0;
-          left: 0;
-          right: 0;
+          bottom: -3px;
+          left: 18%; right: 18%;
           height: 3px;
           background: linear-gradient(90deg, transparent, #87CEEB, transparent);
-          transform: scaleX(0);
-          transition: transform 0.3s ease;
+          opacity: 0;
+          transition: opacity 0.15s;
         }
 
-        .subnav-link:hover::before {
-          transform: scaleX(1);
-        }
-
-        .subnav-link:hover {
+        .snl:hover {
           color: #FFD700;
-          background: rgba(135, 206, 235, 0.1);
+          background: rgba(255, 215, 0, 0.05);
         }
+        .snl:hover::after { opacity: 1; }
 
-        .subnav-link.active {
+        .snl-on {
           color: #FFD700;
-          background: rgba(255, 215, 0, 0.1);
+          background: rgba(255, 215, 0, 0.07);
           border-bottom-color: #FFD700;
-          box-shadow: 0 -2px 15px rgba(255, 215, 0, 0.4);
         }
-
-        .subnav-link.active::before {
+        .snl-on::after {
           background: linear-gradient(90deg, transparent, #FFD700, transparent);
-          transform: scaleX(1);
+          opacity: 1;
         }
 
-        .subnav-icon {
-          font-size: 1.2rem;
-          filter: drop-shadow(0 0 5px currentColor);
+        .sni {
+          font-size: 1rem;
+          line-height: 1;
+          flex-shrink: 0;
+        }
+        .snt {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.6rem;
+          letter-spacing: 2px;
         }
 
         @media (max-width: 768px) {
-          .league-subnav {
-            top: 60px;
-          }
-
-          .subnav-container {
-            padding: 0 1rem;
-            gap: 0.25rem;
-          }
-
-          .subnav-link {
-            padding: 0.75rem 1rem;
-            font-size: 0.9rem;
-          }
-
-          .subnav-link span:not(.subnav-icon) {
-            display: none;
-          }
+          .league-subnav { top: 64px; }
+          .snl { padding: 0 0.85rem; }
+          .snt { display: none; }
+        }
+        @media (max-width: 480px) {
+          .snl { padding: 0 0.6rem; height: 42px; }
         }
       `}</style>
     </div>

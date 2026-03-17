@@ -1,576 +1,2486 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import TwitchLiveWidget from '../components/TwitchLiveWidget';
+import { useLeague } from '../components/LeagueContext';
 
-export default function Home() {
-  const [recentGames, setRecentGames] = useState([]);
-  const [topScorers, setTopScorers] = useState([]);
-  const [loading, setLoading] = useState(true);
+const lgPrefix = (lg) => (lg || '').replace(/[0-9]/g, '').trim();
+const LEAGUE_CONFIG = [
+  { prefix: 'W', label: 'WN95', color: '#87CEEB' },
+  { prefix: 'Q', label: 'THE Q', color: '#FFD700' },
+  { prefix: 'V', label: 'VINTAGE', color: '#FF6B35' },
+];
+const leagueCfg = (prefix) =>
+  LEAGUE_CONFIG.find((l) => l.prefix === prefix) ?? {
+    prefix,
+    label: prefix,
+    color: '#aaa',
+  };
 
+const getFullTeamName = (teamCode, teams) => {
+  const t = teams.find((t) => t.code === teamCode);
+  return t ? t.team : teamCode;
+};
+
+// ─── Parse team row into display name parts ───────────────────────────────────
+// e.g. { team:"Barrie Dolts", coach:"Dasri" }
+//   → { city:"Barrie", nickname:"Dolts", full:"Barrie Dolts", coach:"Dasri" }
+function parseTeamData(teamRow) {
+  const fullName = teamRow?.team || '';
+  const coach = teamRow?.coach || '';
+  if (!fullName) return { city: '', nickname: '', full: '', coach };
+  const parts = fullName.trim().split(' ');
+  if (parts.length === 1)
+    return { city: parts[0], nickname: parts[0], full: fullName, coach };
+  const city = parts[0];
+  const nickname = parts.slice(1).join(' ');
+  return { city, nickname, full: fullName, coach };
+}
+
+function useLeagueCountdown(season) {
+  const [tick, setTick] = useState(null);
   useEffect(() => {
-    const fetchHomeData = async () => {
-      setLoading(true);
-
-      // Fetch recent games (adjust table/fields as needed)
-      const { data: games } = await supabase
-        .from('games')
-        .select('*')
-        .order('game_date', { ascending: false })
-        .limit(10);
-
-      // Fetch top scorers (adjust table/fields as needed)
-      const { data: scorers } = await supabase
-        .from('player_stats')
-        .select('player_name, team, goals, assists, points')
-        .order('points', { ascending: false })
-        .limit(8);
-
-      setRecentGames(games || []);
-      setTopScorers(scorers || []);
-      setLoading(false);
+    if (!season) return;
+    const calc = () => {
+      if (!season.end_date) {
+        setTick({ done: true, seasonLabel: season.lg });
+        return;
+      }
+      const diff = new Date(season.end_date) - Date.now();
+      if (diff <= 0) {
+        setTick({ done: true, seasonLabel: season.lg });
+        return;
+      }
+      setTick({
+        done: false,
+        seasonLabel: season.lg,
+        d: Math.floor(diff / 86400000),
+        h: Math.floor((diff % 86400000) / 3600000),
+        m: Math.floor((diff % 3600000) / 60000),
+        s: Math.floor((diff % 60000) / 1000),
+        urgent: diff < 48 * 3600000,
+        warning: diff < 7 * 86400000,
+      });
     };
+    calc();
+    const id = setInterval(calc, 1000);
+    return () => clearInterval(id);
+  }, [season]);
+  return tick;
+}
 
-    fetchHomeData();
+const p2 = (n) => String(n ?? 0).padStart(2, '0');
+
+function daysUntil(iso) {
+  if (!iso) return null;
+  const norm = /[Zz]|[+-]\d{2}:?\d{2}$/.test(iso) ? iso : iso + 'Z';
+  const evMs = new Date(norm).getTime();
+  if (isNaN(evMs) || evMs < Date.now()) return null;
+  const now = new Date(),
+    ev = new Date(evMs);
+  const todayMid = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  const evMid = new Date(
+    ev.getFullYear(),
+    ev.getMonth(),
+    ev.getDate()
+  ).getTime();
+  const days = Math.round((evMid - todayMid) / 86400000);
+  if (days === 0) return 'TODAY';
+  if (days === 1) return 'TMRW';
+  return `${days}D`;
+}
+
+function ClockDisplay() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const update = () =>
+      setTime(
+        new Date().toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      );
+    update();
+    const id = setInterval(update, 10000);
+    return () => clearInterval(id);
   }, []);
-
-  const leagues = [
-    { name: 'WN95', code: 'WN95', logo: '/assets/leagueLogos/w.png' },
-    { name: 'The Q', code: 'The Q', logo: '/assets/leagueLogos/q.png' },
-    { name: 'Vintage', code: 'Vintage', logo: '/assets/leagueLogos/vintage.png' },
-  ];
-
   return (
-    <div className="home-page">
-      {/* Discord Button - Top Right Fixed */}
-      <a 
-        href="https://discord.gg/YOUR_INVITE" 
-        target="_blank" 
-        rel="noopener noreferrer"
-        className="discord-button-fixed"
-      >
-        <svg className="discord-icon" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515a.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0a12.64 12.64 0 0 0-.617-1.25a.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057a19.9 19.9 0 0 0 5.993 3.03a.078.078 0 0 0 .084-.028a14.09 14.09 0 0 0 1.226-1.994a.076.076 0 0 0-.041-.106a13.107 13.107 0 0 1-1.872-.892a.077.077 0 0 1-.008-.128a10.2 10.2 0 0 0 .372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127a12.299 12.299 0 0 1-1.873.892a.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028a19.839 19.839 0 0 0 6.002-3.03a.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.956-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419c0-1.333.955-2.419 2.157-2.419c1.21 0 2.176 1.096 2.157 2.42c0 1.333-.946 2.418-2.157 2.418z"/>
-        </svg>
-      </a>
-
-      {/* Compact Hero Title */}
-      <div className="compact-hero">
-        <div className="hero-title">NHL '95 ONLINE</div>
-      </div>
-
-      {/* Leagues Strip - Compact Horizontal */}
-      <div className="leagues-strip">
-        {leagues.map((league, idx) => (
-          <div key={idx} className="league-badge">
-            <img 
-              src={league.logo} 
-              alt={league.name}
-              className="league-mini-logo"
-              onError={(e) => {
-                e.target.style.display = 'none';
-                e.target.nextElementSibling.style.display = 'flex';
-              }}
-            />
-            <div className="league-mini-fallback" style={{ display: 'none' }}>
-              {league.code}
-            </div>
-            <div className="league-mini-name">{league.code}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Main Content Area - Two Column Layout */}
-      <div className="main-content-grid">
-        {/* Left Column - Top Scorers */}
-        <div className="content-section">
-          <div className="section-header-compact">
-            <div className="section-title-compact">⭐ TOP SCORERS</div>
-          </div>
-          <div className="scorers-list">
-            {topScorers.map((scorer, idx) => (
-              <div key={idx} className="scorer-row">
-                <div className="scorer-rank-mini">{idx + 1}</div>
-                <div className="scorer-details">
-                  <div className="scorer-name-mini">{scorer.player_name}</div>
-                  <div className="scorer-team-mini">{scorer.team}</div>
-                </div>
-                <div className="scorer-stats-mini">
-                  <span className="stat-mini">{scorer.goals}G</span>
-                  <span className="stat-mini">{scorer.assists}A</span>
-                  <span className="stat-mini highlight-mini">{scorer.points}P</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Column - Stats Dashboard */}
-        <div className="content-section">
-          <div className="section-header-compact">
-            <div className="section-title-compact">📊 LEAGUE STATS</div>
-          </div>
-          <div className="stats-dashboard">
-            <div className="stat-box">
-              <div className="stat-number">3</div>
-              <div className="stat-label">Leagues</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-number">50+</div>
-              <div className="stat-label">Teams</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-number">200+</div>
-              <div className="stat-label">Players</div>
-            </div>
-            <div className="stat-box">
-              <div className="stat-number">1000+</div>
-              <div className="stat-label">Games</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Bottom Ticker - Recent Scores */}
-      <div className="scores-ticker">
-        <div className="ticker-label">RECENT RESULTS</div>
-        <div className="ticker-scroll">
-          <div className="ticker-content">
-            {recentGames.concat(recentGames).map((game, idx) => (
-              <div key={idx} className="ticker-game">
-                <span className="ticker-team">{game.home_team}</span>
-                <span className="ticker-score">{game.home_score}</span>
-                <span className="ticker-vs">-</span>
-                <span className="ticker-score">{game.away_score}</span>
-                <span className="ticker-team">{game.away_team}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <style>{homeStyles}</style>
+    <div className="ht-clock-inner">
+      <span className="ht-clock-time">{time}</span>
+      <span className="ht-clock-label">ET</span>
     </div>
   );
 }
 
-const homeStyles = `
-  .home-page {
-    min-height: 100vh;
-    background: radial-gradient(ellipse at top, #0a0a15 0%, #000000 100%);
-    padding: 1rem 0 0 0;
-    position: relative;
-  }
+function InlineCountdown({ cfg, tick }) {
+  const uc = tick?.urgent ? '#FF3B3B' : tick?.warning ? '#FFB800' : cfg.color;
+  return (
+    <div className="icd" style={{ '--ic': uc }}>
+      <div className="icd-left">
+        <span className="icd-eyebrow">⏱ SEASON COUNTDOWN</span>
+        <div className="icd-meta">
+          <span className="icd-dot" />
+          <span className="icd-league">{cfg.label}</span>
+          {tick?.seasonLabel && (
+            <span className="icd-season">{tick.seasonLabel}</span>
+          )}
+        </div>
+      </div>
+      <div className="icd-right">
+        {!tick ? (
+          <span className="icd-awaiting">AWAITING</span>
+        ) : tick.done ? (
+          <div className="icd-complete">
+            <span style={{ fontSize: 15 }}>🏆</span>
+            <span className="icd-done-txt">COMPLETE</span>
+          </div>
+        ) : (
+          <div className="icd-clock">
+            {[
+              { v: tick.d, u: 'D' },
+              { v: tick.h, u: 'H' },
+              { v: tick.m, u: 'M' },
+              { v: tick.s, u: 'S' },
+            ].map(({ v, u }) => (
+              <div key={u} className="icd-unit">
+                <span className="icd-n">{p2(v)}</span>
+                <span className="icd-u">{u}</span>
+              </div>
+            ))}
+            {tick.d < 7 && (
+              <span style={{ fontSize: 15, marginLeft: 2 }}>
+                {tick.urgent ? '🚨' : '⚡'}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
-  /* Discord Button - Fixed Top Right */
-  .discord-button-fixed {
-    position: fixed;
-    top: 80px;
-    right: 2rem;
-    z-index: 1000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 60px;
-    height: 60px;
-    background: linear-gradient(135deg, #FF8C00 0%, #FF6347 100%);
-    border: 3px solid #FFD700;
-    border-radius: 50%;
-    color: #FFF;
-    text-decoration: none;
-    transition: all 0.3s ease;
-    box-shadow: 
-      0 4px 20px rgba(255, 140, 0, 0.4),
-      inset 0 0 20px rgba(255, 255, 255, 0.1);
-    cursor: pointer;
-  }
+function PanelHeader({ icon, title, action }) {
+  return (
+    <div className="ph">
+      <span className="ph-icon">{icon}</span>
+      <span className="ph-title">{title}</span>
+      {action && <div className="ph-action">{action}</div>}
+    </div>
+  );
+}
 
-  .discord-button-fixed:hover {
-    transform: scale(1.15);
-    box-shadow: 
-      0 0 30px rgba(255, 140, 0, 1),
-      0 0 50px rgba(255, 140, 0, 0.7),
-      inset 0 0 30px rgba(255, 255, 255, 0.3);
-    border-color: #FFF;
-  }
+const SL_PANELS = [
+  { id: 'hot', icon: '🔥', label: 'HOTTEST TEAMS', sub: 'Best record last 10' },
+  {
+    id: 'cold',
+    icon: '🥶',
+    label: 'COLDEST TEAMS',
+    sub: 'Worst record last 10',
+  },
+  {
+    id: 'wstreak',
+    icon: '🏆',
+    label: 'WIN STREAKS',
+    sub: 'Active win streaks',
+  },
+  {
+    id: 'lstreak',
+    icon: '💀',
+    label: 'LOSS STREAKS',
+    sub: 'Active loss streaks',
+  },
+  { id: 'scorers', icon: '⭐', label: 'TOP SCORERS', sub: 'Season leaders' },
+];
 
-  .discord-icon {
-    width: 32px;
-    height: 32px;
-  }
-
-  /* Compact Hero */
-  .compact-hero {
-    text-align: center;
-    padding: 1rem 2rem 1.5rem 2rem;
-  }
-
-  .hero-title {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 2.5rem;
-    color: #FF8C00;
-    letter-spacing: 4px;
-    text-shadow: 0 0 15px #FF8C00, 0 0 30px #FFD700;
-    margin-bottom: 0.5rem;
-  }
-
-  .hero-tagline {
-    font-family: 'VT323', monospace;
-    font-size: 1.4rem;
-    color: #87CEEB;
-    letter-spacing: 2px;
-  }
-
-  /* Leagues Strip - Compact Horizontal */
-  .leagues-strip {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 3rem;
-    padding: 1.5rem 2rem;
-    background: linear-gradient(90deg, 
-      rgba(255, 140, 0, 0.1) 0%,
-      rgba(135, 206, 235, 0.1) 50%,
-      rgba(255, 140, 0, 0.1) 100%
+function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
+  const [idx, setIdx] = useState(0);
+  const timerRef = useRef(null);
+  const startTimer = useCallback(() => {
+    clearInterval(timerRef.current);
+    timerRef.current = setInterval(
+      () => setIdx((i) => (i + 1) % SL_PANELS.length),
+      8000
     );
-    border-top: 2px solid rgba(255, 140, 0, 0.3);
-    border-bottom: 2px solid rgba(135, 206, 235, 0.3);
-  }
+  }, []);
+  useEffect(() => {
+    startTimer();
+    return () => clearInterval(timerRef.current);
+  }, [startTimer]);
+  const goTo = (i) => {
+    setIdx(i);
+    startTimer();
+  };
+  const p = SL_PANELS[idx];
 
-  .league-badge {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.5rem;
-    transition: all 0.3s ease;
-    cursor: pointer;
-  }
-
-  .league-badge:hover {
-    transform: translateY(-5px);
-  }
-
-  .league-mini-logo {
-    width: 80px;
-    height: 80px;
-    object-fit: contain;
-    filter: drop-shadow(0 0 10px rgba(135, 206, 235, 0.5));
-    transition: all 0.3s ease;
-  }
-
-  .league-badge:hover .league-mini-logo {
-    filter: drop-shadow(0 0 20px rgba(255, 140, 0, 1));
-    transform: scale(1.15);
-  }
-
-  .league-mini-fallback {
-    width: 80px;
-    height: 80px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #87CEEB 0%, #4682B4 100%);
-    border-radius: 12px;
-    font-family: 'Press Start 2P', monospace;
-    font-size: 1rem;
-    color: #000;
-    font-weight: bold;
-  }
-
-  .league-mini-name {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.7rem;
-    color: #87CEEB;
-    letter-spacing: 1px;
-    transition: all 0.3s ease;
-  }
-
-  .league-badge:hover .league-mini-name {
-    color: #FFD700;
-    text-shadow: 0 0 10px #FFD700;
-  }
-
-  /* Main Content Grid */
-  .main-content-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
-    padding: 2rem;
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-
-  .content-section {
-    background: linear-gradient(135deg, #1a1a2e 0%, #0a0a15 100%);
-    border: 3px solid #87CEEB;
-    border-radius: 12px;
-    padding: 1.5rem;
-    box-shadow: 
-      0 0 20px rgba(135, 206, 235, 0.3),
-      inset 0 0 20px rgba(135, 206, 235, 0.05);
-  }
-
-  .section-header-compact {
-    margin-bottom: 1.5rem;
-  }
-
-  .section-title-compact {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.9rem;
-    color: #FF8C00;
-    letter-spacing: 2px;
-    text-shadow: 0 0 10px #FF8C00;
-    padding-bottom: 0.75rem;
-    border-bottom: 2px solid rgba(255, 140, 0, 0.3);
-  }
-
-  /* Top Scorers List */
-  .scorers-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .scorer-row {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.75rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-left: 3px solid #87CEEB;
-    border-radius: 6px;
-    transition: all 0.2s ease;
-  }
-
-  .scorer-row:hover {
-    background: rgba(255, 140, 0, 0.1);
-    border-left-color: #FF8C00;
-    transform: translateX(5px);
-  }
-
-  .scorer-row:nth-child(1) {
-    border-left-color: #FFD700;
-    background: rgba(255, 215, 0, 0.05);
-  }
-
-  .scorer-rank-mini {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 1.2rem;
-    color: #FF8C00;
-    min-width: 35px;
-    text-align: center;
-  }
-
-  .scorer-row:nth-child(1) .scorer-rank-mini {
-    color: #FFD700;
-    text-shadow: 0 0 10px #FFD700;
-  }
-
-  .scorer-details {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-  }
-
-  .scorer-name-mini {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.7rem;
-    color: #87CEEB;
-  }
-
-  .scorer-team-mini {
-    font-family: 'VT323', monospace;
-    font-size: 1rem;
-    color: #999;
-  }
-
-  .scorer-stats-mini {
-    display: flex;
-    gap: 0.75rem;
-    align-items: center;
-  }
-
-  .stat-mini {
-    font-family: 'VT323', monospace;
-    font-size: 1.3rem;
-    color: #E0E0E0;
-  }
-
-  .stat-mini.highlight-mini {
-    color: #FFD700;
-    font-weight: bold;
-    font-size: 1.5rem;
-  }
-
-  /* Stats Dashboard */
-  .stats-dashboard {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
-  }
-
-  .stat-box {
-    background: rgba(0, 0, 0, 0.3);
-    border: 2px solid #87CEEB;
-    border-radius: 8px;
-    padding: 1.5rem 1rem;
-    text-align: center;
-    transition: all 0.3s ease;
-  }
-
-  .stat-box:hover {
-    border-color: #FF8C00;
-    background: rgba(255, 140, 0, 0.1);
-    transform: scale(1.05);
-  }
-
-  .stat-number {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 2.5rem;
-    color: #FFD700;
-    text-shadow: 0 0 15px #FFD700;
-    margin-bottom: 0.5rem;
-  }
-
-  .stat-label {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.6rem;
-    color: #87CEEB;
-    letter-spacing: 1px;
-  }
-
-  /* Bottom Ticker - Sports Style */
-  .scores-ticker {
-    position: fixed;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    background: linear-gradient(90deg, #1a1a2e 0%, #0a0a15 50%, #1a1a2e 100%);
-    border-top: 3px solid #FF8C00;
-    display: flex;
-    align-items: center;
-    height: 50px;
-    z-index: 100;
-    box-shadow: 0 -4px 20px rgba(255, 140, 0, 0.3);
-  }
-
-  .ticker-label {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.7rem;
-    color: #FFD700;
-    background: #FF8C00;
-    padding: 0.75rem 1.5rem;
-    letter-spacing: 2px;
-    white-space: nowrap;
-    border-right: 3px solid #FFD700;
-  }
-
-  .ticker-scroll {
-    flex: 1;
-    overflow: hidden;
-    position: relative;
-  }
-
-  .ticker-content {
-    display: flex;
-    gap: 3rem;
-    animation: ticker-scroll 50s linear infinite;
-    padding: 0 2rem;
-  }
-
-  @keyframes ticker-scroll {
-    0% {
-      transform: translateX(0);
+  const rows = () => {
+    if (loading)
+      return [1, 2, 3, 4].map((i) => (
+        <div
+          key={i}
+          className="skel"
+          style={{ height: 24, margin: '.12rem .65rem' }}
+        />
+      ));
+    if (p.id === 'hot' || p.id === 'cold') {
+      const list = p.id === 'hot' ? recentForm.hot : recentForm.cold;
+      if (!list.length)
+        return <div className="sl-empty">No data available</div>;
+      return list.map((t, i) => (
+        <div key={t.team} className="sl-row">
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${t.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <span className="sl-team">{t.team}</span>
+          <div className="sl-dots">
+            {t.last10.map((w, j) => (
+              <span
+                key={j}
+                className={`sl-dot ${w ? 'sl-dot-w' : 'sl-dot-l'}`}
+              />
+            ))}
+          </div>
+          <span
+            className={`sl-val ${
+              p.id === 'hot' ? 'sl-val-hot' : 'sl-val-cold'
+            }`}
+          >
+            {t.w}-{t.l}
+          </span>
+        </div>
+      ));
     }
-    100% {
-      transform: translateX(-50%);
+    if (p.id === 'wstreak') {
+      if (!winStreaks.length)
+        return <div className="sl-empty">No active win streaks</div>;
+      return winStreaks.slice(0, 5).map((s, i) => (
+        <div key={s.team} className="sl-row">
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <span className="sl-team">{s.team}</span>
+          <div className="sl-dots">
+            {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
+              <span key={j} className="sl-dot sl-dot-w" />
+            ))}
+            {s.count > 10 && (
+              <span className="sl-dots-more">+{s.count - 10}</span>
+            )}
+          </div>
+          <span className="sl-val sl-val-hot">{s.count}W</span>
+        </div>
+      ));
     }
+    if (p.id === 'lstreak') {
+      if (!lossStreaks.length)
+        return <div className="sl-empty">No active loss streaks</div>;
+      return lossStreaks.slice(0, 5).map((s, i) => (
+        <div key={s.team} className="sl-row">
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <span className="sl-team">{s.team}</span>
+          <div className="sl-dots">
+            {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
+              <span key={j} className="sl-dot sl-dot-l" />
+            ))}
+            {s.count > 10 && (
+              <span className="sl-dots-more">+{s.count - 10}</span>
+            )}
+          </div>
+          <span className="sl-val sl-val-cold">{s.count}L</span>
+        </div>
+      ));
+    }
+    return (
+      <div>
+        {[1, 2, 3, 4, 5].map((i) => (
+          <div key={i} className="sl-row" style={{ opacity: 1 - i * 0.15 }}>
+            <span className="sl-rank">#{i}</span>
+            <div className="sl-bar-wrap">
+              <div className="sl-bar" style={{ width: `${100 - i * 13}%` }} />
+            </div>
+            <span className="sl-val" style={{ color: 'rgba(255,255,255,.18)' }}>
+              —
+            </span>
+          </div>
+        ))}
+        <div className="sl-coming">PLAYER STATS COMING SOON</div>
+      </div>
+    );
+  };
+
+  return (
+    <section className="panel sl-panel">
+      <div className="sl-tabs">
+        {SL_PANELS.map((sp, i) => (
+          <button
+            key={sp.id}
+            className={`sl-tab ${i === idx ? 'sl-tab-on' : ''}`}
+            onClick={() => goTo(i)}
+            title={sp.label}
+          >
+            {sp.icon}
+          </button>
+        ))}
+      </div>
+      <div className="sl-titlebar">
+        <span className="sl-title">
+          {p.icon} {p.label}
+        </span>
+        <span className="sl-sub">{p.sub}</span>
+      </div>
+      <div className="sl-body">{rows()}</div>
+      <div className="sl-prog-wrap">
+        <div className="sl-prog" key={`${idx}-${loading}`} />
+      </div>
+    </section>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   LEAGUE GAZETTE — Daily AI-Generated Newspaper
+═══════════════════════════════════════════════════════════════ */
+
+const GAZETTE_CACHE_KEY = 'league_gazette_v6';
+function todayStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+const STORY_META = {
+  hot_streak: { color: '#FF4500', tag: 'ON FIRE' },
+  win_streak: { color: '#00C853', tag: 'WIN STREAK' },
+  cold_streak: { color: '#448AFF', tag: 'COLD SPELL' },
+  loss_streak: { color: '#448AFF', tag: 'LOSING SKID' },
+  big_win: { color: '#FFD600', tag: 'BIG WIN' },
+  elimination: { color: '#D50000', tag: 'ELIMINATED' },
+  playoff_push: { color: '#00BFA5', tag: 'PLAYOFF PUSH' },
+  milestone: { color: '#FFD600', tag: 'MILESTONE' },
+  comeback: { color: '#FF6D00', tag: 'COMEBACK' },
+  idle: { color: '#78909C', tag: 'QUIET NIGHT' },
+  rivalry: { color: '#E040FB', tag: 'RIVALRY WATCH' },
+};
+const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
+
+/* ─────────────────────────────────────────────────────────────
+   Fetch from Supabase edge fn
+   Now receives: teamNameMap (abr→{city,nickname,full}) + topScorers
+───────────────────────────────────────────────────────────── */
+async function fetchGazetteEdition({
+  leagueLabel,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+  teamNameMap,
+  topScorers,
+  recentGames,
+  isPlayoffActive,
+  playoffSeriesData,
+  gameStats,
+}) {
+  const today = todayStamp();
+
+  // Use a different cache key during playoffs so it never serves
+  // a regular-season edition when playoffs are active
+  const cacheKey = isPlayoffActive ? `${leagueLabel}_playoff` : leagueLabel;
+
+  // ── 1. Check DB cache ─────────────────────────────────────
+  try {
+    const { data: cached } = await supabase
+      .from('gazette_cache')
+      .select('data, date')
+      .eq('league', cacheKey) // ← use cacheKey not leagueLabel
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (cached?.date === today && cached?.data) {
+      console.log('[Gazette] ✅ Serving from DB cache');
+      return cached.data;
+    }
+  } catch (e) {
+    console.log('[Gazette] No DB cache found, generating live');
   }
 
-  .ticker-game {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    white-space: nowrap;
-    flex-shrink: 0;
+  // ── 2. Fallback: generate live ────────────────────────────
+  console.log(`[Gazette] ⚠️ Cache miss — calling AI`);
+  const season = currentSeason?.lg || leagueLabel;
+  const tn = (code) =>
+    teamNameMap[code] || { city: code, nickname: code, full: code };
+
+  const hotLines = recentForm.hot
+    .slice(0, 5)
+    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
+    .join(' | ');
+  const coldLines = recentForm.cold
+    .slice(0, 5)
+    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
+    .join(' | ');
+  const winLines = winStreaks
+    .slice(0, 5)
+    .map((s) => `${tn(s.team).full} [${s.team}]: W${s.count}`)
+    .join(' | ');
+  const lossLines = lossStreaks
+    .slice(0, 5)
+    .map((s) => `${tn(s.team).full} [${s.team}]: L${s.count}`)
+    .join(' | ');
+  const scorerLines = topScorers
+    .slice(0, 6)
+    .map((s) => {
+      const n = tn(s.g_team);
+      const ach = s.fourGoalGame
+        ? ' 🔥 4-GOAL GAME'
+        : s.hatTrick
+        ? ' 🎩 HAT TRICK'
+        : s.bigNight
+        ? ' ⭐ BIG NIGHT'
+        : '';
+      const best =
+        s.bestGame && s.bestGame.g + s.bestGame.a > 0
+          ? ` (best game: ${s.bestGame.g}G ${s.bestGame.a}A)`
+          : '';
+      return `${s.goal_player_name} (${n.full} / ${s.g_team}): ${s.goals}G ${s.assists}A${best}${ach}`;
+    })
+    .join(' | ');
+
+  const gameLines = (recentGames || [])
+    .slice(0, 8)
+    .map((g) => {
+      const home = teamNameMap[g.home]?.full || g.home;
+      const away = teamNameMap[g.away]?.full || g.away;
+      return `${home} ${g.score_home}-${g.score_away} ${away}${
+        g.ot ? ' (OT)' : ''
+      }`;
+    })
+    .join(' | ');
+
+  const allCodes = [
+    ...new Set([
+      ...recentForm.hot.map((t) => t.team),
+      ...recentForm.cold.map((t) => t.team),
+      ...winStreaks.map((s) => s.team),
+      ...lossStreaks.map((s) => s.team),
+    ]),
+  ];
+  const nameRef = allCodes
+    .map((code) => {
+      const n = tn(code);
+      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
+        n.coach ? `, coach: ${n.coach}` : ''
+      })`;
+    })
+    .join('\n');
+
+  const angles = [
+    'hot_streak',
+    'win_streak',
+    'cold_streak',
+    'loss_streak',
+    'big_win',
+    'playoff_push',
+    'milestone',
+    'comeback',
+    'rivalry',
+  ];
+  const angleHint = angles[new Date().getDate() % angles.length];
+
+  // ── Build playoff series summary ───────────────────────────
+  const playoffBlock =
+    isPlayoffActive && playoffSeriesData?.length
+      ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏒 PLAYOFF MODE — ACTIVE
+${playoffSeriesData
+  .map((s) => {
+    const teamA = teamNameMap[s.team_code_a]?.full || s.team_code_a;
+    const teamB = teamNameMap[s.team_code_b]?.full || s.team_code_b;
+    const winsA = s.wins_a ?? 0;
+    const winsB = s.wins_b ?? 0;
+    const needed = Math.ceil((s.series_length ?? 7) / 2);
+    const leader = winsA > winsB ? teamA : winsB > winsA ? teamB : null;
+    const advanced = winsA >= needed ? teamA : winsB >= needed ? teamB : null;
+    const statusLine = advanced
+      ? `🏆 ${advanced} ADVANCES to Round ${s.round + 1}!`
+      : leader
+      ? `${leader} leads ${Math.max(winsA, winsB)}-${Math.min(winsA, winsB)}`
+      : `Series tied ${winsA}-${winsB}`;
+    return `Round ${s.round} | ${teamA} vs ${teamB} | ${statusLine}`;
+  })
+  .join('\n')}
+- If a team just clinched a series (ADVANCES), that is THE lead story — cover_line must reflect it.
+- Use story_type "milestone" for a clinch, "playoff_push" for a close series lead.
+- Reference round numbers and series scores in your writing.`
+      : '';
+
+  const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
+Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
+${playoffBlock}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEAM NAME REFERENCE
+Use the city name OR the nickname in all written text — never the raw code.
+${nameRef}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE LEAGUE DATA
+Hot teams (last 10): ${hotLines || 'none'}
+Cold teams (last 10): ${coldLines || 'none'}
+Active win streaks: ${winLines || 'none'}
+Active loss streaks: ${lossLines || 'none'}
+${scorerLines ? `Recent game top scorers: ${scorerLines}` : ''}
+${
+  gameLines
+    ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}`
+    : 'No games in last 24 hours.'
+}
+${
+  gameStats
+    ? `\nDetailed game stats (USE THESE ONLY — never invent stats not listed here):\n${gameStats}`
+    : ''
+}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WRITING RULES
+- Use city OR nickname in all written text — never raw codes. Mix it up naturally.
+- When a coach is listed, you MAY quote them by name. Use coach name in quote_attr when it makes sense.
+- If a scorer has 🎩 HAT TRICK or 🔥 4-GOAL GAME, that IS the story — lead the cover with it.
+- If a scorer has ⭐ BIG NIGHT, mention them prominently in a blurb.
+- Pull quote: if a hat trick or 4-goal game happened, quote that player or their coach.
+- Be dramatic and hyperbolic — this is a sports magazine.
+- NEVER invent statistics. Only mention saves, shots, hits, faceoffs, or power play numbers if they appear in the game stats block above.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Respond ONLY with valid JSON, zero other text:
+{
+  "featured_team": "ONE team code from the reference list above — use exact code",
+  "story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
+  "cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
+  "cover_sub": "12-18 words. Punchy supporting line.",
+  "blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "blurb_2": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "pull_quote": "12-20 words. Dramatic fake quote.",
+  "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
+  "bottom_line": "7-11 words. One punchy verdict on the league.",
+  "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
+    Math.floor(Math.random() * 80) + 1
+  }"
+}`;
+
+  const result = await supabase.functions.invoke('gazette-generate', {
+    body: { messages: [{ role: 'user', content: prompt }] },
+  });
+
+  if (result.error) throw new Error(result.error.message);
+
+  const raw =
+    result.data?.text || result.data?.message?.content?.[0]?.text || '';
+  const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
+  if (!match) throw new Error('No JSON found in response');
+  const data = JSON.parse(match[0]);
+
+  // ── 3. Write back to DB so next user gets it from cache ───
+  try {
+    await supabase.from('gazette_cache').upsert({
+      league: cacheKey,
+      date: today,
+      data,
+    });
+    console.log('[Gazette] ✅ Written to DB cache');
+  } catch (e) {
+    console.warn('[Gazette] Failed to write to DB cache:', e);
   }
 
-  .ticker-team {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.8rem;
-    color: #87CEEB;
-  }
+  return data;
+}
 
-  .ticker-score {
-    font-family: 'VT323', monospace;
-    font-size: 1.8rem;
-    color: #FFD700;
-    font-weight: bold;
-  }
+/* ─────────────────────────────────────────────────────────────
+   Skeleton loader
+───────────────────────────────────────────────────────────── */
+function GazetteSkeleton() {
+  return (
+    <div className="si-skel">
+      <div className="si-skel-cover">
+        <div
+          className="si-skel-b"
+          style={{ height: 12, width: '30%', marginBottom: 8 }}
+        />
+        <div
+          className="si-skel-b"
+          style={{ height: 22, width: '68%', marginBottom: 6 }}
+        />
+        <div className="si-skel-b" style={{ height: 14, width: '55%' }} />
+      </div>
+      <div className="si-skel-grid">
+        <div className="si-skel-col">
+          {[1, 2, 3].map((i) => (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <div
+                className="si-skel-b"
+                style={{ height: 8, width: '40%', marginBottom: 6 }}
+              />
+              <div
+                className="si-skel-b"
+                style={{ height: 14, width: '92%', marginBottom: 4 }}
+              />
+              <div className="si-skel-b" style={{ height: 11, width: '72%' }} />
+            </div>
+          ))}
+        </div>
+        <div className="si-skel-b si-skel-hero" />
+        <div className="si-skel-col">
+          <div
+            className="si-skel-b"
+            style={{ height: 72, borderRadius: 6, marginBottom: 14 }}
+          />
+          {[88, 75, 60, 50].map((w, i) => (
+            <div
+              key={i}
+              className="si-skel-b"
+              style={{ height: 10, width: `${w}%`, marginBottom: 7 }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
-  .ticker-vs {
-    font-family: 'Press Start 2P', monospace;
-    font-size: 0.6rem;
-    color: #FF8C00;
-  }
+/* ─────────────────────────────────────────────────────────────
+   Main LeagueGazette component
+   New props: teamNameMap, topScorers
+───────────────────────────────────────────────────────────── */
+function LeagueGazette({
+  leagueLabel,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+  loading: dataLoading,
+  teamNameMap,
+  topScorers,
+  recentGames,
+  isPlayoffActive,
+  playoffSeriesData,
+  gameStats,
+}) {
+  const [edition, setEdition] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  /* Responsive */
-  @media (max-width: 1024px) {
-    .main-content-grid {
-      grid-template-columns: 1fr;
+  const load = useCallback(
+    async (force = false) => {
+      const today = todayStamp();
+      const effectiveCacheKey = isPlayoffActive
+        ? `${leagueLabel}_playoff`
+        : leagueLabel;
+
+      if (!force) {
+        try {
+          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
+          if (c.date === today && c.league === effectiveCacheKey && c.data) {
+            setEdition(c.data);
+            return;
+          }
+        } catch {}
+      }
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchGazetteEdition({
+          leagueLabel,
+          recentForm,
+          winStreaks,
+          lossStreaks,
+          currentSeason,
+          teamNameMap,
+          topScorers,
+          recentGames,
+          isPlayoffActive,
+          playoffSeriesData,
+          gameStats,
+        });
+        localStorage.setItem(
+          GAZETTE_CACHE_KEY,
+          JSON.stringify({ date: today, league: effectiveCacheKey, data })
+        );
+        setEdition(data);
+      } catch (e) {
+        console.error('[Gazette]', e);
+        setError(true);
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [
+      leagueLabel,
+      recentForm,
+      winStreaks,
+      lossStreaks,
+      currentSeason,
+      teamNameMap,
+      topScorers,
+      isPlayoffActive,
+      playoffSeriesData,
+      gameStats,
+    ]
+  );
+
+  useEffect(() => {
+    if (!dataLoading) load();
+  }, [dataLoading, leagueLabel]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    load(true);
+  };
+
+  const team = edition?.featured_team || '';
+  // Resolve to a team code even if AI returned a full name
+  const teamCode =
+    Object.entries(teamNameMap).find(
+      ([code, info]) => info.full === team || code === team
+    )?.[0] || team;
+  const meta = getMeta(edition?.story_type);
+  const lgKey = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  // All lookups use teamCode (the real abr), not team (which may be a full name)
+  const featWin = winStreaks.find((s) => s.team === teamCode);
+  const featLoss = lossStreaks.find((s) => s.team === teamCode);
+  const featForm =
+    recentForm.hot.find((t) => t.team === teamCode) ||
+    recentForm.cold.find((t) => t.team === teamCode);
+
+  // Full name for the hero footer — key into map by teamCode, not team
+  const featFullName = teamNameMap[teamCode]?.full || teamCode;
+
+  return (
+    <div
+      className="si-wrap"
+      style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}
+    >
+      {/* ══ MASTHEAD ══════════════════════════════════════════ */}
+      <header className="si-mast">
+        <div className="si-mast-left">
+          <img
+            src={`/assets/leagueLogos/${lgKey}.png`}
+            alt={leagueLabel}
+            className="si-league-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <div>
+            <div className="si-mast-name">{leagueLabel}</div>
+            <div className="si-mast-sub">MAGAZINE</div>
+          </div>
+        </div>
+        <div className="si-mast-mid">
+          <hr className="si-hr" />
+          <span className="si-mast-date">{dateStr}</span>
+          <hr className="si-hr" />
+        </div>
+        <div className="si-mast-right">
+          {edition?.edition && (
+            <span className="si-issue">{edition.edition}</span>
+          )}
+          <button
+            className="si-refresh"
+            onClick={handleRefresh}
+            disabled={loading || refreshing}
+          >
+            <span
+              style={{
+                display: 'inline-block',
+                animation: refreshing ? 'siSpin .7s linear infinite' : 'none',
+              }}
+            >
+              ↻
+            </span>
+          </button>
+        </div>
+      </header>
+
+      <div className="si-accent-rule" />
+
+      {/* ══ BODY ══════════════════════════════════════════════ */}
+      {loading && !edition ? (
+        <GazetteSkeleton />
+      ) : error ? (
+        <div className="si-error">
+          <span>📡</span>
+          <div>
+            <div className="si-err-title">PRESS ROOM DOWN</div>
+            <div className="si-err-body">Edge function unavailable.</div>
+          </div>
+          <button className="si-refresh" onClick={handleRefresh}>
+            ↻ RETRY
+          </button>
+        </div>
+      ) : edition ? (
+        <div
+          className={
+            refreshing ? 'si-content si-fading' : 'si-content si-fadein'
+          }
+        >
+          {/* ── COVER STRIP ─────────────────────────────── */}
+          <div className="si-cover-strip">
+            <span className="si-story-pill" style={{ background: meta.color }}>
+              {meta.tag}
+            </span>
+            <h1 className="si-cover-line">{edition.cover_line}</h1>
+            <p className="si-cover-sub">{edition.cover_sub}</p>
+          </div>
+
+          {/* ── THREE COLUMN ────────────────────────────── */}
+          <div className="si-cols">
+            {/* LEFT — story blurbs */}
+            <aside className="si-col-left">
+              {[edition.blurb_1, edition.blurb_2, edition.blurb_3]
+                .filter(Boolean)
+                .map((b, i) => (
+                  <div key={i} className="si-blurb">
+                    <div className="si-blurb-bar" />
+                    <div className="si-blurb-tag">{b.tag}</div>
+                    <div className="si-blurb-hed">{b.headline}</div>
+                    <div className="si-blurb-dek">{b.detail}</div>
+                  </div>
+                ))}
+            </aside>
+
+            {/* CENTER — team hero */}
+            <div className="si-col-center">
+              <div className="si-hero">
+                <div className="si-hero-bg">
+                  <img
+                    src={`/assets/banners/${teamCode}.png`}
+                    alt=""
+                    className="si-hero-banner"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <div className="si-hero-vignette" />
+                </div>
+                <div className="si-hero-body">
+                  <img
+                    src={`/assets/teamLogos/${teamCode}.png`}
+                    alt={teamCode}
+                    className="si-hero-logo"
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = '0';
+                    }}
+                  />
+                </div>
+                <div className="si-hero-foot">
+                  {/* Show full team name in hero footer */}
+                  <div className="si-hero-name-wrap">
+                    <span className="si-hero-team">{featFullName}</span>
+                    <span className="si-hero-code">{teamCode}</span>
+                  </div>
+                  <div className="si-hero-badges">
+                    {featWin && (
+                      <span className="si-badge si-badge-w">
+                        W{featWin.count}
+                      </span>
+                    )}
+                    {featLoss && (
+                      <span className="si-badge si-badge-l">
+                        L{featLoss.count}
+                      </span>
+                    )}
+                    {featForm && (
+                      <span className="si-badge si-badge-form">
+                        {featForm.w}–{featForm.l}{' '}
+                        <span className="si-badge-l10">L10</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* RIGHT — quote + live tables */}
+            <aside className="si-col-right">
+              <div className="si-quote">
+                <div className="si-quote-open">"</div>
+                <p className="si-quote-text">{edition.pull_quote}</p>
+                <div className="si-quote-attr">{edition.quote_attr}</div>
+              </div>
+
+              {/* Recent scorers callout — if we have any */}
+              {topScorers.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#FFD600' }}
+                    />
+                    LAST NIGHT
+                  </div>
+                  {topScorers.slice(0, 5).map((s, i) => (
+                    <div key={i} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.g_team}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team si-table-player">
+                        {s.goal_player_name}
+                      </span>
+                      <div className="si-scorer-right">
+                        {s.fourGoalGame && (
+                          <span
+                            className="si-achieve si-achieve-4g"
+                            title="4-Goal Game"
+                          >
+                            🔥
+                          </span>
+                        )}
+                        {!s.fourGoalGame && s.hatTrick && (
+                          <span
+                            className="si-achieve si-achieve-hat"
+                            title="Hat Trick"
+                          >
+                            🎩
+                          </span>
+                        )}
+                        {!s.fourGoalGame && !s.hatTrick && s.bigNight && (
+                          <span
+                            className="si-achieve si-achieve-big"
+                            title="Big Night"
+                          >
+                            ⭐
+                          </span>
+                        )}
+                        <span className="si-table-val si-val-scorer">
+                          {s.goals}G {s.assists}A
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* On fire */}
+              {winStreaks.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#FF4500' }}
+                    />
+                    ON FIRE
+                  </div>
+                  {winStreaks.slice(0, 4).map((s) => (
+                    <div key={s.team} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.team}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team">
+                        {teamNameMap[s.team]?.city || s.team}
+                      </span>
+                      <span className="si-table-val si-val-w">W{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Ice cold */}
+              {lossStreaks.length > 0 && (
+                <div className="si-table">
+                  <div className="si-table-hd">
+                    <span
+                      className="si-table-dot"
+                      style={{ background: '#448AFF' }}
+                    />
+                    ICE COLD
+                  </div>
+                  {lossStreaks.slice(0, 4).map((s) => (
+                    <div key={s.team} className="si-table-row">
+                      <img
+                        src={`/assets/teamLogos/${s.team}.png`}
+                        alt=""
+                        className="si-table-logo"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <span className="si-table-team">
+                        {teamNameMap[s.team]?.city || s.team}
+                      </span>
+                      <span className="si-table-val si-val-l">L{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
+          </div>
+
+          {/* ── BOTTOM LINE ─────────────────────────────── */}
+          <div className="si-footer">
+            <hr className="si-hr si-hr-short" />
+            <span className="si-footer-label">BOTTOM LINE</span>
+            <span className="si-footer-text">{edition.bottom_line}</span>
+            <hr className="si-hr si-hr-short" />
+          </div>
+        </div>
+      ) : null}
+
+      <style>{`
+        .si-wrap {
+          --si-bg:      #09090e;
+          --si-bg-card: #0d0d14;
+          --si-border:  rgba(255,255,255,.07);
+          --si-text:    rgba(225,220,210,.85);
+          --si-muted:   rgba(180,175,160,.42);
+          --si-serif:   'Georgia', 'Times New Roman', serif;
+          font-family: 'VT323', monospace;
+          background: var(--si-bg);
+          border: 1px solid var(--si-border);
+          border-radius: 10px;
+          overflow: hidden;
+          position: relative;
+        }
+        .si-wrap::before {
+          content:''; position:absolute; inset:0; z-index:0; pointer-events:none;
+          background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='250' height='250'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='250' height='250' filter='url(%23g)' opacity='0.025'/%3E%3C/svg%3E");
+          opacity:.7;
+        }
+        .si-wrap > * { position:relative; z-index:1; }
+
+        .si-mast {
+          display: flex; align-items: center; gap: .8rem;
+          padding: .6rem .95rem .5rem;
+          border-bottom: 1px solid var(--si-border);
+          background: var(--si-bg);
+        }
+        .si-mast-left { display:flex; align-items:center; gap:.4rem; flex-shrink:0; }
+        .si-league-logo {
+          width:28px; height:28px; object-fit:contain;
+          filter:drop-shadow(0 0 5px rgba(255,255,255,.15));
+        }
+        .si-mast-name {
+          font-family:'Press Start 2P',monospace; font-size:11px;
+          color:#fff; letter-spacing:2px; line-height:1;
+        }
+        .si-mast-sub {
+          font-family:'Press Start 2P',monospace; font-size:6px;
+          color:rgba(255,255,255,.75); letter-spacing:4px; line-height:1; margin-top:2px;
+        }
+        .si-mast-mid {
+          flex:1; display:flex; flex-direction:column; align-items:center; gap:3px; min-width:0;
+        }
+        .si-hr { width:100%; border:none; border-top:1px solid var(--si-border); margin:0; }
+        .si-hr-short { flex:1; }
+        .si-mast-date {
+          font-family:'VT323',monospace; font-size:14px;
+          color:rgba(255,255,255,.82); letter-spacing:1px; white-space:nowrap;
+        }
+        .si-mast-right { display:flex; align-items:center; gap:.5rem; flex-shrink:0; }
+        .si-issue {
+          font-family:'VT323',monospace; font-size:13px;
+          color:rgba(255,255,255,.72); letter-spacing:.5px; white-space:nowrap;
+        }
+        .si-refresh {
+          font-family:'Press Start 2P',monospace; font-size:9px;
+          color:rgba(255,255,255,.3); background:rgba(255,255,255,.035);
+          border:1px solid rgba(255,255,255,.07); border-radius:4px;
+          padding:.2rem .45rem; cursor:pointer; transition:all .15s; line-height:1;
+          white-space:nowrap;
+        }
+        .si-refresh:hover:not(:disabled) {
+          color:rgba(255,255,255,.65); border-color:rgba(255,255,255,.18);
+          background:rgba(255,255,255,.06);
+        }
+        .si-refresh:disabled { opacity:.3; cursor:not-allowed; }
+        @keyframes siSpin { to{transform:rotate(360deg);} }
+
+        .si-accent-rule {
+          height:3px;
+          background:linear-gradient(90deg, transparent 0%, var(--acc) 20%, color-mix(in srgb,var(--acc) 60%,#fff) 50%, var(--acc) 80%, transparent 100%);
+          box-shadow:0 0 14px color-mix(in srgb,var(--acc) 45%,transparent);
+        }
+
+        .si-cover-strip {
+          padding: .65rem .95rem .5rem;
+          border-bottom: 1px solid var(--si-border);
+          display:flex; flex-direction:column; gap:.28rem;
+        }
+        .si-story-pill {
+          display:inline-block;
+          font-family:'Press Start 2P',monospace; font-size:7px;
+          color:#fff; letter-spacing:2.5px; padding:.18rem .5rem;
+          border-radius:2px; line-height:1; align-self:flex-start;
+        }
+        .si-cover-line {
+          font-family:'Press Start 2P',monospace;
+          font-size:clamp(12px,1.45vw,17px);
+          color:#fff; letter-spacing:1.5px; margin:0;
+          line-height:1.55; text-transform:uppercase;
+        }
+        .si-cover-sub {
+          font-family:'VT323',monospace; font-size:22px;
+          color:rgba(210,205,190,.75); margin:0; line-height:1.35;
+          font-style:italic; letter-spacing:.4px; max-width:66ch;
+        }
+
+        .si-cols {
+          display:grid;
+          grid-template-columns: 1fr 1.5fr 1fr;
+          min-height:270px;
+        }
+
+        .si-col-left {
+          display:flex; flex-direction:column; justify-content:space-evenly;
+          padding:.7rem .75rem .7rem .9rem;
+          border-right:1px solid var(--si-border);
+          gap:.05rem;
+        }
+        .si-blurb {
+          padding:.4rem 0 .5rem;
+          border-bottom:1px solid rgba(255,255,255,.04);
+        }
+        .si-blurb:last-child { border-bottom:none; }
+        .si-blurb-bar {
+          width:18px; height:2px;
+          background:var(--acc);
+          box-shadow:0 0 6px color-mix(in srgb,var(--acc) 55%,transparent);
+          border-radius:1px; margin-bottom:.26rem;
+        }
+        .si-blurb-tag {
+          font-family:'Press Start 2P',monospace; font-size:6.5px;
+          color:var(--acc); letter-spacing:2px; margin-bottom:.2rem;
+          text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
+        }
+        .si-blurb-hed {
+          font-family:'VT323',monospace; font-size:20px;
+          color:rgba(235,228,210,.92); line-height:1.3; margin-bottom:.1rem;
+          letter-spacing:.3px;
+        }
+        .si-blurb-dek {
+          font-family:'VT323',monospace; font-size:17px;
+          color:rgba(190,184,168,.65); line-height:1.3;
+        }
+
+        .si-col-center { display:flex; align-items:stretch; }
+        .si-hero {
+          flex:1; position:relative; overflow:hidden; min-height:270px;
+          display:flex; flex-direction:column;
+        }
+        .si-hero-bg {
+          position:absolute; inset:0;
+          background:linear-gradient(150deg,
+            color-mix(in srgb,var(--acc) 20%,#060610) 0%,
+            #060610 60%
+          );
+        }
+        .si-hero-banner {
+          position:absolute; inset:0; width:100%; height:100%;
+          object-fit:cover; opacity:.13;
+          filter:saturate(1.8) blur(3px);
+        }
+        .si-hero-vignette {
+          position:absolute; inset:0;
+          background:
+            radial-gradient(ellipse 75% 55% at 50% 35%,
+              color-mix(in srgb,var(--acc) 14%,transparent) 0%,
+              transparent 70%
+            ),
+            linear-gradient(180deg, transparent 35%, rgba(4,4,10,.96) 100%);
+        }
+        .si-hero-body {
+          position:relative; z-index:2;
+          flex:1; display:flex; align-items:center; justify-content:center;
+          padding:1.1rem .8rem .4rem;
+        }
+        .si-hero-logo {
+          width:78%; max-width:145px; height:auto; object-fit:contain;
+          filter:
+            drop-shadow(0 0 22px color-mix(in srgb,var(--acc) 55%,transparent))
+            drop-shadow(0 0 55px color-mix(in srgb,var(--acc) 22%,transparent))
+            drop-shadow(0 5px 18px rgba(0,0,0,.65));
+          animation:siFloat 5s ease-in-out infinite;
+        }
+        @keyframes siFloat {
+          0%,100%{transform:translateY(0);}
+          50%{transform:translateY(-5px);}
+        }
+        .si-hero-foot {
+          position:relative; z-index:2;
+          display:flex; align-items:center; justify-content:space-between;
+          padding:.35rem .75rem .4rem;
+          background:linear-gradient(0deg,rgba(4,4,10,.92) 0%,transparent 100%);
+        }
+        .si-hero-name-wrap {
+          display:flex; flex-direction:column; gap:2px;
+        }
+        .si-hero-team {
+          font-family:'Press Start 2P',monospace; font-size:7.5px;
+          color:rgba(255,255,255,.65); letter-spacing:1px; line-height:1;
+        }
+        .si-hero-code {
+          font-family:'VT323',monospace; font-size:12px;
+          color:rgba(255,255,255,.25); letter-spacing:2px; line-height:1;
+        }
+        .si-hero-badges { display:flex; align-items:center; gap:.28rem; }
+        .si-badge {
+          font-family:'Press Start 2P',monospace; font-size:7.5px;
+          padding:.15rem .32rem; border-radius:3px; line-height:1;
+        }
+        .si-badge-w {
+          background:rgba(0,200,83,.12); color:#00C853;
+          border:1px solid rgba(0,200,83,.28);
+        }
+        .si-badge-l {
+          background:rgba(68,138,255,.12); color:#448AFF;
+          border:1px solid rgba(68,138,255,.28);
+        }
+        .si-badge-form {
+          background:rgba(255,255,255,.05); color:rgba(255,255,255,.38);
+          border:1px solid rgba(255,255,255,.09);
+          font-size:6.5px; letter-spacing:.5px;
+        }
+        .si-badge-l10 { opacity:.55; margin-left:2px; }
+
+        .si-col-right {
+          display:flex; flex-direction:column; justify-content:flex-start;
+          gap:.6rem; padding:.7rem .9rem .7rem .75rem;
+          border-left:1px solid var(--si-border);
+        }
+        .si-quote {
+          position:relative;
+          padding:.55rem .65rem .5rem .75rem;
+          background:rgba(255,255,255,.022);
+          border-left:2.5px solid var(--acc);
+          border-radius:0 5px 5px 0;
+        }
+        .si-quote-open {
+          position:absolute; top:-10px; left:7px;
+          font-family:var(--si-serif); font-size:52px;
+          color:color-mix(in srgb,var(--acc) 22%,transparent);
+          line-height:1; pointer-events:none;
+        }
+        .si-quote-text {
+          font-family:'VT323',monospace; font-size:19px;
+          color:rgba(230,222,205,.82); font-style:italic;
+          margin:0 0 .22rem; line-height:1.4; letter-spacing:.3px;
+        }
+        .si-quote-attr {
+          font-family:'Press Start 2P',monospace; font-size:6px;
+          color:var(--si-muted); letter-spacing:.8px; line-height:1.5;
+        }
+        .si-table { display:flex; flex-direction:column; gap:.15rem; }
+        .si-table-hd {
+          display:flex; align-items:center; gap:.28rem;
+          font-family:'Press Start 2P',monospace; font-size:6.5px;
+          color:rgba(255,255,255,.22); letter-spacing:2px;
+          margin-bottom:.05rem; text-transform:uppercase;
+        }
+        .si-table-dot {
+          width:5px; height:5px; border-radius:50%; flex-shrink:0;
+          box-shadow:0 0 4px currentColor;
+        }
+        .si-table-row {
+          display:flex; align-items:center; gap:.28rem;
+          padding:.16rem .22rem; border-radius:4px; transition:background .1s;
+        }
+        .si-table-row:hover { background:rgba(255,255,255,.03); }
+        .si-table-logo {
+          width:17px; height:17px; object-fit:contain; flex-shrink:0;
+          filter:drop-shadow(0 0 2px rgba(255,255,255,.1));
+        }
+        .si-table-team {
+          flex:1; font-family:'Press Start 2P',monospace; font-size:7px;
+          color:rgba(210,205,190,.45); letter-spacing:.5px;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        }
+        /* Player names in VT323 for readability */
+        .si-table-player {
+          font-family:'VT323',monospace !important; font-size:14px !important;
+          color:rgba(220,215,200,.6) !important; letter-spacing:.3px !important;
+        }
+        .si-table-val {
+          font-family:'Press Start 2P',monospace; font-size:7.5px; flex-shrink:0;
+        }
+        .si-val-w { color:#00C853; text-shadow:0 0 5px rgba(0,200,83,.4); }
+        .si-val-l { color:#448AFF; text-shadow:0 0 5px rgba(68,138,255,.35); }
+        .si-val-scorer { color:#FFD600; text-shadow:0 0 5px rgba(255,214,0,.35); font-size:6.5px; }
+        .si-scorer-right { display:flex; align-items:center; gap:.2rem; flex-shrink:0; }
+        .si-achieve { font-size:12px; line-height:1; flex-shrink:0; }
+        .si-achieve-4g  { filter:drop-shadow(0 0 4px rgba(255,100,0,.8)); animation:achPulse 1.8s ease-in-out infinite; }
+        .si-achieve-hat { filter:drop-shadow(0 0 4px rgba(255,215,0,.6)); }
+        .si-achieve-big { filter:drop-shadow(0 0 3px rgba(255,215,0,.4)); }
+        @keyframes achPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
+
+        .si-footer {
+          display:flex; align-items:center; gap:.55rem;
+          padding:.38rem .9rem .42rem;
+          border-top:1px solid var(--si-border);
+          background:rgba(255,255,255,.012);
+        }
+        .si-footer-label {
+          font-family:'Press Start 2P',monospace; font-size:6.5px;
+          color:var(--acc); letter-spacing:2px; flex-shrink:0;
+          text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
+        }
+        .si-footer-text {
+          font-family:'VT323',monospace; font-size:19px;
+          color:rgba(190,184,168,.65); letter-spacing:.4px; font-style:italic;
+          flex-shrink:0;
+        }
+
+        .si-skel { padding:.7rem .9rem .8rem; }
+        .si-skel-cover {
+          display:flex; flex-direction:column; align-items:center;
+          padding-bottom:.65rem; margin-bottom:.6rem;
+          border-bottom:1px solid rgba(255,255,255,.05);
+        }
+        .si-skel-grid {
+          display:grid; grid-template-columns:1fr 1.5fr 1fr;
+          gap:.55rem; min-height:210px;
+        }
+        .si-skel-col { display:flex; flex-direction:column; justify-content:center; }
+        .si-skel-hero { border-radius:7px; height:100%; min-height:200px; }
+        .si-skel-b {
+          background:linear-gradient(90deg,
+            rgba(255,255,255,.025),
+            rgba(255,255,255,.055),
+            rgba(255,255,255,.025)
+          );
+          background-size:200% 100%;
+          animation:shimmer 1.9s infinite;
+          border-radius:3px;
+        }
+
+        .si-error {
+          display:flex; align-items:center; gap:.7rem;
+          padding:1.2rem 1rem; font-size:18px;
+        }
+        .si-err-title {
+          font-family:'Press Start 2P',monospace; font-size:8px;
+          color:rgba(255,255,255,.28); letter-spacing:1px; margin-bottom:.2rem;
+        }
+        .si-err-body {
+          font-family:'VT323',monospace; font-size:14px; color:var(--si-muted);
+        }
+
+        .si-fadein { animation:siFadeIn .35s ease; }
+        .si-fading { opacity:.4; transition:opacity .25s; }
+        @keyframes siFadeIn {
+          from{opacity:0;transform:translateY(3px);}
+          to{opacity:1;transform:translateY(0);}
+        }
+
+        @media(max-width:920px){
+          .si-cols { grid-template-columns:1fr 1fr; grid-template-rows:auto auto; }
+          .si-col-center { grid-column:1/3; grid-row:1; }
+          .si-col-left   { grid-column:1; grid-row:2; border-right:none; border-top:1px solid var(--si-border); }
+          .si-col-right  { grid-column:2; grid-row:2; border-top:1px solid var(--si-border); }
+          .si-hero { min-height:230px; }
+          .si-skel-grid { grid-template-columns:1fr 1fr; }
+          .si-skel-hero { grid-column:1/3; min-height:160px; }
+        }
+        @media(max-width:560px){
+          .si-cols { grid-template-columns:1fr; }
+          .si-col-center,.si-col-left,.si-col-right { grid-column:1; grid-row:auto; }
+          .si-col-left,.si-col-right { border-top:1px solid var(--si-border); border-left:none; }
+          .si-hero { min-height:200px; }
+          .si-cover-line { font-size:11px; }
+          .si-skel-grid { grid-template-columns:1fr; }
+          .si-skel-hero { min-height:130px; }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME PAGE
+═══════════════════════════════════════════════════════════════ */
+export default function Home() {
+  const { selectedLeague } = useLeague();
+  const cfg = leagueCfg(selectedLeague);
+
+  const [currentSeason, setCurrentSeason] = useState(null);
+  const [winStreaks, setWinStreaks] = useState([]);
+  const [lossStreaks, setLossStreaks] = useState([]);
+  const [recentForm, setRecentForm] = useState({ hot: [], cold: [] });
+  const [discordEvents, setDiscordEvents] = useState([]);
+  const [recentTrades, setRecentTrades] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [evtLoading, setEvtLoading] = useState(true);
+  const [tickerItems, setTickerItems] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [recentGames, setRecentGames] = useState([]);
+  const [isPlayoffActive, setIsPlayoffActive] = useState(false);
+  const [playoffSeriesData, setPlayoffSeriesData] = useState([]);
+  const [gameStats, setGameStats] = useState('');
+  const [teamNameMap, setTeamNameMap] = useState({});
+  const [topScorers, setTopScorers] = useState([]);
+
+  const tick = useLeagueCountdown(currentSeason);
+
+  // Fetch all teams once for the ticker helper (code → team name)
+  useEffect(() => {
+    supabase
+      .from('teams')
+      .select('code,team')
+      .then(({ data }) => {
+        if (data) setTeams(data);
+      });
+  }, []);
+
+  const loadLeagueData = useCallback(async (prefix) => {
+    if (!prefix) return;
+    setLoading(true);
+    setCurrentSeason(null);
+    setWinStreaks([]);
+    setLossStreaks([]);
+    setRecentForm({ hot: [], cold: [] });
+    setTeamNameMap({});
+    setTopScorers([]);
+    setRecentGames([]);
+    setIsPlayoffActive(false);
+    setPlayoffSeriesData([]);
+    setGameStats('');
+
+    // ── Seasons ──────────────────────────────────────────────────────────
+    const { data: seasons } = await supabase
+      .from('seasons')
+      .select('*')
+      .order('year', { ascending: false })
+      .limit(20);
+    const ps = (seasons || []).filter((s) => lgPrefix(s.lg) === prefix);
+    if (!ps.length) {
+      setLoading(false);
+      return;
     }
-  }
+    const latest = ps.reduce((b, s) =>
+      new Date(s.end_date) > new Date(b.end_date) ? s : b
+    );
+    setCurrentSeason(latest);
 
-  @media (max-width: 768px) {
-    .hero-title {
-      font-size: 1.5rem;
-      letter-spacing: 2px;
+    // ── Teams for this season → build name map (includes coach) ──────────
+    // teams table uses `abr` as the team code that matches games.home/away
+    const { data: seasonTeams } = await supabase
+      .from('teams')
+      .select('abr,team,coach')
+      .eq('lg', latest.lg);
+
+    const nameMap = {};
+    (seasonTeams || []).forEach((t) => {
+      nameMap[t.abr] = parseTeamData(t);
+    });
+    setTeamNameMap(nameMap);
+
+    // ── Games (season + playoff merged) ──────────────────────────────────
+    const [{ data: allGames }, { data: allPlayoffGames }] = await Promise.all([
+      supabase
+        .from('games')
+        .select(
+          'id,lg,legacy_game_id,home,away,score_home,score_away,result_home,result_away,ot'
+        )
+        .eq('lg', latest.lg)
+        .order('id', { ascending: false }),
+      supabase
+        .from('playoff_games')
+        .select(
+          'id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length'
+        )
+        .eq('lg', latest.lg)
+        .not('team_a_score', 'is', null)
+        .order('id', { ascending: false }),
+    ]);
+
+    // Normalize playoff rows to same shape as games rows
+    const playoffGamesNorm = (allPlayoffGames || []).map((g) => ({
+      id: g.id + 1000000, // offset so they sort above older season games
+      lg: g.lg,
+      legacy_game_id: g.id + 1000000,
+      home: g.team_code_a,
+      away: g.team_code_b,
+      score_home: g.team_a_score,
+      score_away: g.team_b_score,
+      result_home: g.team_a_score > g.team_b_score ? 'W' : 'L',
+      result_away: g.team_b_score > g.team_a_score ? 'W' : 'L',
+      ot: 0,
+      _isPlayoff: true,
+    }));
+
+    // Merge — playoff games float to top (most recent activity)
+    const games = [...playoffGamesNorm, ...(allGames || [])];
+
+    // ── Win/loss streaks ──────────────────────────────────────────────────
+    const teamHist = {};
+    games.forEach((g) => {
+      const hW = ['W', 'OTW'].includes((g.result_home || '').toUpperCase());
+      const aW = ['W', 'OTW'].includes((g.result_away || '').toUpperCase());
+      if (!teamHist[g.home]) teamHist[g.home] = [];
+      if (!teamHist[g.away]) teamHist[g.away] = [];
+      teamHist[g.home].push({ win: hW });
+      teamHist[g.away].push({ win: aW });
+    });
+    const wins = [],
+      losses = [];
+    Object.entries(teamHist).forEach(([team, hist]) => {
+      if (!hist.length) return;
+      const first = hist[0].win;
+      let count = 0;
+      for (const h of hist) {
+        if (h.win === first) count++;
+        else break;
+      }
+      if (first) wins.push({ team, count });
+      else losses.push({ team, count });
+    });
+    wins.sort((a, b) => b.count - a.count);
+    losses.sort((a, b) => b.count - a.count);
+    setWinStreaks(wins.slice(0, 5));
+    setLossStreaks(losses.slice(0, 5));
+
+    // ── Recent form (last 10) ─────────────────────────────────────────────
+    const last10 = {};
+    games.forEach((g) => {
+      const hW = ['W', 'OTW'].includes((g.result_home || '').toUpperCase());
+      const aW = ['W', 'OTW'].includes((g.result_away || '').toUpperCase());
+      [
+        [g.home, hW],
+        [g.away, aW],
+      ].forEach(([t, w]) => {
+        if (!t) return;
+        if (!last10[t]) last10[t] = [];
+        if (last10[t].length < 10) last10[t].push(w);
+      });
+    });
+    const form = Object.entries(last10)
+      .filter(([, a]) => a.length >= 3)
+      .map(([team, arr]) => {
+        const w = arr.filter(Boolean).length;
+        return { team, w, l: arr.length - w, last10: arr, pct: w / arr.length };
+      });
+    form.sort((a, b) => b.pct - a.pct);
+    setRecentForm({
+      hot: form.slice(0, 5),
+      cold: [...form].sort((a, b) => a.pct - b.pct).slice(0, 5),
+    });
+    setLoading(false);
+
+    // ── Recent games for gazette ──────────────────────────────────────────
+    // Playoff games are "more recent" by definition once playoffs start.
+    // Strategy: if any playoff games exist for this season, use those exclusively.
+    // Only fall back to regular-season games when there are zero playoff games.
+
+    const isPlayoffActive = (allPlayoffGames || []).length > 0;
+
+    // Recent playoff games (last 5 by id, already fetched above)
+    const recentPlayoffNorm = (allPlayoffGames || []).slice(0, 5).map((g) => ({
+      home: g.team_code_a,
+      away: g.team_code_b,
+      score_home: g.team_a_score,
+      score_away: g.team_b_score,
+      ot: 0,
+      _isPlayoff: true,
+      round: g.round,
+      game_number: g.game_number,
+    }));
+
+    // Only pull recent season games when no playoff games exist at all
+    let recentSeasonNorm = [];
+    if (!isPlayoffActive) {
+      const yesterday = new Date(
+        Date.now() - 24 * 60 * 60 * 1000
+      ).toISOString();
+      const { data: recentSeasonData } = await supabase
+        .from('games')
+        .select('home, away, score_home, score_away, ot')
+        .eq('lg', latest.lg)
+        .not('score_home', 'is', null)
+        .gte('updated_at', yesterday);
+      recentSeasonNorm = recentSeasonData || [];
     }
 
-    .hero-tagline {
-      font-size: 1.1rem;
+    setRecentGames([...recentPlayoffNorm, ...recentSeasonNorm]);
+    setIsPlayoffActive(isPlayoffActive);
+
+    // ── Compute series standings for gazette ──────────────────────────────
+    const seriesMap = {};
+    (allPlayoffGames || []).forEach((g) => {
+      const key = `${g.round}-${g.series_number}`;
+      if (!seriesMap[key]) {
+        seriesMap[key] = {
+          round: g.round,
+          series_number: g.series_number,
+          team_code_a: g.team_code_a,
+          team_code_b: g.team_code_b,
+          series_length: g.series_length ?? 7,
+          wins_a: 0,
+          wins_b: 0,
+        };
+      }
+      if ((g.team_a_score ?? 0) > (g.team_b_score ?? 0))
+        seriesMap[key].wins_a++;
+      else seriesMap[key].wins_b++;
+    });
+    const computedSeriesData = Object.values(seriesMap).sort(
+      (a, b) => b.round - a.round || a.series_number - b.series_number
+    );
+    setPlayoffSeriesData(computedSeriesData);
+
+    // ── Top scorers — playoff takes priority over regular season ──────────────
+    // Use playoff_game_id from recentPlayoffNorm; only use season IDs as fallback.
+    const recentPlayoffIds = (allPlayoffGames || [])
+      .slice(0, 5)
+      .map((g) => g.id);
+    const recentSeasonIds = isPlayoffActive
+      ? [] // suppress season scoring when playoffs are active
+      : (allGames || []).slice(0, 5).map((g) => g.id);
+
+    const scoringQueries = [];
+    if (recentPlayoffIds.length > 0) {
+      scoringQueries.push(
+        supabase
+          .from('game_raw_scoring')
+          .select(
+            'game_id, playoff_game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team'
+          )
+          .in('playoff_game_id', recentPlayoffIds)
+      );
+    }
+    if (recentSeasonIds.length > 0) {
+      scoringQueries.push(
+        supabase
+          .from('game_raw_scoring')
+          .select(
+            'game_id, playoff_game_id, goal_player_name, assist_primary_name, assist_secondary_name, g_team'
+          )
+          .in('game_id', recentSeasonIds)
+          .is('playoff_game_id', null)
+      );
     }
 
-    .discord-button-fixed {
-      width: 50px;
-      height: 50px;
-      top: 70px;
-      right: 1rem;
+    const scoringResults = await Promise.all(scoringQueries);
+    // Playoff scoring takes priority — put it first
+    const scoringData = scoringResults.flatMap((r) => r.data || []);
+
+    // ── Fetch game stats for the gazette prompt ───────────────────────────
+    let gameStatsLines = '';
+    if (recentPlayoffIds.length > 0) {
+      const { data: statsData } = await supabase
+        .from('game_stats_team')
+        .select('*')
+        .in('playoff_game_id', recentPlayoffIds);
+
+      if (statsData?.length) {
+        gameStatsLines = statsData
+          .map((s) => {
+            const hName = nameMap[s.home]?.full || s.home;
+            const aName = nameMap[s.away]?.full || s.away;
+            const homeSaves = (s.away_shots || 0) - (s.away_score || 0);
+            const awaySaves = (s.home_shots || 0) - (s.home_score || 0);
+            const foTotal = (s.home_fow || 0) + (s.away_fow || 0) || 1;
+            const homeFoPct = (((s.home_fow || 0) / foTotal) * 100).toFixed(0);
+            const awayFoPct = (((s.away_fow || 0) / foTotal) * 100).toFixed(0);
+            return [
+              `GAME: ${hName} ${s.home_score}-${s.away_score} ${aName}`,
+              `  Shots: ${hName} ${s.home_shots} | ${aName} ${s.away_shots}`,
+              `  Saves: ${hName} goalie ${homeSaves} saves | ${aName} goalie ${awaySaves} saves`,
+              `  Checks: ${hName} ${s.home_chk || 0} | ${aName} ${
+                s.away_chk || 0
+              }`,
+              `  Faceoffs: ${hName} ${
+                s.home_fow || 0
+              } won (${homeFoPct}%) | ${aName} ${
+                s.away_fow || 0
+              } won (${awayFoPct}%)`,
+              `  Power play: ${hName} ${s.home_pp_g || 0}/${
+                s.home_pp_amt || 0
+              } | ${aName} ${s.away_pp_g || 0}/${s.away_pp_amt || 0}`,
+              `  Breakaways: ${hName} ${s.home_break_goals || 0}/${
+                s.home_break_attempts || 0
+              } | ${aName} ${s.away_break_goals || 0}/${
+                s.away_break_attempts || 0
+              }`,
+            ].join('\n');
+          })
+          .join('\n\n');
+      }
+    }
+    setGameStats(gameStatsLines);
+
+    if (scoringData.length > 0) {
+      const playerMap = {};
+
+      const ensurePlayer = (name, team, gameKey) => {
+        if (!name) return;
+        if (!playerMap[name])
+          playerMap[name] = {
+            goal_player_name: name,
+            g_team: team,
+            totalGoals: 0,
+            totalAssists: 0,
+            gameBreakdown: {},
+          };
+        if (!playerMap[name].gameBreakdown[gameKey])
+          playerMap[name].gameBreakdown[gameKey] = { g: 0, a: 0 };
+      };
+
+      scoringData.forEach((play) => {
+        // Use playoff_game_id if present, otherwise game_id as the unique game key
+        const gameKey = play.playoff_game_id
+          ? `po-${play.playoff_game_id}`
+          : `s-${play.game_id}`;
+
+        if (play.goal_player_name) {
+          ensurePlayer(play.goal_player_name, play.g_team, gameKey);
+          playerMap[play.goal_player_name].totalGoals++;
+          playerMap[play.goal_player_name].gameBreakdown[gameKey].g++;
+          playerMap[play.goal_player_name].g_team = play.g_team;
+        }
+        if (play.assist_primary_name) {
+          ensurePlayer(play.assist_primary_name, play.g_team, gameKey);
+          playerMap[play.assist_primary_name].totalAssists++;
+          playerMap[play.assist_primary_name].gameBreakdown[gameKey].a++;
+        }
+        if (play.assist_secondary_name) {
+          ensurePlayer(play.assist_secondary_name, play.g_team, gameKey);
+          playerMap[play.assist_secondary_name].totalAssists++;
+          playerMap[play.assist_secondary_name].gameBreakdown[gameKey].a++;
+        }
+      });
+
+      const scorerList = Object.values(playerMap)
+        .filter((p) => p.totalGoals > 0 || p.totalAssists > 0)
+        .map((p) => {
+          const points = p.totalGoals + p.totalAssists;
+          const hatTrick = Object.values(p.gameBreakdown).some(
+            (gb) => gb.g >= 3
+          );
+          const bigNight = points >= 5;
+          const fourGoalGame = Object.values(p.gameBreakdown).some(
+            (gb) => gb.g >= 4
+          );
+          const bestGame = Object.values(p.gameBreakdown).reduce(
+            (best, gb) => (gb.g + gb.a > best.g + best.a ? gb : best),
+            { g: 0, a: 0 }
+          );
+          return {
+            goal_player_name: p.goal_player_name,
+            g_team: p.g_team,
+            goals: p.totalGoals,
+            assists: p.totalAssists,
+            points,
+            hatTrick,
+            fourGoalGame,
+            bigNight,
+            bestGame,
+          };
+        })
+        .sort((a, b) => {
+          const aScore =
+            (a.fourGoalGame ? 100 : 0) +
+            (a.hatTrick ? 50 : 0) +
+            (a.bigNight ? 20 : 0) +
+            a.points;
+          const bScore =
+            (b.fourGoalGame ? 100 : 0) +
+            (b.hatTrick ? 50 : 0) +
+            (b.bigNight ? 20 : 0) +
+            b.points;
+          return bScore - aScore;
+        });
+
+      setTopScorers(scorerList.slice(0, 8));
     }
 
-    .discord-icon {
-      width: 24px;
-      height: 24px;
+    // ── Ticker items ──────────────────────────────────────────────────────────
+    // DROP THIS IN: replaces the existing "// ── Ticker items ──" block
+    // inside loadLeagueData, right after setTickerItems([]) in the reset block
+    // and before the closing brace of loadLeagueData.
+    // Nothing else in Home.jsx changes.
+
+    const getName = (code) =>
+      nameMap[code]?.full || getFullTeamName(code, teams) || code;
+    const getCity = (code) => nameMap[code]?.city || code;
+
+    const tickerEvents = [];
+    const evSet = new Set();
+    const push = (msg) => {
+      if (msg && !evSet.has(msg)) {
+        tickerEvents.push(msg);
+        evSet.add(msg);
+      }
+    };
+
+    // ── 1. All-season standings: leader, top 3 ───────────────────────────────
+    // Derive wins from score_home/score_away (most reliable fields)
+    const allTeamStats = {};
+    games.forEach((g) => {
+      const hs = Number(g.score_home ?? -1);
+      const as = Number(g.score_away ?? -1);
+      // Skip games without scores
+      if (hs < 0 || as < 0) return;
+      const hW = hs > as;
+      const aW = as > hs;
+      [
+        [g.home, hW],
+        [g.away, aW],
+      ].forEach(([team, win]) => {
+        if (!team) return;
+        if (!allTeamStats[team]) allTeamStats[team] = { gp: 0, w: 0 };
+        allTeamStats[team].gp++;
+        if (win) allTeamStats[team].w++;
+      });
+    });
+    const ranked = Object.entries(allTeamStats)
+      .filter(([, s]) => s.gp >= 3)
+      .map(([team, s]) => ({ team, gp: s.gp, w: s.w, pct: s.w / s.gp }))
+      .sort((a, b) => b.w - a.w || b.pct - a.pct);
+
+    if (ranked.length > 0) {
+      const leader = ranked[0];
+      push(
+        `👑 ${getName(leader.team)} LEADS ${latest.lg} — ${leader.w}W · ${(
+          leader.pct * 100
+        ).toFixed(0)}% WIN RATE`
+      );
+    }
+    if (ranked.length > 1) {
+      push(
+        `🏒 ${latest.lg} CURRENT WINS LEADERS — ${ranked
+          .slice(0, 3)
+          .map((t, i) => `${i + 1}. ${getName(t.team)} (${t.w}W)`)
+          .join('  ·  ')}`
+      );
     }
 
-    .leagues-strip {
-      gap: 1.5rem;
+    // Top 3 by win % (min 5 GP to filter out small samples)
+    const pctRanked = ranked
+      .filter((t) => t.gp >= 5)
+      .map((t) => ({ ...t }))
+      .sort((a, b) => b.pct - a.pct || b.w - a.w);
+    if (pctRanked.length > 1) {
+      push(
+        `📈 ${latest.lg} TOP WIN % — ${pctRanked
+          .slice(0, 3)
+          .map(
+            (t, i) =>
+              `${i + 1}. ${getName(t.team)} (${(t.pct * 100).toFixed(0)}%)`
+          )
+          .join('  ·  ')}`
+      );
     }
 
-    .league-mini-logo {
-      width: 60px;
-      height: 60px;
+    // ── 2. Active win & loss streaks ─────────────────────────────────────────
+    const teamHist2 = {};
+    games.forEach((g) => {
+      const hs = Number(g.score_home ?? -1);
+      const as = Number(g.score_away ?? -1);
+      if (hs < 0 || as < 0) return;
+      const hW = hs > as;
+      const aW = as > hs;
+      [
+        [g.home, hW],
+        [g.away, aW],
+      ].forEach(([team, win]) => {
+        if (!team) return;
+        if (!teamHist2[team]) teamHist2[team] = [];
+        teamHist2[team].push(win);
+      });
+    });
+
+    Object.entries(teamHist2).forEach(([team, hist]) => {
+      if (!hist.length) return;
+      const first = hist[0].valueOf();
+      let count = 0;
+      for (const h of hist) {
+        if (h === first) count++;
+        else break;
+      }
+      // Only show ONE message per team — the most dramatic version
+      if (first && count >= 5)
+        push(`🚀 ${getName(team)} IS ON FIRE — ${count} IN A ROW`);
+      else if (first && count >= 5)
+        push(`🔥 ${getName(team)} — ${count}-GAME WIN STREAK`);
+      else if (!first && count >= 5)
+        push(`📉 ${getName(team)} — ${count} STRAIGHT LOSSES`);
+    });
+
+    // ── 3. Notable recent results (last 20 games) ────────────────────────────
+    const lastGames = games.slice(0, 20);
+    let highestCombined = 0;
+    let highestGame = null;
+    let biggestBlowout = 0;
+    let biggestBlowoutGame = null;
+
+    lastGames.forEach((g) => {
+      if (!g.score_home && !g.score_away) return;
+      const hs = Number(g.score_home || 0);
+      const as = Number(g.score_away || 0);
+      const combined = hs + as;
+      const diff = Math.abs(hs - as);
+
+      // Highest scoring game
+      if (combined > highestCombined) {
+        highestCombined = combined;
+        highestGame = g;
+      }
+      // Biggest blowout (4+ goal margin)
+      if (diff > biggestBlowout && diff >= 4) {
+        biggestBlowout = diff;
+        biggestBlowoutGame = g;
+      }
+    });
+
+    if (highestGame && highestCombined >= 6) {
+      push(
+        `⚡ HIGH SCORER — ${getName(highestGame.home)} ${
+          highestGame.score_home
+        }–${highestGame.score_away} ${getName(highestGame.away)}${
+          highestGame.ot ? ' (OT)' : ''
+        }`
+      );
+    }
+    if (biggestBlowoutGame) {
+      const hs = Number(biggestBlowoutGame.score_home);
+      const as = Number(biggestBlowoutGame.score_away);
+      const winner =
+        hs > as ? biggestBlowoutGame.home : biggestBlowoutGame.away;
+      push(`💥 DOMINANT WIN — ${getName(winner)} BY ${biggestBlowout} GOALS`);
     }
 
-    .main-content-grid {
-      padding: 1rem;
-      gap: 1rem;
+    // Most recent result
+    if (lastGames.length > 0 && lastGames[0].score_home != null) {
+      const g = lastGames[0];
+      push(
+        `🏒 LAST RESULT: ${getName(g.home)} ${g.score_home}–${
+          g.score_away
+        } ${getName(g.away)}${g.ot ? ' (OT)' : ''}`
+      );
     }
 
-    .stats-dashboard {
-      grid-template-columns: 1fr;
+    // ── 4. Season total goals ────────────────────────────────────────────────
+    const totalGoals = games.reduce(
+      (sum, g) => sum + Number(g.score_home || 0) + Number(g.score_away || 0),
+      0
+    );
+    if (totalGoals > 0) {
+      const gpct =
+        games.length > 0 ? (totalGoals / games.length).toFixed(1) : '0';
+      push(
+        `📈 ${latest.lg} — ${totalGoals} GOALS SCORED ACROSS ${games.length} GAMES · ${gpct} PER GAME AVG`
+      );
     }
 
-    .ticker-label {
-      font-size: 0.5rem;
-      padding: 0.5rem 1rem;
+    // ── 5. Recent form callouts (last 10) ────────────────────────────────────
+    const formList = Object.entries(last10)
+      .filter(([, a]) => a.length >= 3)
+      .map(([team, arr]) => {
+        const w = arr.filter(Boolean).length;
+        return { team, w, l: arr.length - w, pct: w / arr.length };
+      })
+      .sort((a, b) => b.pct - a.pct);
+    formList.slice(0, 2).forEach((t) => {
+      push(`🔥 ${getName(t.team)} — ${t.w}-${t.l} IN LAST 10`);
+    });
+    const coldTeam = [...formList].sort((a, b) => a.pct - b.pct)[0];
+    if (coldTeam && coldTeam.l >= 6) {
+      push(
+        `🥶 ${getName(coldTeam.team)} STRUGGLING — ${coldTeam.w}-${
+          coldTeam.l
+        } LAST 10`
+      );
     }
 
-    .ticker-team {
-      font-size: 0.6rem;
+    // ── 6. Shutout callout — last 10 games per team ──────────────────────────
+    const teamGames = {};
+    games.forEach((g) => {
+      if (g.score_home == null || g.score_away == null) return;
+      if (!teamGames[g.home]) teamGames[g.home] = [];
+      if (!teamGames[g.away]) teamGames[g.away] = [];
+      teamGames[g.home].push({
+        scored: Number(g.score_home),
+        allowed: Number(g.score_away),
+      });
+      teamGames[g.away].push({
+        scored: Number(g.score_away),
+        allowed: Number(g.score_home),
+      });
+    });
+    const shutoutTeams = Object.entries(teamGames)
+      .map(([team, tg]) => {
+        const last10 = tg.slice(0, 10); // games already sorted desc by id
+        const sos = last10.filter((g) => g.allowed === 0).length;
+        return { team, sos, gp: last10.length };
+      })
+      .filter((t) => t.gp >= 5 && t.sos >= 3)
+      .sort((a, b) => b.sos - a.sos);
+    if (shutoutTeams.length > 0) {
+      const top = shutoutTeams[0];
+      push(
+        `🧱 ${getName(top.team)} — ${top.sos} SHUTOUTS IN LAST ${Math.min(
+          top.gp,
+          10
+        )} GAMES`
+      );
     }
 
-    .ticker-score {
-      font-size: 1.4rem;
-    }
-  }
-`;
+    // ── 7. Games played count ────────────────────────────────────────────────
+    push(`🏒 ${latest.lg} IN PROGRESS — ${games.length} GAMES PLAYED`);
+
+    setTickerItems(tickerEvents);
+  }, []);
+
+  useEffect(() => {
+    loadLeagueData(selectedLeague);
+  }, [selectedLeague, loadLeagueData]);
+
+  useEffect(() => {
+    const refresh = async () => {
+      setEvtLoading(true);
+      const result = await supabase.functions.invoke('discord-events');
+      if (!result.error && Array.isArray(result.data))
+        setDiscordEvents(result.data.slice(0, 6));
+      else if (result.error)
+        console.warn('[discord-events]', result.error.message);
+      setEvtLoading(false);
+      supabase.functions.invoke('hyper-endpoint').catch(console.error);
+    };
+    refresh();
+    const id = setInterval(refresh, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const fmtTime = (iso) =>
+    iso
+      ? new Date(iso).toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : '';
+  const displayItems =
+    tickerItems.length > 0 ? tickerItems : loading ? [''] : [];
+
+  return (
+    <div className="hp">
+      <div className="scanlines" aria-hidden />
+
+      <div className="cg">
+        {/* ── LEFT COLUMN ── */}
+        <div className="cg-a">
+          <InlineCountdown cfg={cfg} tick={tick} />
+          <Spotlight
+            recentForm={recentForm}
+            winStreaks={winStreaks}
+            lossStreaks={lossStreaks}
+            loading={loading}
+          />
+          <section className="panel">
+            <PanelHeader icon="🔄" title="TRANSACTIONS" />
+            <div className="tx-body">
+              {recentTrades.length === 0 ? (
+                <div className="tx-ph">
+                  <span style={{ fontSize: 18, opacity: 0.2 }}>📋</span>
+                  <span className="tx-ph-msg">TRADE TRACKER COMING SOON</span>
+                </div>
+              ) : (
+                recentTrades.slice(0, 5).map((t, i) => (
+                  <div key={i} className="tx-row">
+                    <div className="tx-teams">
+                      <span className="tx-team">{t.from_team}</span>
+                      <span className="tx-arr">⇄</span>
+                      <span className="tx-team">{t.to_team}</span>
+                    </div>
+                    <span className="tx-player">{t.player_name}</span>
+                    <span className="tx-date">{t.trade_date}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+        </div>
+
+        {/* ── CENTER COLUMN — GAZETTE ── */}
+        <div className="cg-b">
+          <LeagueGazette
+            leagueLabel={cfg.label}
+            recentForm={recentForm}
+            winStreaks={winStreaks}
+            lossStreaks={lossStreaks}
+            currentSeason={currentSeason}
+            loading={loading}
+            teamNameMap={teamNameMap}
+            topScorers={topScorers}
+            recentGames={recentGames}
+            isPlayoffActive={isPlayoffActive}
+            playoffSeriesData={playoffSeriesData}
+            gameStats={gameStats}
+          />
+        </div>
+
+        {/* ── RIGHT COLUMN ── */}
+        <div className="cg-c">
+          <div className="media-cluster">
+            <section className="panel twg-panel">
+              <TwitchLiveWidget />
+            </section>
+            <section className="panel">
+              <PanelHeader
+                icon={
+                  <svg
+                    style={{
+                      width: 12,
+                      height: 12,
+                      color: '#5865F2',
+                      verticalAlign: 'middle',
+                      flexShrink: 0,
+                    }}
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.62.874-1.395 1.226-1.994a.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.292a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.1.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z" />
+                  </svg>
+                }
+                title="UPCOMING EVENTS"
+                action={
+                  <a
+                    href="https://discord.gg/QxRDBgz3"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="discord-join"
+                  >
+                    JOIN →
+                  </a>
+                }
+              />
+              <div className="events">
+                {evtLoading ? (
+                  [1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="skel"
+                      style={{ height: 52, margin: '.2rem .72rem' }}
+                    />
+                  ))
+                ) : discordEvents.length === 0 ? (
+                  <div className="panel-empty ev-cta">
+                    <p>🎮 No upcoming events.</p>
+                    <p className="ev-setup">
+                      Deploy <code>discord-events</code> edge fn.
+                    </p>
+                  </div>
+                ) : (
+                  discordEvents.map((ev) => {
+                    const du = daysUntil(ev.startTime);
+                    const isToday = du === 'TODAY',
+                      isTmrw = du === 'TMRW';
+                    return (
+                      <a
+                        key={ev.id}
+                        href={ev.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ev-row"
+                      >
+                        <div className="ev-cal">
+                          <span className="ev-mon">
+                            {new Date(ev.startTime).toLocaleDateString(
+                              'en-US',
+                              { month: 'short' }
+                            )}
+                          </span>
+                          <span className="ev-day">
+                            {new Date(ev.startTime).getDate()}
+                          </span>
+                        </div>
+                        <div className="ev-info">
+                          <span className="ev-name">{ev.name}</span>
+                          <span className="ev-time">
+                            {fmtTime(ev.startTime)}
+                          </span>
+                        </div>
+                        <div className="ev-right">
+                          {ev.status === 2 ? (
+                            <span className="ev-live">● LIVE</span>
+                          ) : du ? (
+                            <span
+                              className={`ev-du${
+                                isToday ? ' ev-today' : isTmrw ? ' ev-tmrw' : ''
+                              }`}
+                            >
+                              {du}
+                            </span>
+                          ) : null}
+                        </div>
+                      </a>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+          </div>
+        </div>
+      </div>
+
+      {/* HDTV TICKER */}
+      <div className="hdtv-ticker">
+        <div className="ht-brand">
+          <div className="ht-brand-top">{cfg.label}</div>
+          <div className="ht-brand-bottom">
+            <span className="ht-live-dot" />
+            <span>LIVE</span>
+          </div>
+        </div>
+        <div className="ht-stage">
+          <div className="ht-fade-l" />
+          <div className="ht-fade-r" />
+          <div className="ht-rail">
+            <div className="ht-belt">
+              {displayItems.length > 0 &&
+                displayItems.concat(displayItems).map((item, i) => (
+                  <span key={i} className="ht-story">
+                    <span className={`ht-text ht-c${i % 4}`}>{item}</span>
+                    <span className="ht-sep">
+                      <span className="ht-sep-line" />
+                      <span className="ht-sep-gem">◆</span>
+                      <span className="ht-sep-line" />
+                    </span>
+                  </span>
+                ))}
+            </div>
+          </div>
+        </div>
+        <div className="ht-clock">
+          <ClockDisplay />
+        </div>
+      </div>
+
+      <style>{`
+        *,*::before,*::after{box-sizing:border-box;}
+        html,body{background:#00000a!important;}
+
+        .hp {
+          min-height:100vh;
+          background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),#00000a;
+          padding-bottom:56px;
+          overflow-x:hidden;
+          position:relative;
+        }
+        .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.055) 2px,rgba(0,0,0,.055) 4px);}
+
+        .cg {
+          display: grid;
+          grid-template-columns: 360px 1fr 360px;
+          grid-template-areas: "a b c";
+          gap: .75rem;
+          padding: .75rem 14px;
+          max-width: 100%;
+          margin: 0 auto;
+          align-items: start;
+        }
+        .cg-a { grid-area:a; display:flex; flex-direction:column; gap:.72rem; }
+        .cg-b { grid-area:b; min-width:0; }
+        .cg-c { grid-area:c; display:flex; flex-direction:column; align-self:start; }
+
+        /* ── Countdown ── */
+        .icd{display:flex;align-items:center;justify-content:space-between;gap:.55rem;padding:.58rem .82rem;background:color-mix(in srgb,var(--ic) 8%,rgba(0,0,0,.65));border:1.5px solid color-mix(in srgb,var(--ic) 32%,transparent);border-radius:10px;position:relative;overflow:hidden;}
+        .icd::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 65% 100% at 0% 50%,color-mix(in srgb,var(--ic) 12%,transparent),transparent 70%);}
+        .icd-left{display:flex;flex-direction:column;gap:.2rem;}
+        .icd-eyebrow{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,140,0,.5);letter-spacing:2px;}
+        .icd-meta{display:flex;align-items:center;gap:.38rem;}
+        .icd-dot{width:6px;height:6px;border-radius:50%;background:var(--ic);box-shadow:0 0 5px var(--ic);animation:icPulse 2s ease-in-out infinite;flex-shrink:0;}
+        @keyframes icPulse{0%,100%{opacity:1}50%{opacity:.35}}
+        .icd-league{font-family:'Press Start 2P',monospace;font-size:12px;color:var(--ic);letter-spacing:2px;}
+        .icd-season{font-family:'VT323',monospace;font-size:17px;color:color-mix(in srgb,var(--ic) 55%,rgba(255,255,255,.25));}
+        .icd-right{display:flex;align-items:center;flex-shrink:0;}
+        .icd-awaiting{font-family:'Press Start 2P',monospace;font-size:10px;color:rgba(255,255,255,.2);letter-spacing:1px;}
+        .icd-complete{display:flex;align-items:center;gap:.3rem;}
+        .icd-done-txt{font-family:'Press Start 2P',monospace;font-size:10px;color:color-mix(in srgb,var(--ic) 70%,rgba(255,255,255,.3));letter-spacing:1px;}
+        .icd-clock{display:flex;align-items:center;gap:.25rem;}
+        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.2rem .38rem;min-width:38px;}
+        .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
+        .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
+
+        /* ── Panels ── */
+        .panel{border:1.5px solid rgba(135,206,235,.1);border-radius:10px;overflow:hidden;background:linear-gradient(155deg,rgba(255,255,255,.02) 0%,rgba(0,0,0,.3) 100%);}
+        .ph{display:flex;align-items:center;gap:.38rem;padding:.48rem .82rem;background:linear-gradient(90deg,rgba(255,140,0,.07) 0%,transparent 100%);border-bottom:1px solid rgba(255,140,0,.1);flex-wrap:wrap;}
+        .ph-icon{font-size:13px;flex-shrink:0;}
+        .ph-title{flex:1;font-family:'Press Start 2P',monospace;font-size:11px;color:#FF8C00;letter-spacing:2px;text-shadow:0 0 6px rgba(255,140,0,.3);}
+        .ph-action{flex-shrink:0;}
+        .discord-join{font-family:'Press Start 2P',monospace;font-size:9px;color:#5865F2;text-decoration:none;letter-spacing:1px;border:1px solid rgba(88,101,242,.3);border-radius:4px;padding:.2rem .42rem;background:rgba(88,101,242,.07);transition:all .15s;white-space:nowrap;}
+        .discord-join:hover{color:#7289DA;border-color:rgba(88,101,242,.55);}
+        .panel-empty{padding:.82rem;font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,.2);text-align:center;letter-spacing:2px;}
+        .skel{background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));background-size:200% 100%;animation:shimmer 1.6s infinite;border-radius:4px;}
+        @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+
+        /* ── Spotlight ── */
+        .sl-panel{overflow:visible;}
+        .sl-tabs{display:flex;border-bottom:1px solid rgba(255,140,0,.1);background:rgba(0,0,0,.25);}
+        .sl-tab{flex:1;padding:.35rem .15rem;font-size:14px;background:transparent;border:none;border-right:1px solid rgba(255,255,255,.04);cursor:pointer;transition:all .14s;color:rgba(255,255,255,.3);line-height:1;}
+        .sl-tab:last-child{border-right:none;}
+        .sl-tab:hover{background:rgba(255,140,0,.07);filter:brightness(1.4);}
+        .sl-tab-on{background:rgba(255,140,0,.1)!important;border-bottom:2px solid #FF8C00!important;filter:brightness(1.6)!important;}
+        .sl-titlebar{display:flex;flex-direction:column;gap:.07rem;padding:.38rem .68rem .3rem;background:linear-gradient(90deg,rgba(255,140,0,.06) 0%,transparent 100%);border-bottom:1px solid rgba(255,255,255,.04);}
+        .sl-title{font-family:'Press Start 2P',monospace;font-size:10px;color:#FF8C00;letter-spacing:1.5px;text-shadow:0 0 8px rgba(255,140,0,.3);}
+        .sl-sub{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.22);letter-spacing:.5px;}
+        .sl-body{padding:.18rem 0 .06rem;min-height:115px;}
+        .sl-prog-wrap{height:3px;background:rgba(255,255,255,.05);overflow:hidden;}
+        .sl-prog{height:100%;background:linear-gradient(90deg,#FF8C00,#FFD700);animation:slp 8s linear forwards;}
+        @keyframes slp{from{width:0%}to{width:100%}}
+        .sl-row{display:flex;align-items:center;gap:.3rem;padding:.2rem .62rem;border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s;}
+        .sl-row:last-child{border-bottom:none;}
+        .sl-row:hover{background:rgba(255,140,0,.04);}
+        .sl-rank{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.2);min-width:16px;flex-shrink:0;}
+        .sl-logo{width:20px;height:20px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 3px rgba(255,255,255,.15));}
+        .sl-team{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.55);min-width:24px;flex-shrink:0;}
+        .sl-dots{display:flex;gap:2px;flex:1;align-items:center;flex-wrap:wrap;}
+        .sl-dot{width:5px;height:5px;border-radius:2px;flex-shrink:0;}
+        .sl-dot-w{background:#00CC55;box-shadow:0 0 3px rgba(0,204,85,.5);}
+        .sl-dot-l{background:#4477CC;box-shadow:0 0 3px rgba(68,119,204,.4);}
+        .sl-dots-more{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.3);margin-left:1px;}
+        .sl-val{font-family:'Press Start 2P',monospace;font-size:10px;flex-shrink:0;min-width:26px;text-align:right;}
+        .sl-val-hot{color:#00CC55;text-shadow:0 0 7px rgba(0,204,85,.4);}
+        .sl-val-cold{color:#6B9FFF;text-shadow:0 0 7px rgba(107,159,255,.35);}
+        .sl-empty{font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,.2);text-align:center;padding:1.2rem;letter-spacing:1px;}
+        .sl-bar-wrap{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;}
+        .sl-bar{height:100%;background:linear-gradient(90deg,rgba(255,140,0,.3),rgba(255,215,0,.2));border-radius:3px;}
+        .sl-coming{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.13);letter-spacing:1px;text-align:center;padding:.4rem;}
+
+        /* ── Transactions ── */
+        .tx-body{padding:.12rem 0;}
+        .tx-ph{display:flex;flex-direction:column;align-items:center;gap:.28rem;padding:.62rem .8rem;}
+        .tx-ph-msg{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.14);letter-spacing:1px;text-align:center;}
+        .tx-row{display:flex;align-items:center;gap:.28rem;padding:.22rem .66rem;border-bottom:1px solid rgba(255,255,255,.03);}
+        .tx-row:last-child{border-bottom:none;}
+        .tx-teams{display:flex;align-items:center;gap:.14rem;}
+        .tx-team{font-family:'Press Start 2P',monospace;font-size:9px;color:#87CEEB;}
+        .tx-arr{color:#FF8C00;font-size:15px;}
+        .tx-player{flex:1;font-family:'VT323',monospace;font-size:16px;color:#E0E0E0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .tx-date{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.2);flex-shrink:0;}
+
+        /* ── Right cluster ── */
+        .media-cluster{display:flex;flex-direction:column;gap:0;border:1.5px solid rgba(88,101,242,.18);border-radius:10px;overflow:hidden;}
+        .media-cluster>.panel{border:none;border-radius:0;border-bottom:1px solid rgba(88,101,242,.12);}
+        .media-cluster>.panel:last-child{border-bottom:none;}
+        .media-cluster>.twg-panel{border-bottom:1px solid rgba(0,255,100,.1);}
+        .events{padding:.04rem 0;}
+        .ev-row{display:flex;align-items:flex-start;gap:.48rem;padding:.38rem .72rem;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.03);transition:background .12s;}
+        .ev-row:last-child{border-bottom:none;}
+        .ev-row:hover{background:rgba(88,101,242,.07);}
+        .ev-cal{display:flex;flex-direction:column;align-items:center;background:rgba(88,101,242,.1);border:1px solid rgba(88,101,242,.25);border-radius:5px;padding:.16rem .36rem;min-width:33px;flex-shrink:0;margin-top:2px;}
+        .ev-mon{font-family:'Press Start 2P',monospace;font-size:8px;color:#7289DA;text-transform:uppercase;}
+        .ev-day{font-family:'VT323',monospace;font-size:25px;color:#fff;line-height:1;}
+        .ev-info{flex:1;display:flex;flex-direction:column;gap:.08rem;min-width:0;}
+        .ev-name{font-family:'Press Start 2P',monospace;font-size:9px;color:#E0E0E0;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .ev-time{font-family:'VT323',monospace;font-size:15px;color:rgba(135,206,235,.5);margin-top:.04rem;}
+        .ev-right{display:flex;flex-direction:column;align-items:flex-end;gap:.14rem;flex-shrink:0;padding-top:2px;}
+        .ev-live{font-family:'Press Start 2P',monospace;font-size:8px;background:rgba(0,255,100,.12);border:1px solid rgba(0,255,100,.38);color:#00FF64;padding:.1rem .28rem;border-radius:3px;animation:blink 1.4s ease-in-out infinite;}
+        .ev-du{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.28);letter-spacing:1px;}
+        .ev-today{color:#00FF64;text-shadow:0 0 8px rgba(0,255,100,.4);animation:blink 1.4s ease-in-out infinite;}
+        .ev-tmrw{color:#FFD700;}
+        .ev-cta{text-align:left!important;padding:.8rem!important;}
+        .ev-cta p{margin:0 0 .22rem;font-size:15px!important;}
+        .ev-setup{font-size:13px!important;color:rgba(255,255,255,.15)!important;}
+        .ev-setup code{background:rgba(255,255,255,.07);padding:.05rem .18rem;border-radius:3px;}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
+
+        /* ── HDTV Ticker ── */
+        .hdtv-ticker {
+          position:fixed; bottom:0; left:0; right:0; height:48px;
+          display:flex; align-items:stretch; z-index:200;
+          background:#060a16;
+          border-top:3px solid #D95E00;
+          box-shadow:0 -1px 0 rgba(255,185,70,0.6),0 -2px 0 rgba(0,0,0,0.9),0 -10px 40px rgba(200,75,0,0.22),inset 0 1px 0 rgba(255,140,50,0.1);
+          overflow:hidden;
+          font-family:'Helvetica Neue','Arial',sans-serif;
+        }
+        .ht-brand {
+          flex-shrink:0; width:96px;
+          display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+          background:linear-gradient(150deg,#B50000 0%,#6E0000 100%);
+          border-right:2px solid rgba(0,0,0,0.5);
+          position:relative; overflow:hidden;
+        }
+        .ht-brand::before { content:''; position:absolute; top:0; left:0; right:60%; bottom:40%; background:linear-gradient(135deg,rgba(255,255,255,0.12),transparent); pointer-events:none; }
+        .ht-brand::after  { content:''; position:absolute; top:0; right:0; bottom:0; width:8px; background:linear-gradient(-90deg,rgba(0,0,0,0.35),transparent); pointer-events:none; }
+        .ht-brand-top { font-family:'Press Start 2P',monospace; font-size:9.5px; font-weight:700; color:#fff; letter-spacing:1px; text-shadow:0 1px 4px rgba(0,0,0,0.9); position:relative; z-index:1; line-height:1; }
+        .ht-brand-bottom { display:flex; align-items:center; gap:5px; font-size:8.5px; font-weight:800; color:rgba(255,255,255,0.55); letter-spacing:3.5px; text-transform:uppercase; line-height:1; position:relative; z-index:1; }
+        .ht-live-dot { width:5px; height:5px; border-radius:50%; background:#00FF88; box-shadow:0 0 8px #00FF88,0 0 2px #00FF88; flex-shrink:0; animation:livePulse 2s ease-in-out infinite; }
+        @keyframes livePulse { 0%,100%{opacity:1;box-shadow:0 0 8px #00FF88,0 0 2px #00FF88} 50%{opacity:0.35;box-shadow:0 0 2px #00FF88} }
+        .ht-stage { flex:1; position:relative; overflow:hidden; border-top:1px solid rgba(255,255,255,0.04); background:repeating-linear-gradient(90deg,transparent 0,transparent 149px,rgba(255,255,255,0.018) 149px,rgba(255,255,255,0.018) 150px); }
+        .ht-fade-l,.ht-fade-r { position:absolute; top:0; bottom:0; z-index:2; pointer-events:none; width:52px; }
+        .ht-fade-l { left:0; background:linear-gradient(90deg,#060a16 20%,transparent); }
+        .ht-fade-r { right:0; background:linear-gradient(-90deg,#060a16 20%,transparent); }
+        .ht-rail { width:100%; overflow:hidden; }
+        .ht-belt { display:inline-flex; align-items:center; white-space:nowrap; animation:beltRoll 220s linear infinite; will-change:transform; }
+        @keyframes beltRoll { 0%{transform:translateX(60vw)} 100%{transform:translateX(-100%)} }
+        .ht-story { display:inline-flex; align-items:center; }
+        .ht-text { font-size:14.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; line-height:1; padding:0 0.5rem; }
+        .ht-c0{color:#EEF3FF;}
+        .ht-c1{color:#FFD166;text-shadow:0 0 12px rgba(255,200,80,0.25);}
+        .ht-c2{color:#87CEEB;text-shadow:0 0 12px rgba(135,206,235,0.2);}
+        .ht-c3{color:rgba(220,230,255,0.65);}
+        .ht-sep { display:inline-flex; align-items:center; gap:5px; margin:0 0.5rem; flex-shrink:0; }
+        .ht-sep-line { display:inline-block; width:20px; height:1px; background:rgba(210,95,0,0.55); flex-shrink:0; }
+        .ht-sep-gem { font-size:7px; color:#D95E00; text-shadow:0 0 10px rgba(217,94,0,0.9); flex-shrink:0; line-height:1; }
+        .ht-clock { flex-shrink:0; width:80px; display:flex; align-items:center; justify-content:center; border-left:1.5px solid rgba(255,255,255,0.06); background:rgba(255,255,255,0.022); position:relative; }
+        .ht-clock::before { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(217,94,0,0.5),transparent); }
+        .ht-clock-inner { display:flex; flex-direction:column; align-items:center; gap:2px; }
+        .ht-clock-time { font-size:15px; font-weight:700; color:#ECF1FF; letter-spacing:1.5px; font-variant-numeric:tabular-nums; line-height:1; }
+        .ht-clock-label { font-size:8px; font-weight:700; color:rgba(255,255,255,0.28); letter-spacing:3px; line-height:1; }
+
+        /* ── Responsive ── */
+        @media(max-width:1200px){
+          .cg { grid-template-columns: 340px 1fr; grid-template-areas: "a b"; }
+          .cg-c { display: none; }
+        }
+        @media(max-width:820px){
+          .cg { grid-template-columns: 1fr; grid-template-areas: "a" "b"; }
+        }
+        @media(max-width:600px){
+          .cg { padding: .6rem 8px; gap: .6rem; }
+          .ht-brand { width:72px; } .ht-brand-top { font-size:8px; }
+          .ht-clock { width:62px; } .ht-clock-time { font-size:13px; }
+          .ht-text { font-size:13px; }
+        }
+      `}</style>
+    </div>
+  );
+}

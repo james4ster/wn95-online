@@ -11,16 +11,14 @@ export const useLeague = () => {
 };
 
 export const LeagueProvider = ({ children }) => {
-  const [selectedLeague, setSelectedLeague] = useState(
-    localStorage.getItem('selectedLeague') || ''
-  );
+  const [selectedLeague, setSelectedLeague] = useState('W');
 
-  useEffect(() => {
+  /*useEffect(() => {
     if (selectedLeague) {
       localStorage.setItem('selectedLeague', selectedLeague);
     }
   }, [selectedLeague]);
-
+*/
   return (
     <LeagueContext.Provider value={{ selectedLeague, setSelectedLeague }}>
       {children}

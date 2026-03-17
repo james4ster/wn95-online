@@ -59,12 +59,14 @@ const PosBadge = ({ pos }) => <span className={`pos-badge pos-${pos}`}>{pos}</sp
 
 export default function Players() {
   const [tab, setTab]         = useState('scout');
-  const [cmpView, setCmpView] = useState('side'); // 'side' | 'year'
+  const [cmpView, setCmpView] = useState('side');
 
   // ── Scout ──
   const [players, setPlayers]                 = useState([]);
   const [loading, setLoading]                 = useState(false);
+  const [currentYear, setCurrentYear]         = useState(null);
   const [page, setPage]                       = useState(0);
+  const [totalCount, setTotalCount]           = useState(0);
   const [totalPages, setTotalPages]           = useState(0);
   const [expandedId, setExpandedId]           = useState(null);
   const [expandedSeasons, setExpandedSeasons] = useState([]);
@@ -87,7 +89,6 @@ export default function Players() {
   const sTimer = useRef(null);
   const cTimer = useRef(null);
 
-  // Player color palette
   const CMP_COLORS = [
     { main: '#00C8FF', bg: 'rgba(0,200,255,.08)',  border: 'rgba(0,200,255,.4)'  },
     { main: '#FF6B35', bg: 'rgba(255,107,53,.08)', border: 'rgba(255,107,53,.4)' },
@@ -95,7 +96,19 @@ export default function Players() {
     { main: '#10B981', bg: 'rgba(16,185,129,.08)', border: 'rgba(16,185,129,.4)' },
   ];
 
-  // Debounce search
+  // ── Fetch current season year on mount ──
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from('seasons')
+        .select('year')
+        .order('end_date', { ascending: false })
+        .limit(1);
+      if (data?.[0]) setCurrentYear(data[0].year);
+    })();
+  }, []);
+
+  // ── Debounce search ──
   useEffect(() => {
     clearTimeout(sTimer.current);
     sTimer.current = setTimeout(() => { setDsearch(search); setPage(0); }, 350);
@@ -103,65 +116,53 @@ export default function Players() {
 
   useEffect(() => { setPage(0); }, [posFilter, handFilter, yearFrom, yearTo]);
 
+  // ── Main data fetch — query player_attributes_by_season directly ──
   useEffect(() => {
+    if (currentYear === null) return; // wait for current year to load
     const go = async () => {
       setLoading(true);
       const offset = page * PAGE_SIZE;
-  
-      // 1️⃣ fetch master list
-      let { data: masterData, error: masterError } = await supabase
-        .from('player_master')
-        .select('player_master_id, player_name')
-        .ilike('player_name', dsearch ? `%${dsearch}%` : '%') // search if any
-        .order('player_name', { ascending: true });
-  
-      if (masterError) {
-        console.error('Error fetching player_master:', masterError);
-        setLoading(false);
-        return;
-      }
-  
-      const masterIds = masterData.map(p => p.player_master_id);
-  
-      // 2️⃣ fetch attributes for the filtered master ids
-      let attrQuery = supabase
+
+      // Determine year range — default to current season
+      const yFrom = yearFrom ? parseInt(yearFrom) : currentYear;
+      const yTo   = yearTo   ? parseInt(yearTo)   : currentYear;
+
+      // Build query against player_attributes_by_season
+      // We want one row per player (their best/latest OVR in range)
+      // Supabase can't GROUP BY natively, so we fetch all matching rows
+      // then deduplicate client-side keeping highest OVR
+      let query = supabase
         .from('player_attributes_by_season')
-        .select('player_master_id, year, pos, hand, ovr')
-        .in('player_master_id', masterIds);
-  
-      if (posFilter)  attrQuery = attrQuery.eq('pos', posFilter);
-      if (handFilter) attrQuery = attrQuery.eq('hand', handFilter);
-      if (yearFrom)   attrQuery = attrQuery.gte('year', parseInt(yearFrom));
-      if (yearTo)     attrQuery = attrQuery.lte('year', parseInt(yearTo));
-  
-      const { data: attrData, error: attrError } = await attrQuery;
-  
-      if (attrError) {
-        console.error('Error fetching player_attributes_by_season:', attrError);
-        setLoading(false);
-        return;
+        .select('player_master_id, player_name, year, pos, hand, ovr', { count: 'exact' })
+        .gte('year', yFrom)
+        .lte('year', yTo)
+        .order('ovr', { ascending: false });
+
+      if (dsearch)    query = query.ilike('player_name', `%${dsearch}%`);
+      if (posFilter)  query = query.eq('pos', posFilter);
+      if (handFilter) query = query.eq('hand', handFilter);
+
+      const { data, error } = await query;
+
+      if (error) { console.error(error); setLoading(false); return; }
+
+      // Deduplicate by player_master_id, keeping highest OVR row
+      const seen = new Map();
+      for (const row of (data || [])) {
+        const existing = seen.get(row.player_master_id);
+        if (!existing || row.ovr > existing.ovr) seen.set(row.player_master_id, row);
       }
-  
-      // 3️⃣ merge master + latest attributes
-      const grouped = {};
-      for (const r of attrData) {
-        if (!grouped[r.player_master_id]) grouped[r.player_master_id] = { ...masterData.find(m => m.player_master_id === r.player_master_id), allOvr: [] };
-        grouped[r.player_master_id].allOvr.push(r.ovr);
-        grouped[r.player_master_id].pos = r.pos;  // optional: latest overwrites
-        grouped[r.player_master_id].hand = r.hand;
-        grouped[r.player_master_id].year = r.year;
-      }
-  
-      const unique = Object.values(grouped).map(p => ({ ...p, avgOvr: avg(p.allOvr) }));
-  
-      setTotalPages(Math.ceil(unique.length / PAGE_SIZE));
-      setPlayers(unique.slice(offset, offset + PAGE_SIZE));
-  
+
+      const deduped = Array.from(seen.values())
+        .sort((a, b) => b.ovr - a.ovr);
+
+      setTotalCount(deduped.length);
+      setTotalPages(Math.ceil(deduped.length / PAGE_SIZE));
+      setPlayers(deduped.slice(offset, offset + PAGE_SIZE));
       setLoading(false);
     };
-  
     go();
-  }, [dsearch, posFilter, handFilter, yearFrom, yearTo, page]);
+  }, [dsearch, posFilter, handFilter, yearFrom, yearTo, page, currentYear]);
   
 
   // ── Expand seasons ──
@@ -235,9 +236,8 @@ export default function Players() {
   };
 
   const removeFromCompare = (pid) => {
-    setCompareList(prev => prev.filter(p => p.player_master_id !== player_master_id));
-    setCmpSeasons(prev => { const n = { ...prev }; delete n[player_master_id]; return n; });
-
+    setCompareList(prev => prev.filter(p => p.player_master_id !== pid));
+    setCmpSeasons(prev => { const n = { ...prev }; delete n[pid]; return n; });
   };
 
   const addFromScout = async (e, player) => {
@@ -280,14 +280,20 @@ export default function Players() {
           </div>
           <div className="fg"><label>HAND</label>
             <select className="f-sel" value={handFilter} onChange={e => setHand(e.target.value)}>
-              <option value="">ALL</option><option value="1">RIGHT</option><option value="0">LEFT</option>
+              <option value="">ALL</option><option value="0">RIGHT</option><option value="1">LEFT</option>
             </select>
           </div>
           <div className="fg"><label>YR FROM</label>
-            <input className="f-inp" type="number" placeholder="1917" value={yearFrom} onChange={e => setYearFrom(e.target.value)} />
+            <input className="f-inp" type="number"
+              placeholder={currentYear||'YEAR'}
+              value={yearFrom !== '' ? yearFrom : (currentYear || '')}
+              onChange={e => setYearFrom(e.target.value)} />
           </div>
           <div className="fg"><label>YR TO</label>
-            <input className="f-inp" type="number" placeholder="2025" value={yearTo} onChange={e => setYearTo(e.target.value)} />
+            <input className="f-inp" type="number"
+              placeholder={currentYear||'YEAR'}
+              value={yearTo !== '' ? yearTo : (currentYear || '')}
+              onChange={e => setYearTo(e.target.value)} />
           </div>
           {hasFilters && <button className="clear-btn" onClick={clearFilters}>✕ CLEAR</button>}
         </div>
@@ -319,7 +325,7 @@ export default function Players() {
                   </div>
                   <div className="pr-c"><PosBadge pos={p.pos} /></div>
                   <div className="pr-c pr-hand">{handLabel(p.hand)}</div>
-                  <div className="pr-c"><OvrBadge ovr={p.avgOvr} /></div>
+                  <div className="pr-c"><OvrBadge ovr={p.ovr} /></div>
                   <div className="pr-c">
                     <button className={`cmp-btn ${inCmp ? 'cmp-btn--in' : ''}`}
                       disabled={compareList.length >= 4 || inCmp}
@@ -715,7 +721,11 @@ export default function Players() {
         .scoreboard-header::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px);pointer-events:none}
         .scoreboard-header::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent 30%,rgba(255,215,0,.1) 50%,transparent 70%);animation:shimmer 3s infinite}
         @keyframes shimmer{0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)}100%{transform:translateX(100%) translateY(100%) rotate(45deg)}}
-        .led-text{font-family:'Press Start 2P',monospace;font-size:2rem;color:#FFD700;letter-spacing:6px;text-shadow:0 0 8px #FFD700,0 0 16px #FFD700,0 0 32px #FFA500;position:relative}
+        .led-text {
+            font-family:'Press Start 2P',monospace; font-size:2rem; color:#FFD700; letter-spacing:6px;
+            text-shadow:0 0 10px #FF8C00,0 0 20px #FF8C00,0 0 30px #FFD700;
+            filter:contrast(1.3) brightness(1.2); position:relative;
+          }
 
         /* ══ TABS ══════════════════════════════════════════════════════════════ */
         .page-tabs{display:flex;gap:.5rem;margin-bottom:1.25rem;border-bottom:2px solid rgba(255,165,0,.2);padding-bottom:.5rem}
@@ -797,11 +807,11 @@ export default function Players() {
         .bar-good{background:linear-gradient(90deg,#FFD700,#FFA500);box-shadow:0 0 4px rgba(255,215,0,.35)}
         .bar-avg{background:linear-gradient(90deg,#87CEEB,#4682B4)}
         .bar-low{background:rgba(255,255,255,.18)}
-
+        
         /* ══ BADGES ════════════════════════════════════════════════════════════ */
         .ovr-badge{display:inline-block;font-family:'Press Start 2P',monospace;font-size:.62rem;padding:.22rem .48rem;border-radius:5px;letter-spacing:1px}
-        .ovr-elite{background:rgba(255,215,0,.15);border:2px solid rgba(255,215,0,.5);color:#FFD700;text-shadow:0 0 8px rgba(255,215,0,.6)}
-        .ovr-good{background:rgba(0,255,100,.1);border:2px solid rgba(0,255,100,.38);color:#00FF64}
+        .ovr-elite{background:rgba(0,255,100,.12);border:2px solid rgba(0,255,100,.5);color:#00FF64;text-shadow:0 0 8px rgba(0,255,100,.6)}
+        .ovr-good{background:rgba(255,215,0,.12);border:2px solid rgba(255,215,0,.5);color:#FFD700}
         .ovr-avg{background:rgba(135,206,235,.1);border:2px solid rgba(135,206,235,.28);color:#87CEEB}
         .ovr-low{background:rgba(255,255,255,.05);border:2px solid rgba(255,255,255,.12);color:rgba(255,255,255,.35)}
         .pos-badge{font-family:'Press Start 2P',monospace;font-size:.42rem;border-radius:4px;padding:.16rem .38rem;letter-spacing:1px}

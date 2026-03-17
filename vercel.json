@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/gazette-cron.js": {
+      "maxDuration": 60
+    }
+  },
+  "crons": [
+    {
+      "path": "/api/gazette-cron",
+      "schedule": "0 4 * * *"
+    }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

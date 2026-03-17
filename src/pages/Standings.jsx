@@ -1290,11 +1290,7 @@ export default function Standings() {
       )}
 
       <style>{`
-        html { overflow-x: auto; }
-        body { overflow-x: auto; }
-        .standings-page {
-          overflow-x: auto;
-        }
+       
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
         .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
         .arcade-table { width:max-content; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }

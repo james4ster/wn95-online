@@ -2330,7 +2330,6 @@ export default function Stats() {
   }, [managers]);
 
   // ── Fetch all games (season + playoff) ───────────────────────────────────
-  // ── Fetch all games (season + playoff) ───────────────────────────────────
   useEffect(() => {
     setLoading(true);
     setAllGames([]);
@@ -2347,7 +2346,9 @@ export default function Stats() {
           'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score'
         )
         .not('team_a_score', 'is', null),
-      supabase.from('managers').select('id,coach_name'),
+      supabase
+        .from('managers')
+        .select('id, coach_name, discord_username, discord_url'),
       supabase
         .from('teams')
         .select('abr,lg,manager_id')

@@ -1355,7 +1355,7 @@ export default function Standings() {
         .tied-row { cursor:default; }
         .row-banner-overlay { position:absolute; left:0; top:0; bottom:0; width:380px; pointer-events:none; z-index:0; overflow:hidden; opacity:.18; transition:opacity .3s ease; }
         .arcade-table tbody tr:hover .row-banner-overlay { opacity:.28; }
-        .banner-image { position:absolute; left:0; top:50%; transform:translateY(-50%); height:150%; width:auto; object-fit:contain; filter:blur(1px) brightness(1.3); mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); }
+        .banner-image { position:absolute; left:0; top:50%; transform:translateY(-50%); height:150%; width:auto; object-fit:contain; brightness(1.3); mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); }
         .arcade-table tbody tr { position: relative; }
         .team-cell { position: static !important; overflow: visible !important; }
         .arcade-table tbody tr:hover .banner-image { filter:blur(.5px) brightness(1.5); transform:translateY(-50%) scale(1.03); }

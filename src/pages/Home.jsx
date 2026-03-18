@@ -573,15 +573,13 @@ ${playoffSeriesData
     relevantTeams
       .map((code) => {
         // Try to get managerId from teamManagerMap, fallback to code itself
-        const managerId = teamManagerMap[code] ?? code;
-
-        // Grab traits from traitsMap
+        const team = teams.find((t) => t.abr === code);
+        const managerId = team?.manager_id ?? code; // fallback to code if missing
         const traits = traitsMap[managerId];
 
         if (!traits) return `${code} — traits missing`;
 
         // Grab coach name safely
-        const team = teams?.find((t) => t.abr === code) ?? {};
         const coachName = team.coach || 'Unknown';
         const teamName = teamNameMap[code]?.full || code;
 

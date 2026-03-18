@@ -398,6 +398,7 @@ async function fetchGazetteEdition({
   isPlayoffActive,
   playoffSeriesData,
   gameStats,
+  traitsMap,
 }) {
   const today = todayStamp();
 
@@ -735,6 +736,7 @@ function LeagueGazette({
           isPlayoffActive,
           playoffSeriesData,
           gameStats,
+          traitsMap: managers.manager_traits,
         });
         localStorage.setItem(
           GAZETTE_CACHE_KEY,

@@ -404,10 +404,14 @@ async function fetchGazetteEdition({
   const today = todayStamp();
   const season = currentSeason?.lg || leagueLabel;
 
-  // Map manager_id → traits (no JSON.parse needed for jsonb)
+  // Map manager_id → traits safely
   const traitsMap = managers.reduce((acc, m) => {
     if (m.manager_traits) {
-      acc[m.id] = m.manager_traits;
+      // manager_traits might already be a JS object (from jsonb), so only parse if string
+      acc[m.id] =
+        typeof m.manager_traits === 'string'
+          ? JSON.parse(m.manager_traits)
+          : m.manager_traits;
     }
     return acc;
   }, {});
@@ -554,20 +558,19 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
-  // ── Build traits lines
-  const traitsLines = allCodes
+  // Build traits lines for each team in your relevant list
+  const traitsLines = relevantTeams
     .map((code) => {
       const managerId = teamManagerMap[code];
+      if (!managerId) return null;
+
       const traits = traitsMap[managerId];
       const coachName = teams.find((t) => t.abr === code)?.coach;
 
       if (!traits) return null;
 
-      return `${tn(code).full} (${code}) — coached by ${coachName}, who is a ${
-        traits.media
-      }, ${traits.style} strategist with a ${
-        traits.philosophy
-      } philosophy and a ${traits.temperament} temperament.`;
+      const team = teamNameMap[code]?.full || code;
+      return `${team} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
     })
     .filter(Boolean)
     .join('\n');

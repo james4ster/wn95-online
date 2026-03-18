@@ -567,9 +567,9 @@ ${playoffSeriesData
       const traits = traitsMap[coach];
 
       console.log('---');
-      console.log('team code:', code);
-      console.log('coach:', coach);
-      console.log('traits found:', traits);
+      console.log('TEAM:', code);
+      console.log('COACH:', coach);
+      console.log('TRAITS:', traits);
 
       if (!traits) return null;
 
@@ -763,6 +763,7 @@ function LeagueGazette({
         const { data: managers } = await supabase
           .from('managers')
           .select('coach_name, manager_traits');
+        console.log('managers:', managers);
 
         const traitsMap = (managers || []).reduce((acc, m) => {
           if (m.manager_traits) {
@@ -774,6 +775,9 @@ function LeagueGazette({
           }
           return acc;
         }, {});
+
+        console.log('traitsMap keys:', Object.keys(traitsMap));
+        console.log('traitsMap sample:', traitsMap);
 
         const data = await fetchGazetteEdition({
           leagueLabel,

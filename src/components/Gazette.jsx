@@ -127,6 +127,13 @@ Valid team codes (use EXACTLY): ${allTeams.join(', ') || 'N/A'}
 MANAGER TRAITS:
 ${traitsLines}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPORTANT INSTRUCTIONS:
+- When writing pull_quote or bottom_line, explicitly use manager traits.
+  - Traits should influence tone, style, be specific.
+  - Example: aggressive coach → punchy quote, witty coach → clever line, strategic → emphasize tactics.
+- Use the traits naturally — don’t just list them. Blend into the text.
+
 Respond ONLY with valid JSON, zero other text:
 {
   "featured_team": "ONE team code from the valid list above — pick the most newsworthy",

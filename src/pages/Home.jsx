@@ -535,7 +535,10 @@ ${playoffSeriesData
       : '';
 
   // ── Build traits block ───────────────────────────
-  const traitsBlock = Object.keys(traitsMap || {}).length
+  const traitsBlock = (typeof traitsMap !== 'undefined'
+    ? Object.keys(traitsMap || {})
+    : []
+  ).length
     ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEAM TRAITS (DO NOT INVENT)

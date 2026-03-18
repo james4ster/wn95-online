@@ -1,4 +1,3 @@
-/* testing */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';
@@ -575,12 +574,13 @@ ${playoffSeriesData
       .map((code) => {
         const managerId = teamManagerMap[code];
         const traits = traitsMap[managerId];
-        const coachName =
-          (teams.find((t) => t.abr === code) ?? {}).coach ?? 'Unknown';
 
         if (!traits) return null;
 
+        const team = teams?.find((t) => t.abr === code) ?? {};
         const teamName = teamNameMap[code]?.full || code;
+        const coachName = team.coach || 'Unknown';
+
         return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
       })
       .filter(Boolean)

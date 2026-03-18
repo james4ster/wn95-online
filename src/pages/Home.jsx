@@ -1,4 +1,3 @@
-/* testing */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';
@@ -552,7 +551,19 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
-  const relevantTeams = teams.map((t) => t.abr);
+  const relevantTeams = [
+    ...new Set([
+      ...(recentForm?.hot || []).map((t) => t.team),
+      ...(recentForm?.cold || []).map((t) => t.team),
+      ...(winStreaks || []).map((s) => s.team),
+      ...(lossStreaks || []).map((s) => s.team),
+      ...(playoffSeriesData || []).flatMap((s) => [
+        s.team_code_a,
+        s.team_code_b,
+      ]),
+    ]),
+  ];
+
   // ── Build traits lines for relevant teams (null-safe)
   const traitsLines = (relevantTeams || [])
     .map((code) => {

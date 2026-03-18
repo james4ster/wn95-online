@@ -388,27 +388,27 @@ const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
 ───────────────────────────────────────────────────────────── */
 async function fetchGazetteEdition({
   leagueLabel,
-  recentForm = {},
-  winStreaks = [],
-  lossStreaks = [],
-  currentSeason = {},
-  teamNameMap = {},
-  topScorers = [],
-  recentGames = [],
-  isPlayoffActive = false,
-  playoffSeriesData = [],
-  gameStats = '',
-  managers = [],
-  teams = [],
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  currentSeason,
+  teamNameMap,
+  topScorers,
+  recentGames,
+  isPlayoffActive,
+  playoffSeriesData,
+  gameStats,
+  managers,
+  teams,
 }) {
   const today = new Date().toISOString().split('T')[0];
   const season = currentSeason?.lg || leagueLabel;
 
-  // ── Build traits map: manager_id → traits safely
+  // ── Map manager_id → traits safely
   const traitsMap = (managers || []).reduce((acc, m) => {
     if (m?.manager_traits) {
       try {
-        const key = m.id ?? m.coach_name; // fallback if no id
+        const key = m.id ?? m.coach_name; // fallback
         acc[key] =
           typeof m.manager_traits === 'string'
             ? JSON.parse(m.manager_traits)
@@ -419,10 +419,11 @@ async function fetchGazetteEdition({
     }
     return acc;
   }, {});
+
   console.log('[Gazette] traitsMap keys:', Object.keys(traitsMap));
   console.log('[Gazette] traitsMap sample:', Object.values(traitsMap)[0] || {});
 
-  // ── Map team_code → manager_id safely
+  // ── Map team_code → manager_id
   const teamManagerMap = (teams || []).reduce((acc, t) => {
     if (t.manager_id) acc[t.abr] = t.manager_id;
     return acc;
@@ -454,12 +455,12 @@ async function fetchGazetteEdition({
   const tn = (code) =>
     teamNameMap[code] || { city: code, nickname: code, full: code };
 
-  // ── Build streak lines safely
-  const hotLines = (recentForm.hot || [])
+  // ── Build streak lines
+  const hotLines = (recentForm?.hot || [])
     .slice(0, 5)
     .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
     .join(' | ');
-  const coldLines = (recentForm.cold || [])
+  const coldLines = (recentForm?.cold || [])
     .slice(0, 5)
     .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
     .join(' | ');
@@ -504,38 +505,26 @@ async function fetchGazetteEdition({
     })
     .join(' | ');
 
-  // ── Build relevant teams
-  const relevantTeams = [
+  // ── Name references
+  const allCodes = [
     ...new Set([
-      ...(recentForm.hot || []).map((t) => t.team),
-      ...(recentForm.cold || []).map((t) => t.team),
+      ...(recentForm?.hot || []).map((t) => t.team),
+      ...(recentForm?.cold || []).map((t) => t.team),
       ...(winStreaks || []).map((s) => s.team),
       ...(lossStreaks || []).map((s) => s.team),
-      ...(playoffSeriesData || []).flatMap((s) => [
-        s.team_code_a,
-        s.team_code_b,
-      ]),
     ]),
   ];
 
-  // ── Build traits lines safely
-  const traitsLines = relevantTeams
+  const nameRef = allCodes
     .map((code) => {
-      const team = teams.find((t) => t.abr === code);
-      const managerId = team?.manager_id;
-      const traits = managerId ? traitsMap[managerId] : null;
-      const coachName = team?.coach ?? 'Unknown';
-
-      if (!traits) return `${code} — traits missing`;
-
-      const teamName = teamNameMap[code]?.full || code;
-      return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
+      const n = tn(code);
+      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
+        n.coach ? `, coach: ${n.coach}` : ''
+      })`;
     })
     .join('\n');
 
-  console.log('[Gazette] Traits lines:\n', traitsLines);
-
-  // ── Build playoff block
+  // ── Playoff summary
   const playoffBlock =
     isPlayoffActive && playoffSeriesData?.length
       ? `
@@ -563,14 +552,35 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
-  // ── Name reference block
-  const nameRef = relevantTeams
-    .map((code) => {
-      const n = tn(code);
-      const coach = teams.find((t) => t.abr === code)?.coach ?? 'Unknown';
-      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}, coach: ${coach})`;
-    })
-    .join('\n');
+  const relevantTeams = [
+    ...new Set([
+      ...(recentForm?.hot || []).map((t) => t.team),
+      ...(recentForm?.cold || []).map((t) => t.team),
+      ...(winStreaks || []).map((s) => s.team),
+      ...(lossStreaks || []).map((s) => s.team),
+      ...(playoffSeriesData || []).flatMap((s) => [
+        s.team_code_a,
+        s.team_code_b,
+      ]),
+    ]),
+  ];
+
+  // ── Build traits lines safely — skip any team missing manager or traits
+  const traitsLines =
+    relevantTeams
+      .map((code) => {
+        const managerId = teamManagerMap[code];
+        if (!managerId || !traitsMap[managerId]) return null; // skip missing
+        const traits = traitsMap[managerId];
+        const coachName =
+          (teams.find((t) => t.abr === code) ?? {}).coach || 'Unknown';
+        const teamName = teamNameMap[code]?.full || code;
+        return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
+      })
+      .filter(Boolean)
+      .join('\n') || 'No traits available';
+
+  console.log('[Gazette] Traits lines:\n', traitsLines);
 
   // ── Build prompt
   const angles = [
@@ -591,7 +601,7 @@ Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
 ${playoffBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TEAM TRAITS
+  TEAM TRAITS
 ${traitsLines}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━

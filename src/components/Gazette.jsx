@@ -6,6 +6,7 @@
 
    The <LeagueGazette .../> call in JSX stays exactly the same.
    All imports (useState, useCallback, supabase) already in Home.jsx
+   Testing Traits version
 ═══════════════════════════════════════════════════════════════ */
 
 const GAZETTE_CACHE_KEY = 'league_gazette_v3';

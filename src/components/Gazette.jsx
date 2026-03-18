@@ -6,7 +6,6 @@
 
    The <LeagueGazette .../> call in JSX stays exactly the same.
    All imports (useState, useCallback, supabase) already in Home.jsx
-   Testing Traits version
 ═══════════════════════════════════════════════════════════════ */
 
 const GAZETTE_CACHE_KEY = 'league_gazette_v3';
@@ -82,6 +81,7 @@ async function fetchGazetteEdition({
   managersData?.forEach((m) => {
     try {
       traitsMap[m.abr] = JSON.parse(m.manager_traits);
+      console.log('traitsMap', traitsMap);
     } catch {
       traitsMap[m.abr] = {};
     }

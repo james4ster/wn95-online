@@ -506,6 +506,7 @@ async function fetchGazetteEdition({
   const angleHint = angles[new Date().getDate() % angles.length];
 
   // ── Build playoff series summary ───────────────────────────
+  // ── Build playoff series summary with traits ───────────────────────────
   const playoffBlock =
     isPlayoffActive && playoffSeriesData?.length
       ? `
@@ -533,9 +534,27 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
+  // ── Build traits block ───────────────────────────
+  const traitsBlock = Object.keys(traitsMap || {}).length
+    ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEAM TRAITS (DO NOT INVENT)
+${Object.entries(traitsMap)
+  .map(([teamCode, traits]) => {
+    const name = teamNameMap[teamCode]?.full || teamCode;
+    const traitText = Object.entries(traits)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join(', ');
+    return `${name}: ${traitText || 'no traits'}`;
+  })
+  .join('\n')}`
+    : '';
+
+  // ── Full prompt with playoff summary + traits ───────────────────────────
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
 Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
 ${playoffBlock}
+${traitsBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEAM NAME REFERENCE
@@ -573,17 +592,17 @@ WRITING RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Respond ONLY with valid JSON, zero other text:
 {
-  "featured_team": "ONE team code from the reference list above — use exact code",
-  "story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
-  "cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
-  "cover_sub": "12-18 words. Punchy supporting line.",
-  "blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-  "blurb_2": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-  "blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-  "pull_quote": "12-20 words. Dramatic fake quote.",
-  "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
-  "bottom_line": "7-11 words. One punchy verdict on the league.",
-  "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
+"featured_team": "ONE team code from the reference list above — use exact code",
+"story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
+"cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
+"cover_sub": "12-18 words. Punchy supporting line.",
+"blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+"blurb_2": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+"blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+"pull_quote": "12-20 words. Dramatic fake quote.",
+"quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
+"bottom_line": "7-11 words. One punchy verdict on the league.",
+"edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
     Math.floor(Math.random() * 80) + 1
   }"
 }`;

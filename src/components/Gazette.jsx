@@ -148,9 +148,9 @@ Respond ONLY with valid JSON, zero other text:
     "headline": "6-9 words about a third team or league note.",
     "detail": "8-12 words."
   },
-  "pull_quote": "12-20 words. Dramatic fake quote from a player or coach on the featured team.",
-  "quote_attr": "— Fake Name, Role, ${leagueLabel}",
-  "bottom_line": "7-11 words. One punchy verdict on the league right now.",
+  "pull_quote": "12-20 words. Dramatic fake quote from a player or coach on the featured team, using manager traits if possible.",
+  "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
+  "bottom_line": "7-11 words. One punchy verdict on the league, incorporating manager traits if appropriate.",
   "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
     Math.floor(Math.random() * 80) + 1
   }"

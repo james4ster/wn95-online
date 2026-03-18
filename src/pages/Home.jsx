@@ -406,13 +406,14 @@ async function fetchGazetteEdition({
 
   // Map manager_id → traits safely
   const traitsMap = managers.reduce((acc, m) => {
-    if (m.manager_traits) {
-      // manager_traits might already be a JS object (from jsonb), so only parse if string
-      acc[m.id] =
-        typeof m.manager_traits === 'string'
-          ? JSON.parse(m.manager_traits)
-          : m.manager_traits;
-    }
+    if (!m.id || !m.manager_traits) return acc; // skip if no id or traits
+
+    // Parse only if it's a string (jsonb might already be object)
+    acc[m.id] =
+      typeof m.manager_traits === 'string'
+        ? JSON.parse(m.manager_traits)
+        : m.manager_traits;
+
     return acc;
   }, {});
 
@@ -1527,7 +1528,7 @@ export default function Home() {
   useEffect(() => {
     supabase
       .from('teams')
-      .select('code,team')
+      .select('abr,team')
       .then(({ data }) => {
         if (data) setTeams(data);
       });
@@ -1567,7 +1568,7 @@ export default function Home() {
     // teams table uses `abr` as the team code that matches games.home/away
     const { data: seasonTeams } = await supabase
       .from('teams')
-      .select('abr,team,coach')
+      .select('abr, team, coach, manager_id')
       .eq('lg', latest.lg);
 
     const nameMap = {};

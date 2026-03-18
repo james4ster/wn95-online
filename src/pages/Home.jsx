@@ -398,8 +398,19 @@ async function fetchGazetteEdition({
   isPlayoffActive,
   playoffSeriesData,
   gameStats,
-  traitsMap,
+  managers,
 }) {
+  const traitsMap = managers.reduce((acc, m) => {
+    if (m.manager_traits) {
+      try {
+        acc[m.coach_name] = JSON.parse(m.manager_traits);
+      } catch (e) {
+        console.warn(`Failed to parse traits for ${m.coach_name}:`, e);
+      }
+    }
+    return acc;
+  }, {});
+
   const today = todayStamp();
 
   // Use a different cache key during playoffs so it never serves
@@ -535,16 +546,35 @@ ${playoffSeriesData
       : '';
 
   // ── Add traits for featured SUM team ───────────────────────────
-  const traitsBlock =
-    isPlayoffActive && traitsMap?.['SUM']
-      ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TEAM TRAITS — SUM
-SUM (${teamNameMap['SUM']?.full || 'Sumter Trash'}):
-${Object.entries(traitsMap['SUM'])
-  .map(([trait, value]) => `- ${trait}: ${value}`)
-  .join('\n')}`
-      : '';
+  const relevantTeams = [
+    ...recentForm.hot.map((t) => t.team),
+    ...recentForm.cold.map((t) => t.team),
+    ...winStreaks.map((s) => s.team),
+    ...lossStreaks.map((s) => s.team),
+  ];
+
+  const uniqueTeams = [...new Set(relevantTeams)];
+
+  const traitsBlock = isPlayoffActive
+    ? `
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TEAM TRAITS
+  ${uniqueTeams
+    .map((code) => {
+      const team = teamNameMap[code]?.full || code;
+      const coach = teamNameMap[code]?.coach;
+      const traits = traitsMap[coach];
+
+      if (!traits) return null;
+
+      return `${team} (${code}) — Coach ${coach}:
+  ${Object.entries(traits)
+    .map(([trait, val]) => `- ${trait}: ${val}`)
+    .join('\n')}`;
+    })
+    .filter(Boolean)
+    .join('\n\n')}`
+    : '';
 
   // ── Full prompt with playoff summary + traits ───────────────────────────
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
@@ -724,6 +754,8 @@ function LeagueGazette({
       setLoading(true);
       setError(null);
       try {
+        const managers = await supabase.from('managers').select('*');
+
         const data = await fetchGazetteEdition({
           leagueLabel,
           recentForm,
@@ -736,7 +768,7 @@ function LeagueGazette({
           isPlayoffActive,
           playoffSeriesData,
           gameStats,
-          traitsMap: managers.manager_traits,
+          managers,
         });
         localStorage.setItem(
           GAZETTE_CACHE_KEY,

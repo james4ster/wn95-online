@@ -570,11 +570,12 @@ ${playoffSeriesData
   const traitsLines =
     relevantTeams
       .map((code) => {
-        const managerKey = teamManagerMap[code];
+        const managerKey = teamManagerMap[code]; // manager_id for this team
         const traits = traitsMap[managerKey];
-        const coachName = teams.find((t) => t.abr === code)?.coach ?? 'Unknown';
+        const teamObj = teams.find((t) => t.abr === code) ?? {};
+        const coachName = teamObj.coach ?? 'Unknown';
 
-        if (!traits) return null;
+        if (!traits) return null; // skip if no traits
 
         const teamName = teamNameMap[code]?.full || code;
         return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
@@ -582,7 +583,11 @@ ${playoffSeriesData
       .filter(Boolean)
       .join('\n') || 'No traits available';
 
-  console.log('[Gazette] Traits lines:\n', traitsLines);
+  /* DEBUG LINES */
+  console.log('[Gazette] relevantTeams:', relevantTeams);
+  console.log('[Gazette] teamManagerMap:', teamManagerMap);
+  console.log('[Gazette] traitsMap keys:', Object.keys(traitsMap));
+  console.log('[Gazette] traitsLines:\n', traitsLines);
 
   // ── Build prompt
   const angles = [

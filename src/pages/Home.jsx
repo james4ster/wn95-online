@@ -399,11 +399,13 @@ async function fetchGazetteEdition({
   playoffSeriesData,
   gameStats,
   managers,
+  teams,
 }) {
+  // ── Map manager_id → traits ───────────────────────────────
   const traitsMap = managers.reduce((acc, m) => {
     if (m.manager_traits) {
       try {
-        acc[m.coach_name] = JSON.parse(m.manager_traits);
+        acc[m.id] = JSON.parse(m.manager_traits);
       } catch (e) {
         console.warn(`Failed to parse traits for ${m.coach_name}:`, e);
       }
@@ -411,10 +413,13 @@ async function fetchGazetteEdition({
     return acc;
   }, {});
 
-  const today = todayStamp();
+  // ── Map team_code → manager_id ───────────────────────────
+  const teamManagerMap = teams.reduce((acc, t) => {
+    if (t.manager_id) acc[t.abr] = t.manager_id;
+    return acc;
+  }, {});
 
-  // Use a different cache key during playoffs so it never serves
-  // a regular-season edition when playoffs are active
+  const today = todayStamp();
   const cacheKey = isPlayoffActive ? `${leagueLabel}_playoff` : leagueLabel;
 
   // ── 1. Check DB cache ─────────────────────────────────────
@@ -422,7 +427,7 @@ async function fetchGazetteEdition({
     const { data: cached } = await supabase
       .from('gazette_cache')
       .select('data, date')
-      .eq('league', cacheKey) // ← use cacheKey not leagueLabel
+      .eq('league', cacheKey)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -435,12 +440,13 @@ async function fetchGazetteEdition({
     console.log('[Gazette] No DB cache found, generating live');
   }
 
-  // ── 2. Fallback: generate live ────────────────────────────
+  // ── 2. Generate live ─────────────────────────────────────
   console.log(`[Gazette] ⚠️ Cache miss — calling AI`);
   const season = currentSeason?.lg || leagueLabel;
   const tn = (code) =>
     teamNameMap[code] || { city: code, nickname: code, full: code };
 
+  // Hot/cold streak lines
   const hotLines = recentForm.hot
     .slice(0, 5)
     .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
@@ -457,6 +463,8 @@ async function fetchGazetteEdition({
     .slice(0, 5)
     .map((s) => `${tn(s.team).full} [${s.team}]: L${s.count}`)
     .join(' | ');
+
+  // Top scorers
   const scorerLines = topScorers
     .slice(0, 6)
     .map((s) => {
@@ -476,6 +484,7 @@ async function fetchGazetteEdition({
     })
     .join(' | ');
 
+  // Recent games
   const gameLines = (recentGames || [])
     .slice(0, 8)
     .map((g) => {
@@ -487,37 +496,31 @@ async function fetchGazetteEdition({
     })
     .join(' | ');
 
-  const allCodes = [
-    ...new Set([
-      ...recentForm.hot.map((t) => t.team),
-      ...recentForm.cold.map((t) => t.team),
-      ...winStreaks.map((s) => s.team),
-      ...lossStreaks.map((s) => s.team),
-    ]),
+  // Unique teams for traits
+  const relevantTeams = [
+    ...recentForm.hot.map((t) => t.team),
+    ...recentForm.cold.map((t) => t.team),
+    ...winStreaks.map((s) => s.team),
+    ...lossStreaks.map((s) => s.team),
   ];
-  const nameRef = allCodes
+  const uniqueTeams = [...new Set(relevantTeams)];
+
+  // Build traits lines
+  const traitsLines = uniqueTeams
     .map((code) => {
-      const n = tn(code);
-      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
-        n.coach ? `, coach: ${n.coach}` : ''
-      })`;
+      const team = teamNameMap[code]?.full || code;
+      const managerId = teamManagerMap[code]; // team → manager
+      const traits = traitsMap[managerId]; // lookup traits by manager_id
+      const coachName = teams.find((t) => t.abr === code)?.coach;
+
+      if (!traits) return null;
+
+      return `${team} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
     })
+    .filter(Boolean)
     .join('\n');
 
-  const angles = [
-    'hot_streak',
-    'win_streak',
-    'cold_streak',
-    'loss_streak',
-    'big_win',
-    'playoff_push',
-    'milestone',
-    'comeback',
-    'rivalry',
-  ];
-  const angleHint = angles[new Date().getDate() % angles.length];
-
-  // ── Build playoff series summary with traits ───────────────────────────
+  // ── Build playoff series summary ─────────────────────────
   const playoffBlock =
     isPlayoffActive && playoffSeriesData?.length
       ? `
@@ -540,60 +543,43 @@ ${playoffSeriesData
     return `Round ${s.round} | ${teamA} vs ${teamB} | ${statusLine}`;
   })
   .join('\n')}
-- If a team just clinched a series (ADVANCES), that is THE lead story — cover_line must reflect it.
+- If a team just clinched a series (ADVANCES), that is THE lead story.
 - Use story_type "milestone" for a clinch, "playoff_push" for a close series lead.
 - Reference round numbers and series scores in your writing.`
       : '';
 
-  // ── Add traits for featured SUM team ───────────────────────────
-  const relevantTeams = [
-    ...recentForm.hot.map((t) => t.team),
-    ...recentForm.cold.map((t) => t.team),
-    ...winStreaks.map((s) => s.team),
-    ...lossStreaks.map((s) => s.team),
-  ];
-
-  const uniqueTeams = [...new Set(relevantTeams)];
-
-  /*debugging */
-  console.log('managers:', managers);
-  console.log('traitsMap:', traitsMap);
-  console.log('uniqueTeams:', uniqueTeams);
-
-  // Map team codes → coach names from managers
-  const teamCoachMap = (managers || []).reduce((acc, m) => {
-    if (m.coach_name) acc[m.team_code] = m.coach_name;
-    return acc;
-  }, {});
-
-  // Build traits lines for each relevant team
-  const traitsLines = uniqueTeams
+  // ── Build team name references ──────────────────────────
+  const nameRef = [...new Set([...relevantTeams])]
     .map((code) => {
-      const team = teamNameMap[code]?.full || code;
-      const coachName = teamCoachMap[code]; // get coach for this team
-      const traits = traitsMap[coachName]; // lookup parsed traits
-
-      console.log('---');
-      console.log('TEAM:', code);
-      console.log('COACH:', coachName);
-      console.log('TRAITS:', traits);
-
-      if (!traits) return null; // skip if no traits
-
-      return `${team} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
+      const n = tn(code);
+      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
+        n.coach ? `, coach: ${n.coach}` : ''
+      })`;
     })
-    .filter(Boolean)
     .join('\n');
 
-  // ── Full prompt with playoff summary + traits ───────────────────────────
+  const angles = [
+    'hot_streak',
+    'win_streak',
+    'cold_streak',
+    'loss_streak',
+    'big_win',
+    'playoff_push',
+    'milestone',
+    'comeback',
+    'rivalry',
+  ];
+  const angleHint = angles[new Date().getDate() % angles.length];
+
+  // ── Build prompt ───────────────────────────────────────
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
-  Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
-  ${playoffBlock}
+Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
+${playoffBlock}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TEAM TRAITS
-  ${traitsLines}
-  
+TEAM TRAITS
+${traitsLines}
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEAM NAME REFERENCE
 Use the city name OR the nickname in all written text — never the raw code.
@@ -619,33 +605,17 @@ ${
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING RULES
-- Use city OR nickname in all written text — never raw codes. Mix it up naturally.
-- When a coach is listed, you MAY quote them by name. Use coach name in quote_attr when it makes sense.
-- If a scorer has 🎩 HAT TRICK or 🔥 4-GOAL GAME, that IS the story — lead the cover with it.
-- If a scorer has ⭐ BIG NIGHT, mention them prominently in a blurb.
-- Pull quote: if a hat trick or 4-goal game happened, quote that player or their coach.
+- Use city OR nickname in all written text — never raw codes.
+- When a coach is listed, you MAY quote them by name.
+- If a scorer has 🎩 HAT TRICK or 🔥 4-GOAL GAME, that IS the story.
+- If a scorer has ⭐ BIG NIGHT, mention them prominently.
+- Pull quote: if a hat trick or 4-goal game happened, quote that player or coach.
 - Be dramatic and hyperbolic — this is a sports magazine.
-- NEVER invent statistics. Only mention saves, shots, hits, faceoffs, or power play numbers if they appear in the game stats block above.
+- NEVER invent statistics. Only mention listed stats.`;
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Respond ONLY with valid JSON, zero other text:
-{
-"featured_team": "ONE team code from the reference list above — use exact code",
-"story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
-"cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
-"cover_sub": "12-18 words. Punchy supporting line.",
-"blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-"blurb_2": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-"blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-"pull_quote": "12-20 words. Dramatic fake quote.",
-"quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
-"bottom_line": "7-11 words. One punchy verdict on the league.",
-"edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
-    Math.floor(Math.random() * 80) + 1
-  }"
-}`;
+  console.log(traitsLines); // Debug
 
-  console.log(traitsLines); // Log Traits
+  // ── Invoke AI ─────────────────────────────────────────
   const result = await supabase.functions.invoke('gazette-generate', {
     body: { messages: [{ role: 'user', content: prompt }] },
   });
@@ -658,7 +628,7 @@ Respond ONLY with valid JSON, zero other text:
   if (!match) throw new Error('No JSON found in response');
   const data = JSON.parse(match[0]);
 
-  // ── 3. Write back to DB so next user gets it from cache ───
+  // ── Write back to DB cache ───────────────────────────
   try {
     await supabase.from('gazette_cache').upsert({
       league: cacheKey,

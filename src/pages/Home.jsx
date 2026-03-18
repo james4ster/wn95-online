@@ -562,18 +562,14 @@ ${playoffSeriesData
   const traitsLines = relevantTeams
     .map((code) => {
       const managerId = teamManagerMap[code];
-      if (!managerId) return null; // skip if no manager
-      const traits =
-        traitsMap[managerId] ||
-        traitsMap[teams.find((t) => t.abr === code)?.coach];
-      if (!traits) return null; // skip if manager has no traits
+      const traits = traitsMap[managerId];
+      if (!traits) return null; // skip managers without traits
 
-      const coachName = teams.find((t) => t.abr === code)?.coach || 'Unknown';
+      const coachName = teams.find((t) => t.abr === code)?.coach;
       const team = teamNameMap[code]?.full || code;
-
       return `${team} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
     })
-    .filter(Boolean)
+    .filter(Boolean) // removes nulls
     .join('\n');
 
   // ── 11. Build AI prompt ─────────────────────────────────

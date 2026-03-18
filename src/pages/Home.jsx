@@ -754,7 +754,7 @@ function LeagueGazette({
       setLoading(true);
       setError(null);
       try {
-        const managers = await supabase.from('managers').select('*');
+        const { data: managers } = await supabase.from('managers').select('*');
 
         const data = await fetchGazetteEdition({
           leagueLabel,

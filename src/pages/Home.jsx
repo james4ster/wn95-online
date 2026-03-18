@@ -551,6 +551,7 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
+  const relevantTeams = teams.map((t) => t.abr);
   // ── Build traits lines for relevant teams (null-safe)
   const traitsLines = (relevantTeams || [])
     .map((code) => {

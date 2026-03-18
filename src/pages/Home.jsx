@@ -572,14 +572,18 @@ ${playoffSeriesData
   const traitsLines =
     relevantTeams
       .map((code) => {
-        const managerId = teamManagerMap[code];
+        // Try to get managerId from teamManagerMap, fallback to code itself
+        const managerId = teamManagerMap[code] ?? code;
+
+        // Grab traits from traitsMap
         const traits = traitsMap[managerId];
 
-        if (!traits) return null;
+        if (!traits) return `${code} — traits missing`;
 
+        // Grab coach name safely
         const team = teams?.find((t) => t.abr === code) ?? {};
-        const teamName = teamNameMap[code]?.full || code;
         const coachName = team.coach || 'Unknown';
+        const teamName = teamNameMap[code]?.full || code;
 
         return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
       })

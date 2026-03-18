@@ -44,6 +44,7 @@ async function fetchGazetteEdition({
 }) {
   const season = currentSeason?.lg || leagueLabel;
 
+  // Build simple lines for hot/cold teams
   const hotLines = recentForm.hot
     .slice(0, 5)
     .map((t) => `${t.team}:${t.w}W-${t.l}L`)
@@ -70,7 +71,33 @@ async function fetchGazetteEdition({
     ]),
   ];
 
-  // Rotate angle seed daily for variety
+  // --- Load manager traits for these teams from Supabase ---
+  const { data: managersData } = await supabase
+    .from('managers')
+    .select('abr, manager_traits')
+    .in('abr', allTeams);
+
+  const traitsMap = {};
+  managersData?.forEach((m) => {
+    try {
+      traitsMap[m.abr] = JSON.parse(m.manager_traits);
+    } catch {
+      traitsMap[m.abr] = {};
+    }
+  });
+
+  // Prepare a string summarizing each team and manager traits
+  const traitsLines = allTeams
+    .map((team) => {
+      const traits = traitsMap[team] || {};
+      const tStr = Object.entries(traits)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+      return `${team} [${tStr || 'no traits'}]`;
+    })
+    .join('; ');
+
+  // Rotate angle seed daily
   const angles = [
     'hot_streak',
     'win_streak',
@@ -93,6 +120,9 @@ Cold teams (last 10 games): ${coldLines || 'none'}
 Win streaks: ${winLines || 'none'}
 Loss streaks: ${lossLines || 'none'}
 Valid team codes (use EXACTLY): ${allTeams.join(', ') || 'N/A'}
+
+MANAGER TRAITS:
+${traitsLines}
 
 Respond ONLY with valid JSON, zero other text:
 {
@@ -133,7 +163,7 @@ Respond ONLY with valid JSON, zero other text:
     result.data?.text || result.data?.message?.content?.[0]?.text || '';
   const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in response');
-  //return JSON.parse(match[0]);
+
   const parsed = JSON.parse(match[0]);
   console.log('[Gazette JSON]', parsed);
   return parsed;
@@ -255,7 +285,7 @@ function LeagueGazette({
   };
 
   // Derived display values
-  const team = edition?.featured_team || '';
+  const team = edition?.featured_team || ''; //REPLACE WITH '' AFTER TEST
   // If featured_team is a full name, find the matching code
   const teamCode =
     Object.entries(teamNameMap).find(

@@ -1296,9 +1296,17 @@ export default function Standings() {
           overflow-x: visible;
         }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
-        .table-container { overflow-x: auto; border-radius:12px; scrollbar-width: none; }
+        .table-container {
+          overflow-x: auto;
+          display: block;
+          width: 100%;
+        }
         .table-container::-webkit-scrollbar { display: none; }
-        .arcade-table { width:max-content; min-width:100%; border-collapse:separate; border-spacing:0; font-family:'VT323',monospace; }
+        .arcade-table {
+          width: max-content;
+          min-width: 100%;
+          display: inline-table;
+        }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }
         .scoreboard-header::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px); pointer-events:none; }
@@ -1331,7 +1339,12 @@ export default function Standings() {
         .arcade-select:hover:not(:disabled) { border-color:#FFD700; color:#FFD700; transform:translateY(-2px); }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }
         .arcade-select option { background:#1a1a2e; color:#87CEEB; }
-        .scoreboard-frame { background:linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%); border:4px solid #FF0000; border-radius:12px; box-shadow:0 0 20px rgba(255,0,0,.4),0 0 40px rgba(255,0,0,.2),inset 0 0 20px rgba(255,0,0,.1); }
+        .scoreboard-frame {
+          display: inline-block;
+          width: max-content;
+          min-width: 100%;
+          box-sizing: border-box;
+        }
         .arcade-table td,.arcade-table th { box-sizing:border-box; }
         .arcade-table thead { background:linear-gradient(180deg,#FFD700 0%,#FF6347 100%); }
         .arcade-table th { padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease; position:relative; border-right:1px solid rgba(255,255,255,.2); }
@@ -1363,7 +1376,6 @@ export default function Standings() {
         .sort-indicator { font-size:.5rem; animation:bounce .5s ease; }
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
         .arcade-table tbody tr { transition:all .2s ease; position:relative; }
-        .team-cell { overflow: visible !important; }.arcade-table tbody tr { transition:all .2s ease; position:relative; overflow:hidden; }
         .playoff-team .rank-cell::before { content:''; position:absolute; left:-8px; top:-1px; bottom:-1px; width:4px; background:linear-gradient(180deg,#00FF00 0%,#00CC00 100%); box-shadow:0 0 10px rgba(0,255,0,.6); z-index:100; }
         .tied-pts { position:relative; animation: none !important; }
         .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); animation: none !important; }
@@ -1386,7 +1398,13 @@ export default function Standings() {
           -webkit-mask-repeat: no-repeat;
           -webkit-mask-size: 100% 100%;
         }
-        .arcade-table tbody tr:hover .row-banner-overlay { opacity:.28; }
+        .arcade-table tbody tr:hover {
+          transform: translateZ(0) scale(1.01);
+        }
+        .arcade-table td.sorted-cell {
+          background: rgba(255, 140, 0, 0.10) !important;
+          box-shadow: inset 0 0 8px rgba(255, 140, 0, 0.25);
+        }
         .banner-image {
           position: absolute;
           left: 0;
@@ -1403,7 +1421,6 @@ export default function Standings() {
           filter: brightness(1.3);
         }
         .arcade-table tbody tr { position: relative; }
-        .team-cell { position: static !important; overflow: visible !important; }
         .arcade-table tbody tr:hover .banner-image { filter: brightness(1.5); transform:translateY(-50%) scale(1.03); }
         .arcade-table tbody tr.even-row { background:rgba(0,30,60,.4); }
         .arcade-table tbody tr.odd-row { background:rgba(0,20,40,.6); }
@@ -1469,8 +1486,15 @@ export default function Standings() {
           .led-text{font-size:1.2rem;letter-spacing:3px}
           .view-tabs{flex-direction:column;gap:.5rem;padding:.5rem}
           .tab-button{padding:.6rem 1rem;font-size:.55rem;justify-content:center}
-          .arcade-table th{font-size:.5rem;padding:.5rem .25rem}
-          .arcade-table td{font-size:1rem;padding:.5rem .25rem}
+          .arcade-table {
+            width: max-content;
+            min-width: 100%;
+            display: table;
+          }
+          .scoreboard-frame {
+            display: inline-block;   
+            min-width: 100%;
+          }
         }
       `}</style>
     </div>

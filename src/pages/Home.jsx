@@ -420,9 +420,6 @@ async function fetchGazetteEdition({
     return acc;
   }, {});
 
-  console.log('[Gazette] traitsMap keys:', Object.keys(traitsMap));
-  console.log('[Gazette] traitsMap sample:', Object.values(traitsMap)[0] || {});
-
   // ── Map team_code → manager_id
   const teamManagerMap = (teams || []).reduce((acc, t) => {
     if (t.manager_id) acc[t.abr] = t.manager_id;
@@ -565,22 +562,50 @@ ${playoffSeriesData
     ]),
   ];
 
-  // ── Build traits lines safely — skip any team missing manager or traits
+  // ── Determine featured team (just clinched, fallback to first relevant hot team)
+  let featuredTeam;
+  if (isPlayoffActive && playoffSeriesData?.length) {
+    const clinched = playoffSeriesData.find(
+      (s) =>
+        (s.wins_a ?? 0) >= Math.ceil((s.series_length ?? 7) / 2) ||
+        (s.wins_b ?? 0) >= Math.ceil((s.series_length ?? 7) / 2)
+    );
+    featuredTeam = clinched
+      ? clinched.wins_a >= Math.ceil((clinched.series_length ?? 7) / 2)
+        ? clinched.team_code_a
+        : clinched.team_code_b
+      : playoffSeriesData[0].team_code_a;
+  } else {
+    // fallback to first hot team
+    featuredTeam =
+      (recentForm?.hot?.[0]?.team ||
+        (winStreaks?.[0]?.team ?? null) ||
+        relevantTeams?.[0]) ??
+      null;
+  }
+
+  // ── Build dynamic traits lines for all relevant teams
   const traitsLines =
     relevantTeams
       .map((code) => {
         const managerId = teamManagerMap[code];
         if (!managerId || !traitsMap[managerId]) return null; // skip missing
         const traits = traitsMap[managerId];
-        const coachName =
-          (teams.find((t) => t.abr === code) ?? {}).coach || 'Unknown';
         const teamName = teamNameMap[code]?.full || code;
-        return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
+        const coachName =
+          (teams.find((t) => t.abr === code) || {}).coach || 'Unknown';
+        return `${teamName} (${code}) — coached by ${coachName}, media: ${traits.media}, style: ${traits.style}, philosophy: ${traits.philosophy}, temperament: ${traits.temperament}`;
       })
       .filter(Boolean)
       .join('\n') || 'No traits available';
 
-  console.log('[Gazette] Traits lines:\n', traitsLines);
+  // ── Featured team traits for bottom_line
+  const featuredTraits =
+    featuredTeam &&
+    teamManagerMap[featuredTeam] &&
+    traitsMap[teamManagerMap[featuredTeam]]
+      ? traitsMap[teamManagerMap[featuredTeam]]
+      : {};
 
   // ── Build prompt
   const angles = [
@@ -641,16 +666,12 @@ WRITING RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Respond ONLY with valid JSON, zero other text:
 {
-"featured_team": "ONE team code from the reference list above — use exact code",
-"story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
-"cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
-"cover_sub": "12-18 words. Punchy supporting line.",
-"blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-"blurb_2": { "tag": "2-3 ALL CAPS WORDS", "headline": "6-9 words", "detail": "8-12 words" },
-"blurb_3": { "tag": "2-3 ALL CAPS WORDS", "headline": "6-9 words", "detail": "8-12 words" },
-"pull_quote": "12-20 words. Dramatic fake quote.",
-"quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
-"bottom_line": "7-11 words. Use the manager traits for tone.",
+"featured_team": "${featuredTeam}",
+"bottom_line": "Manager traits: ${featuredTraits.media || 'unknown'}, ${
+    featuredTraits.style || 'unknown'
+  }, ${featuredTraits.philosophy || 'unknown'}, ${
+    featuredTraits.temperament || 'unknown'
+  }",
 "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
     Math.floor(Math.random() * 80) + 1
   }"

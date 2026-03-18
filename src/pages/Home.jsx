@@ -505,7 +505,6 @@ async function fetchGazetteEdition({
   ];
   const angleHint = angles[new Date().getDate() % angles.length];
 
-  // ── Build playoff series summary ───────────────────────────
   // ── Build playoff series summary with traits ───────────────────────────
   const playoffBlock =
     isPlayoffActive && playoffSeriesData?.length
@@ -540,17 +539,12 @@ ${playoffSeriesData
     : []
   ).length
     ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TEAM TRAITS (DO NOT INVENT)
-${Object.entries(traitsMap)
-  .map(([teamCode, traits]) => {
-    const name = teamNameMap[teamCode]?.full || teamCode;
-    const traitText = Object.entries(traits)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join(', ');
-    return `${name}: ${traitText || 'no traits'}`;
-  })
-  .join('\n')}`
+    ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    TEAM TRAITS — FOCUS ON SUM
+    SUM (${teamNameMap['SUM']?.full || 'Sumter Trash'}):
+    ${Object.entries(traitsMap['SUM'])
+      .map(([trait, value]) => `- ${trait}: ${value}`)
+      .join('\n')}`
     : '';
 
   // ── Full prompt with playoff summary + traits ───────────────────────────

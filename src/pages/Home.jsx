@@ -560,20 +560,27 @@ ${playoffSeriesData
   console.log('traitsMap:', traitsMap);
   console.log('uniqueTeams:', uniqueTeams);
 
+  // Map team codes → coach names from managers
+  const teamCoachMap = (managers || []).reduce((acc, m) => {
+    if (m.coach_name) acc[m.team_code] = m.coach_name;
+    return acc;
+  }, {});
+
+  // Build traits lines for each relevant team
   const traitsLines = uniqueTeams
     .map((code) => {
       const team = teamNameMap[code]?.full || code;
-      const coach = teamNameMap[code]?.coach;
-      const traits = traitsMap[coach];
+      const coachName = teamCoachMap[code]; // get coach for this team
+      const traits = traitsMap[coachName]; // lookup parsed traits
 
       console.log('---');
       console.log('TEAM:', code);
-      console.log('COACH:', coach);
+      console.log('COACH:', coachName);
       console.log('TRAITS:', traits);
 
-      if (!traits) return null;
+      if (!traits) return null; // skip if no traits
 
-      return `${team} (${code}) — coached by ${coach}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
+      return `${team} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
     })
     .filter(Boolean)
     .join('\n');

@@ -404,29 +404,26 @@ async function fetchGazetteEdition({
   const today = todayStamp();
   const season = currentSeason?.lg || leagueLabel;
 
-  // Map manager_id → traits safely
+  // ── 1. Build traits map safely ─────────────────────────────
   const traitsMap = managers.reduce((acc, m) => {
-    if (!m.id || !m.manager_traits) return acc; // skip if no id or traits
-
-    // Parse only if it's a string (jsonb might already be object)
+    if (!m.id || !m.manager_traits) return acc; // skip if missing id or traits
     acc[m.id] =
       typeof m.manager_traits === 'string'
         ? JSON.parse(m.manager_traits)
         : m.manager_traits;
-
     return acc;
   }, {});
 
-  // Map team_code → manager_id
+  // ── 2. Build team → manager map safely ────────────────────
   const teamManagerMap = teams.reduce((acc, t) => {
-    if (t.manager_id) acc[t.abr] = t.manager_id;
+    if (t.manager_id && t.abr) acc[t.abr] = t.manager_id;
     return acc;
   }, {});
 
-  // Cache key (use different for playoffs)
+  // ── 3. Cache key ─────────────────────────────────────────
   const cacheKey = isPlayoffActive ? `${leagueLabel}_playoff` : leagueLabel;
 
-  // ── 1. Check DB cache ─────────────────────────────
+  // ── 4. Check DB cache ───────────────────────────────────
   try {
     const { data: cached } = await supabase
       .from('gazette_cache')
@@ -449,7 +446,7 @@ async function fetchGazetteEdition({
   const tn = (code) =>
     teamNameMap[code] || { city: code, nickname: code, full: code };
 
-  // ── Build hot/cold/win/loss streak lines
+  // ── 5. Build hot/cold/win/loss streak lines ──────────────
   const hotLines = recentForm.hot
     .slice(0, 5)
     .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
@@ -467,7 +464,7 @@ async function fetchGazetteEdition({
     .map((s) => `${tn(s.team).full} [${s.team}]: L${s.count}`)
     .join(' | ');
 
-  // ── Top scorers
+  // ── 6. Top scorers ───────────────────────────────────────
   const scorerLines = topScorers
     .slice(0, 6)
     .map((s) => {
@@ -487,19 +484,18 @@ async function fetchGazetteEdition({
     })
     .join(' | ');
 
-  // ── Recent games
+  // ── 7. Recent games ──────────────────────────────────────
   const gameLines = (recentGames || [])
     .slice(0, 8)
-    .map((g) => {
-      const home = tn(g.home).full;
-      const away = tn(g.away).full;
-      return `${home} ${g.score_home}-${g.score_away} ${away}${
-        g.ot ? ' (OT)' : ''
-      }`;
-    })
+    .map(
+      (g) =>
+        `${tn(g.home).full} ${g.score_home}-${g.score_away} ${tn(g.away).full}${
+          g.ot ? ' (OT)' : ''
+        }`
+    )
     .join(' | ');
 
-  // ── Name references
+  // ── 8. Name references ───────────────────────────────────
   const allCodes = [
     ...new Set([
       ...recentForm.hot.map((t) => t.team),
@@ -531,7 +527,7 @@ async function fetchGazetteEdition({
   ];
   const angleHint = angles[new Date().getDate() % angles.length];
 
-  // ── Build playoff summary
+  // ── 9. Playoff block ─────────────────────────────────────
   const playoffBlock =
     isPlayoffActive && playoffSeriesData?.length
       ? `
@@ -559,7 +555,9 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
-  // Build traits lines for each team in your relevant list
+  // ── 10. Relevant teams for traits ────────────────────────
+  const relevantTeams = allCodes;
+
   const traitsLines = relevantTeams
     .map((code) => {
       const managerId = teamManagerMap[code];
@@ -567,7 +565,6 @@ ${playoffSeriesData
 
       const traits = traitsMap[managerId];
       const coachName = teams.find((t) => t.abr === code)?.coach;
-
       if (!traits) return null;
 
       const team = teamNameMap[code]?.full || code;
@@ -576,7 +573,7 @@ ${playoffSeriesData
     .filter(Boolean)
     .join('\n');
 
-  // ── Build prompt
+  // ── 11. Build AI prompt ─────────────────────────────────
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
 Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
 ${playoffBlock}
@@ -638,6 +635,7 @@ Respond ONLY with valid JSON, zero other text:
 
   console.log('Traits lines:\n', traitsLines);
 
+  // ── 12. Call AI function ───────────────────────────────
   const result = await supabase.functions.invoke('gazette-generate', {
     body: { messages: [{ role: 'user', content: prompt }] },
   });
@@ -650,7 +648,7 @@ Respond ONLY with valid JSON, zero other text:
   if (!match) throw new Error('No JSON found in response');
   const data = JSON.parse(match[0]);
 
-  // ── Write back to DB cache
+  // ── 13. Write back to DB cache ──────────────────────────
   try {
     await supabase.from('gazette_cache').upsert({
       league: cacheKey,

@@ -565,21 +565,20 @@ ${playoffSeriesData
   ];
 
   // ── Build traits lines for relevant teams (null-safe)
-  const traitsLines = (relevantTeams || [])
-    .map((code) => {
-      const managerId = teamManagerMap[code];
-      if (!managerId) return null;
+  const traitsLines =
+    relevantTeams
+      .map((code) => {
+        const managerId = teamManagerMap[code];
+        const traits = traitsMap[managerId];
+        const coachName = teams.find((t) => t.abr === code)?.coach;
 
-      const traits = traitsMap[managerId];
-      const coachName = teams.find((t) => t.abr === code)?.coach;
+        if (!traits) return null; // skip if no traits
 
-      if (!traits) return null;
-
-      const team = teamNameMap[code]?.full || code;
-      return `${team} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
-    })
-    .filter(Boolean)
-    .join('\n');
+        const teamName = teamNameMap[code]?.full || code;
+        return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
+      })
+      .filter(Boolean)
+      .join('\n') || 'No traits available';
 
   console.log('[Gazette] Traits lines:\n', traitsLines);
 
@@ -637,6 +636,7 @@ WRITING RULES
 - Pull quote: if a hat trick or 4-goal game happened, quote that player or their coach.
 - Be dramatic and hyperbolic — this is a sports magazine.
 - NEVER invent statistics. Only mention saves, shots, hits, faceoffs, or power play numbers if they appear in the game stats block above.
+- ENSURE the manager traits are used in the quote or bottom line
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Respond ONLY with valid JSON, zero other text:
@@ -650,7 +650,7 @@ Respond ONLY with valid JSON, zero other text:
 "blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
 "pull_quote": "12-20 words. Dramatic fake quote.",
 "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
-"bottom_line": "7-11 words. One punchy verdict on the league.",
+"bottom_line": "7-11 words. Use the manager traits for tone.",
 "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
     Math.floor(Math.random() * 80) + 1
   }"

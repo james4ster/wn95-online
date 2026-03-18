@@ -72,20 +72,22 @@ async function fetchGazetteEdition({
   ];
 
   // --- Load manager traits for these teams from Supabase ---
+  console.log('allTeams', allTeams);
   const { data: managersData } = await supabase
     .from('managers')
     .select('abr, manager_traits')
     .in('abr', allTeams);
 
   const traitsMap = {};
+  console.log('managersData', managersData);
   managersData?.forEach((m) => {
     try {
       traitsMap[m.abr] = JSON.parse(m.manager_traits);
-      console.log('traitsMap', traitsMap);
     } catch {
       traitsMap[m.abr] = {};
     }
   });
+  console.log('traitsMap after loop', traitsMap);
 
   // Prepare a string summarizing each team and manager traits
   const traitsLines = allTeams

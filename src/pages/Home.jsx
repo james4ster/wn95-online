@@ -408,7 +408,9 @@ async function fetchGazetteEdition({
   const traitsMap = (managers || []).reduce((acc, m) => {
     if (m?.manager_traits) {
       try {
-        acc[m.id] =
+        // use manager_id if available, fallback to coach_name
+        const key = m.id ?? m.coach_name;
+        acc[key] =
           typeof m.manager_traits === 'string'
             ? JSON.parse(m.manager_traits)
             : m.manager_traits;
@@ -424,7 +426,7 @@ async function fetchGazetteEdition({
 
   // ── Map team_code → manager_id
   const teamManagerMap = (teams || []).reduce((acc, t) => {
-    if (t.manager_id) acc[t.abr] = t.manager_id;
+    if (t.manager_id) acc[t.abr] = t.manager_id; // this must match traitsMap key
     return acc;
   }, {});
 
@@ -568,11 +570,11 @@ ${playoffSeriesData
   const traitsLines =
     relevantTeams
       .map((code) => {
-        const managerId = teamManagerMap[code];
-        const traits = traitsMap[managerId];
-        const coachName = teams.find((t) => t.abr === code)?.coach;
+        const managerKey = teamManagerMap[code];
+        const traits = traitsMap[managerKey];
+        const coachName = teams.find((t) => t.abr === code)?.coach ?? 'Unknown';
 
-        if (!traits) return null; // skip if no traits
+        if (!traits) return null;
 
         const teamName = teamNameMap[code]?.full || code;
         return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;

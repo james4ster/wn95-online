@@ -555,11 +555,7 @@ ${playoffSeriesData
 
   const uniqueTeams = [...new Set(relevantTeams)];
 
-  const traitsBlock = isPlayoffActive
-    ? `
-  ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TEAM TRAITS
-  ${uniqueTeams
+  const traitsLines = uniqueTeams
     .map((code) => {
       const team = teamNameMap[code]?.full || code;
       const coach = teamNameMap[code]?.coach;
@@ -567,21 +563,20 @@ ${playoffSeriesData
 
       if (!traits) return null;
 
-      return `${team} (${code}) — Coach ${coach}:
-  ${Object.entries(traits)
-    .map(([trait, val]) => `- ${trait}: ${val}`)
-    .join('\n')}`;
+      return `${team} (${code}) — coached by ${coach}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
     })
     .filter(Boolean)
-    .join('\n\n')}`
-    : '';
+    .join('\n');
 
   // ── Full prompt with playoff summary + traits ───────────────────────────
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
   Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
   ${playoffBlock}
-  ${traitsBlock}
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TEAM TRAITS
+  ${traitsLines}
+  
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEAM NAME REFERENCE
 Use the city name OR the nickname in all written text — never the raw code.
@@ -633,6 +628,7 @@ Respond ONLY with valid JSON, zero other text:
   }"
 }`;
 
+  console.log(traitsLines); // Log Traits
   const result = await supabase.functions.invoke('gazette-generate', {
     body: { messages: [{ role: 'user', content: prompt }] },
   });
@@ -754,7 +750,20 @@ function LeagueGazette({
       setLoading(true);
       setError(null);
       try {
-        const { data: managers } = await supabase.from('managers').select('*');
+        const { data: managers } = await supabase
+          .from('managers')
+          .select('coach_name, manager_traits');
+
+        const traitsMap = (managers || []).reduce((acc, m) => {
+          if (m.manager_traits) {
+            try {
+              acc[m.coach_name] = JSON.parse(m.manager_traits);
+            } catch (e) {
+              console.warn(`Bad traits JSON for ${m.coach_name}`);
+            }
+          }
+          return acc;
+        }, {});
 
         const data = await fetchGazetteEdition({
           leagueLabel,

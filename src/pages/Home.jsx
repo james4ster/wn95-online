@@ -555,11 +555,21 @@ ${playoffSeriesData
 
   const uniqueTeams = [...new Set(relevantTeams)];
 
+  /*debugging */
+  console.log('managers:', managers);
+  console.log('traitsMap:', traitsMap);
+  console.log('uniqueTeams:', uniqueTeams);
+
   const traitsLines = uniqueTeams
     .map((code) => {
       const team = teamNameMap[code]?.full || code;
       const coach = teamNameMap[code]?.coach;
       const traits = traitsMap[coach];
+
+      console.log('---');
+      console.log('team code:', code);
+      console.log('coach:', coach);
+      console.log('traits found:', traits);
 
       if (!traits) return null;
 

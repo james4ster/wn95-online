@@ -1,4 +1,3 @@
-/* Testing traits */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';
@@ -406,9 +405,10 @@ async function fetchGazetteEdition({
   const season = currentSeason?.lg || leagueLabel;
 
   // ── 1. Build traits map safely ─────────────────────────────
-  const traitsMap = managers.reduce((acc, m) => {
-    if (!m.id || !m.manager_traits) return acc; // skip if missing id or traits
-    acc[m.id] =
+  const traitsMap = (managers || []).reduce((acc, m) => {
+    const key = m.id || m.coach_name; // fallback to coach_name if id is missing
+    if (!m.manager_traits) return acc;
+    acc[key] =
       typeof m.manager_traits === 'string'
         ? JSON.parse(m.manager_traits)
         : m.manager_traits;
@@ -563,7 +563,9 @@ ${playoffSeriesData
     .map((code) => {
       const managerId = teamManagerMap[code];
       if (!managerId) return null; // skip if no manager
-      const traits = traitsMap[managerId];
+      const traits =
+        traitsMap[managerId] ||
+        traitsMap[teams.find((t) => t.abr === code)?.coach];
       if (!traits) return null; // skip if manager has no traits
 
       const coachName = teams.find((t) => t.abr === code)?.coach || 'Unknown';

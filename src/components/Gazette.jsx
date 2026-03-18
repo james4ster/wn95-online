@@ -285,7 +285,7 @@ function LeagueGazette({
   };
 
   // Derived display values
-  const team = edition?.featured_team || ''; //REPLACE WITH '' AFTER TEST
+  const team = edition?.featured_team || 'SUM'; //REPLACE WITH '' AFTER TEST
   // If featured_team is a full name, find the matching code
   const teamCode =
     Object.entries(teamNameMap).find(

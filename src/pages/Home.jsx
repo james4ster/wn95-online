@@ -1201,10 +1201,8 @@ function LeagueGazette({
 
           {/* ── BOTTOM LINE ─────────────────────────────── */}
           <div className="si-footer">
-            <hr className="si-hr si-hr-short" />
             <span className="si-footer-label">BOTTOM LINE</span>
             <span className="si-footer-text">{edition.bottom_line}</span>
-            <hr className="si-hr si-hr-short" />
           </div>
         </div>
       ) : null}
@@ -1496,22 +1494,24 @@ function LeagueGazette({
         @keyframes achPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
 
         .si-footer {
-          display:flex; align-items:center; gap:.55rem;
-          padding:.38rem .9rem .42rem;
+          display:flex; flex-direction:column; align-items:center; gap:.18rem;
+          padding:.45rem .9rem .5rem;
           border-top:1px solid var(--si-border);
           background:rgba(255,255,255,.012);
+          text-align:center;
+        }
+        .si-footer-text {
+          font-family:'VT323',monospace; font-size:19px;
+          color:rgba(190,184,168,.65); letter-spacing:.4px; font-style:italic;
+          white-space:normal; word-break:break-word; text-align:center;
+          width:100%;
         }
         .si-footer-label {
           font-family:'Press Start 2P',monospace; font-size:6.5px;
           color:var(--acc); letter-spacing:2px; flex-shrink:0;
           text-shadow:0 0 8px color-mix(in srgb,var(--acc) 45%,transparent);
         }
-        .si-footer-text {
-          font-family:'VT323',monospace; font-size:19px;
-          color:rgba(190,184,168,.65); letter-spacing:.4px; font-style:italic;
-          flex-shrink:0;
-        }
-
+        
         .si-skel { padding:.7rem .9rem .8rem; }
         .si-skel-cover {
           display:flex; flex-direction:column; align-items:center;

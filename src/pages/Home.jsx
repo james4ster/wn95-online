@@ -752,16 +752,7 @@ function LeagueGazette({
       ? `${leagueLabel}_playoff`
       : leagueLabel;
 
-    // ── Tier 1: localStorage (instant, no network) ──────────────────────────
-    try {
-      const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-      if (c.date === today && c.league === effectiveCacheKey && c.data) {
-        setEdition(c.data);
-        return;
-      }
-    } catch {}
-
-    // ── Tier 2: gazette_cache table (cron-warmed, shared across all users) ──
+    // ── Tier 1: gazette_cache table (single source of truth) ────────────────
     try {
       const { data: cached } = await supabase
         .from('gazette_cache')
@@ -771,23 +762,12 @@ function LeagueGazette({
         .single();
 
       if (cached?.data) {
-        // Seed localStorage so this visitor is instant on next load
-        localStorage.setItem(
-          GAZETTE_CACHE_KEY,
-          JSON.stringify({
-            date: today,
-            league: effectiveCacheKey,
-            data: cached.data,
-          })
-        );
         setEdition(cached.data);
         return;
       }
     } catch {}
 
-    // ── Tier 3: no cache row exists — generate fresh ────────────────────────
-    // This only runs when gazette_cache has no row for today (e.g. after
-    // manually deleting a row for testing, or before the cron has run).
+    // ── Tier 2: no cache row — generate fresh ────────────────────────────────
     setLoading(true);
     setError(null);
 
@@ -808,14 +788,6 @@ function LeagueGazette({
         teams,
       });
 
-      // Write to localStorage for this visitor
-      localStorage.setItem(
-        GAZETTE_CACHE_KEY,
-        JSON.stringify({ date: today, league: effectiveCacheKey, data })
-      );
-
-      // Write back to gazette_cache so ALL subsequent visitors get this edition
-      // without triggering another generation
       supabase
         .from('gazette_cache')
         .upsert({

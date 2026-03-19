@@ -745,86 +745,113 @@ function LeagueGazette({
   const [edition, setEdition] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(
-    async (force = false) => {
-      const today = todayStamp();
-      const effectiveCacheKey = isPlayoffActive
-        ? `${leagueLabel}_playoff`
-        : leagueLabel;
+  const load = useCallback(async () => {
+    const today = todayStamp();
+    const effectiveCacheKey = isPlayoffActive
+      ? `${leagueLabel}_playoff`
+      : leagueLabel;
 
-      if (!force) {
-        try {
-          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-          if (c.date === today && c.league === effectiveCacheKey && c.data) {
-            setEdition(c.data);
-            return;
-          }
-        } catch {}
+    // ── Tier 1: localStorage (instant, no network) ──────────────────────────
+    try {
+      const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
+      if (c.date === today && c.league === effectiveCacheKey && c.data) {
+        setEdition(c.data);
+        return;
       }
+    } catch {}
 
-      setLoading(true);
-      setError(null);
+    // ── Tier 2: gazette_cache table (cron-warmed, shared across all users) ──
+    try {
+      const { data: cached } = await supabase
+        .from('gazette_cache')
+        .select('data')
+        .eq('league', effectiveCacheKey)
+        .eq('date', today)
+        .single();
 
-      try {
-        // NOTE: managers and teams now come from props — no fetch needed here.
-        // This removes the bug where `id` was missing from the select, causing
-        // every manager to be skipped in the traitsMap reduce.
-
-        const data = await fetchGazetteEdition({
-          leagueLabel,
-          currentSeason,
-          teamNameMap,
-          recentForm,
-          winStreaks,
-          lossStreaks,
-          isPlayoffActive,
-          playoffSeriesData,
-          recentGames,
-          topScorers,
-          gameStats,
-          managers, // ← from props, fetched in loadLeagueData with `id` included
-          teams, // ← from props
-        });
-
+      if (cached?.data) {
+        // Seed localStorage so this visitor is instant on next load
         localStorage.setItem(
           GAZETTE_CACHE_KEY,
-          JSON.stringify({ date: today, league: effectiveCacheKey, data })
+          JSON.stringify({
+            date: today,
+            league: effectiveCacheKey,
+            data: cached.data,
+          })
         );
-        setEdition(data);
-      } catch (e) {
-        console.error('[Gazette]', e);
-        setError(true);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+        setEdition(cached.data);
+        return;
       }
-    },
-    [
-      leagueLabel,
-      recentForm,
-      winStreaks,
-      lossStreaks,
-      currentSeason,
-      teamNameMap,
-      topScorers,
-      isPlayoffActive,
-      playoffSeriesData,
-      gameStats,
-      managers, // ← add to dep array
-      teams, // ← add to dep array
-    ]
-  );
+    } catch {}
+
+    // ── Tier 3: no cache row exists — generate fresh ────────────────────────
+    // This only runs when gazette_cache has no row for today (e.g. after
+    // manually deleting a row for testing, or before the cron has run).
+    setLoading(true);
+    setError(null);
+
+    try {
+      const data = await fetchGazetteEdition({
+        leagueLabel,
+        currentSeason,
+        teamNameMap,
+        recentForm,
+        winStreaks,
+        lossStreaks,
+        isPlayoffActive,
+        playoffSeriesData,
+        recentGames,
+        topScorers,
+        gameStats,
+        managers,
+        teams,
+      });
+
+      // Write to localStorage for this visitor
+      localStorage.setItem(
+        GAZETTE_CACHE_KEY,
+        JSON.stringify({ date: today, league: effectiveCacheKey, data })
+      );
+
+      // Write back to gazette_cache so ALL subsequent visitors get this edition
+      // without triggering another generation
+      supabase
+        .from('gazette_cache')
+        .upsert({
+          league: effectiveCacheKey,
+          date: today,
+          data: data,
+          created_at: new Date().toISOString(),
+        })
+        .then(() => {})
+        .catch(() => {});
+
+      setEdition(data);
+    } catch (e) {
+      console.error('[Gazette]', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [
+    leagueLabel,
+    recentForm,
+    winStreaks,
+    lossStreaks,
+    currentSeason,
+    teamNameMap,
+    topScorers,
+    isPlayoffActive,
+    playoffSeriesData,
+    gameStats,
+    managers,
+    teams,
+  ]);
 
   useEffect(() => {
     if (!dataLoading) load();
   }, [dataLoading, leagueLabel]);
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    load(true);
-  };
 
   const team = edition?.featured_team || '';
   // Resolve to a team code even if AI returned a full name
@@ -857,6 +884,7 @@ function LeagueGazette({
       style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}
     >
       {/* ══ MASTHEAD ══════════════════════════════════════════ */}
+      const mastheadJSX = (
       <header className="si-mast">
         <div className="si-mast-left">
           <img
@@ -881,25 +909,11 @@ function LeagueGazette({
           {edition?.edition && (
             <span className="si-issue">{edition.edition}</span>
           )}
-          <button
-            className="si-refresh"
-            onClick={handleRefresh}
-            disabled={loading || refreshing}
-          >
-            <span
-              style={{
-                display: 'inline-block',
-                animation: refreshing ? 'siSpin .7s linear infinite' : 'none',
-              }}
-            >
-              ↻
-            </span>
-          </button>
+          {/* Refresh button removed — cron controls updates, no user-triggered regeneration */}
         </div>
       </header>
-
+      );
       <div className="si-accent-rule" />
-
       {/* ══ BODY ══════════════════════════════════════════════ */}
       {loading && !edition ? (
         <GazetteSkeleton />
@@ -1124,14 +1138,11 @@ function LeagueGazette({
 
           {/* ── BOTTOM LINE ─────────────────────────────── */}
           <div className="si-footer">
-            <hr className="si-hr si-hr-short" />
             <span className="si-footer-label">BOTTOM LINE</span>
             <span className="si-footer-text">{edition.bottom_line}</span>
-            <hr className="si-hr si-hr-short" />
           </div>
         </div>
       ) : null}
-
       <style>{`
         .si-wrap {
           --si-bg:      #09090e;
@@ -1187,20 +1198,8 @@ function LeagueGazette({
           font-family:'VT323',monospace; font-size:13px;
           color:rgba(255,255,255,.72); letter-spacing:.5px; white-space:nowrap;
         }
-        .si-refresh {
-          font-family:'Press Start 2P',monospace; font-size:9px;
-          color:rgba(255,255,255,.3); background:rgba(255,255,255,.035);
-          border:1px solid rgba(255,255,255,.07); border-radius:4px;
-          padding:.2rem .45rem; cursor:pointer; transition:all .15s; line-height:1;
-          white-space:nowrap;
-        }
-        .si-refresh:hover:not(:disabled) {
-          color:rgba(255,255,255,.65); border-color:rgba(255,255,255,.18);
-          background:rgba(255,255,255,.06);
-        }
-        .si-refresh:disabled { opacity:.3; cursor:not-allowed; }
-        @keyframes siSpin { to{transform:rotate(360deg);} }
-
+        
+        
         .si-accent-rule {
           height:3px;
           background:linear-gradient(90deg, transparent 0%, var(--acc) 20%, color-mix(in srgb,var(--acc) 60%,#fff) 50%, var(--acc) 80%, transparent 100%);
@@ -1419,10 +1418,11 @@ function LeagueGazette({
         @keyframes achPulse { 0%,100%{opacity:1} 50%{opacity:.55} }
 
         .si-footer {
-          display:flex; align-items:center; gap:.55rem;
-          padding:.38rem .9rem .42rem;
+          display:flex; flex-direction:column; align-items:center; gap:.18rem;
+          padding:.45rem .9rem .5rem;
           border-top:1px solid var(--si-border);
           background:rgba(255,255,255,.012);
+          text-align:center;
         }
         .si-footer-label {
           font-family:'Press Start 2P',monospace; font-size:6.5px;
@@ -1432,7 +1432,8 @@ function LeagueGazette({
         .si-footer-text {
           font-family:'VT323',monospace; font-size:19px;
           color:rgba(190,184,168,.65); letter-spacing:.4px; font-style:italic;
-          flex-shrink:0;
+          white-space:normal; word-break:break-word; text-align:center;
+          width:100%;
         }
 
         .si-skel { padding:.7rem .9rem .8rem; }
@@ -1471,7 +1472,7 @@ function LeagueGazette({
         }
 
         .si-fadein { animation:siFadeIn .35s ease; }
-        .si-fading { opacity:.4; transition:opacity .25s; }
+        
         @keyframes siFadeIn {
           from{opacity:0;transform:translateY(3px);}
           to{opacity:1;transform:translateY(0);}

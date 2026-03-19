@@ -1256,7 +1256,6 @@ function buildTeamStats(rows) {
     home.pp_amt += Number(g.home_pp_amt || 0);
     home.pp_shots += Number(g.home_pp_shots || 0);
     home.sh_g += Number(g.home_shg || 0);
-    home.ot_g += Number(g.home_ot_g || 0);
     home.ps_att += Number(g.home_ps || 0);
     home.ps_g += Number(g.home_psg || 0);
     home.fo_won += Number(g.home_fow || 0);
@@ -1279,8 +1278,6 @@ function buildTeamStats(rows) {
     home.p2_ga += Number(g.away_2p_g || 0);
     home.p3_gf += Number(g.home_3p_g || 0);
     home.p3_ga += Number(g.away_3p_g || 0);
-    home.ot_gf += Number(g.home_ot_g || 0);
-    home.ot_ga += Number(g.away_ot_g || 0);
 
     // --- AWAY ---
     away.gp++;
@@ -1292,7 +1289,6 @@ function buildTeamStats(rows) {
     away.pp_amt += Number(g.away_pp_amt || 0);
     away.pp_shots += Number(g.away_pp_shots || 0);
     away.sh_g += Number(g.away_shg || 0);
-    away.ot_g += Number(g.away_ot_g || 0);
     away.ps_att += Number(g.away_ps || 0);
     away.ps_g += Number(g.away_psg || 0);
     away.fo_won += Number(g.away_fow || 0);
@@ -1317,6 +1313,17 @@ function buildTeamStats(rows) {
     away.p3_ga += Number(g.home_3p_g || 0);
     away.ot_gf += Number(g.away_ot_g || 0);
     away.ot_ga += Number(g.home_ot_g || 0);
+
+    // Derive OT goals from ot_flag — winner always scores exactly 1 OT goal
+    if (Number(g.ot_flag) === 1) {
+      const homeWon = Number(g.home_score || 0) > Number(g.away_score || 0);
+      home.ot_g += homeWon ? 1 : 0;
+      away.ot_g += homeWon ? 0 : 1;
+      home.ot_gf += homeWon ? 1 : 0;
+      home.ot_ga += homeWon ? 0 : 1;
+      away.ot_gf += homeWon ? 0 : 1;
+      away.ot_ga += homeWon ? 1 : 0;
+    }
   }
 
   return Array.from(m.values()).map((s) => {

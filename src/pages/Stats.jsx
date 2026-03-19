@@ -2350,7 +2350,7 @@ export default function Stats() {
       supabase
         .from('playoff_games')
         .select(
-          'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score'
+          'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score, ot_flag'
         )
         .not('team_a_score', 'is', null),
       supabase
@@ -2396,7 +2396,7 @@ export default function Stats() {
         coach_away: teamCoachMap.get(g.team_code_b?.trim().toUpperCase()) || '',
         score_home: g.team_a_score,
         score_away: g.team_b_score,
-        ot: 0,
+        ot: g.ot_flag === 1 ? 1 : 0,
         _isPlayoff: true,
         round: g.round,
         series_number: g.series_number,

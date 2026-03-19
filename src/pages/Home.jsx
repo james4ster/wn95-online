@@ -394,37 +394,41 @@ async function fetchGazetteEdition({
   winStreaks,
   lossStreaks,
   playoffSeriesData,
-  managers,
-  teams,
+  isPlayoffActive,
+  recentGames,
+  topScorers,
+  gameStats,
+  managers, // NEW — passed in from LeagueGazette props
+  teams, // NEW — passed in from LeagueGazette props
 }) {
-  const today = new Date().toISOString().split('T')[0];
   const season = currentSeason?.lg || leagueLabel;
 
-  // ── Build maps for easy lookup
+  // ── 1. Build traitsMap: manager id → parsed traits object ────────────────
+  // managers must be fetched with `id` included (see load() fix below)
   const traitsMap = (managers || []).reduce((acc, m) => {
-    if (m?.manager_traits) {
-      try {
-        acc[m.id] =
-          typeof m.manager_traits === 'string'
-            ? JSON.parse(m.manager_traits)
-            : m.manager_traits;
-      } catch (err) {
-        console.warn('[Gazette] Failed to parse traits for', m.coach_name, err);
-      }
+    if (!m?.id || !m?.manager_traits) return acc;
+    try {
+      acc[m.id] =
+        typeof m.manager_traits === 'string'
+          ? JSON.parse(m.manager_traits)
+          : m.manager_traits;
+    } catch (err) {
+      console.warn('[Gazette] Failed to parse traits for', m.coach_name, err);
     }
     return acc;
   }, {});
 
+  // ── 2. Build teamManagerMap: team abr → manager id ───────────────────────
   const teamManagerMap = (teams || []).reduce((acc, t) => {
     if (t.manager_id) acc[t.abr] = t.manager_id;
     return acc;
   }, {});
 
-  // ── Determine featured team
+  // ── 3. Determine featured team ───────────────────────────────────────────
   let featuredTeamCode = null;
 
-  if (playoffSeriesData?.length) {
-    // Pick the team that just clinched a series (ADVANCES)
+  if (isPlayoffActive && (playoffSeriesData || []).length) {
+    // Prefer a team that just clinched
     for (const s of playoffSeriesData) {
       const needed = Math.ceil((s.series_length ?? 7) / 2);
       if (s.wins_a >= needed) {
@@ -437,33 +441,219 @@ async function fetchGazetteEdition({
       }
     }
   }
-  // Fallback to hottest team if no playoff clinch
   if (!featuredTeamCode && recentForm?.hot?.length) {
     featuredTeamCode = recentForm.hot[0].team;
   }
 
-  // ── Pull manager traits
+  // ── 4. Resolve traits for featured team ──────────────────────────────────
   const managerId = teamManagerMap[featuredTeamCode];
   const traits = managerId ? traitsMap[managerId] : null;
 
-  const traitsLine = traits
-    ? `${traits.media}, ${traits.style}, ${traits.philosophy}, ${traits.temperament}`
-    : 'unknown, unknown, unknown, unknown';
+  // ── 5. Build name helper ──────────────────────────────────────────────────
+  const tn = (code) =>
+    teamNameMap[code] ?? { city: code, nickname: code, full: code };
 
-  // ── Build prompt snippet for AI
-  const prompt = `
-You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
-Today's story angle: "PLAYOFF ACTION".
+  // ── 6. Build data lines for the prompt ───────────────────────────────────
+  const hotLines = (recentForm?.hot || [])
+    .slice(0, 5)
+    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
+    .join(' | ');
 
+  const coldLines = (recentForm?.cold || [])
+    .slice(0, 5)
+    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
+    .join(' | ');
+
+  const winLines = (winStreaks || [])
+    .slice(0, 5)
+    .map((s) => `${tn(s.team).full} [${s.team}]: W${s.count}`)
+    .join(' | ');
+
+  const lossLines = (lossStreaks || [])
+    .slice(0, 5)
+    .map((s) => `${tn(s.team).full} [${s.team}]: L${s.count}`)
+    .join(' | ');
+
+  const scorerLines = (topScorers || [])
+    .slice(0, 6)
+    .map((s) => {
+      const ach = s.fourGoalGame
+        ? ' 🔥 4-GOAL GAME'
+        : s.hatTrick
+        ? ' 🎩 HAT TRICK'
+        : s.bigNight
+        ? ' ⭐ BIG NIGHT'
+        : '';
+      const best =
+        s.bestGame && s.bestGame.g + s.bestGame.a > 0
+          ? ` (best game: ${s.bestGame.g}G ${s.bestGame.a}A)`
+          : '';
+      return `${s.goal_player_name} (${tn(s.g_team).full} / ${s.g_team}): ${
+        s.goals
+      }G ${s.assists}A${best}${ach}`;
+    })
+    .join(' | ');
+
+  const gameLines = (recentGames || [])
+    .slice(0, 8)
+    .map((g) => {
+      const home = teamNameMap[g.home]?.full ?? g.home;
+      const away = teamNameMap[g.away]?.full ?? g.away;
+      return `${home} ${g.score_home}-${g.score_away} ${away}${
+        g.ot ? ' (OT)' : ''
+      }`;
+    })
+    .join(' | ');
+
+  // ── 7. Build team name reference block ───────────────────────────────────
+  const allCodes = [
+    ...new Set([
+      ...(recentForm?.hot || []).map((t) => t.team),
+      ...(recentForm?.cold || []).map((t) => t.team),
+      ...(winStreaks || []).map((s) => s.team),
+      ...(lossStreaks || []).map((s) => s.team),
+    ]),
+  ];
+
+  const nameRef = allCodes
+    .map((code) => {
+      const n = tn(code);
+      const mgrid = teamManagerMap[code];
+      const mgr = mgrid ? traitsMap[mgrid] : null;
+      const mgrLine = mgr
+        ? `, manager traits: ${mgr.media} / ${mgr.style} / ${mgr.philosophy} / ${mgr.temperament}`
+        : '';
+      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
+        n.coach ? `, coach: ${n.coach}` : ''
+      }${mgrLine})`;
+    })
+    .join('\n');
+
+  // ── 8. Traits block for featured team ────────────────────────────────────
+  const traitsBlock = traits
+    ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FEATURED TEAM: ${teamNameMap[featuredTeamCode]?.full || featuredTeamCode}
-Manager traits: ${traitsLine}
+FEATURED MANAGER PERSONALITY — ${tn(featuredTeamCode).full}
+  Media style:   ${traits.media}
+  Playing style: ${traits.style}
+  Philosophy:    ${traits.philosophy}
+  Temperament:   ${traits.temperament}
+ 
+Use these traits to shape the pull_quote and bottom_line:
+- A "humorous" manager cracks jokes even under pressure.
+- A "psychopath" temperament means cold, unfeeling, zero remorse quotes.
+- A "fast-paced" style coach talks about speed, pressure, never letting up.
+- A "thinks in layers" philosophy coach talks about systems and hidden plans.
+Blend naturally — don't just list the traits. Make the quote SOUND like this person.`
+    : '';
 
+  // ── 9. Playoff block ─────────────────────────────────────────────────────
+  const playoffBlock =
+    isPlayoffActive && (playoffSeriesData || []).length
+      ? `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Use traits to write blurbs and bottom line.
-`;
+🏒 PLAYOFF MODE — ACTIVE
+${(playoffSeriesData || [])
+  .map((s) => {
+    const teamA = teamNameMap[s.team_code_a]?.full ?? s.team_code_a;
+    const teamB = teamNameMap[s.team_code_b]?.full ?? s.team_code_b;
+    const needed = Math.ceil((s.series_length ?? 7) / 2);
+    const advanced =
+      s.wins_a >= needed ? teamA : s.wins_b >= needed ? teamB : null;
+    const leader =
+      s.wins_a > s.wins_b ? teamA : s.wins_b > s.wins_a ? teamB : null;
+    const statusLine = advanced
+      ? `🏆 ${advanced} ADVANCES to Round ${s.round + 1}!`
+      : leader
+      ? `${leader} leads ${Math.max(s.wins_a, s.wins_b)}-${Math.min(
+          s.wins_a,
+          s.wins_b
+        )}`
+      : `Series tied ${s.wins_a}-${s.wins_b}`;
+    return `Round ${s.round} | ${teamA} vs ${teamB} | ${statusLine}`;
+  })
+  .join('\n')}
+- If a team just clinched (ADVANCES), that IS the lead story.
+- Use story_type "milestone" for a clinch, "playoff_push" for a close lead.
+- Reference round numbers and series scores in your writing.`
+      : '';
 
-  // ── Call AI
+  // ── 10. Angle seed ────────────────────────────────────────────────────────
+  const angles = [
+    'hot_streak',
+    'win_streak',
+    'cold_streak',
+    'loss_streak',
+    'big_win',
+    'playoff_push',
+    'milestone',
+    'comeback',
+    'rivalry',
+  ];
+  const angleHint = isPlayoffActive
+    ? 'PLAYOFF ACTION'
+    : angles[new Date().getDate() % angles.length];
+
+  const volNum = Math.floor(Math.random() * 30) + 1;
+  const issNum = Math.floor(Math.random() * 80) + 1;
+
+  // ── 11. Full prompt ───────────────────────────────────────────────────────
+  const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
+Today's story angle: "${angleHint}".
+${playoffBlock}
+${traitsBlock}
+ 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEAM NAME REFERENCE
+Use the city name OR nickname in all written text — NEVER the raw code.
+${nameRef}
+ 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+LIVE LEAGUE DATA
+Hot teams (last 10):   ${hotLines || 'none'}
+Cold teams (last 10):  ${coldLines || 'none'}
+Active win streaks:    ${winLines || 'none'}
+Active loss streaks:   ${lossLines || 'none'}
+${scorerLines ? `Recent top scorers: ${scorerLines}` : ''}
+${
+  gameLines
+    ? `Recent results (use EXACTLY — never invent scores): ${gameLines}`
+    : 'No recent games.'
+}
+${
+  gameStats
+    ? `\nDetailed game stats (USE ONLY WHAT IS LISTED — never invent):\n${gameStats}`
+    : ''
+}
+ 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WRITING RULES
+- Use city OR nickname — never raw codes. Mix it up.
+- When a coach is listed, you MAY quote them by name in quote_attr.
+- If a scorer has 🎩 HAT TRICK or 🔥 4-GOAL GAME, lead the cover with it.
+- If a scorer has ⭐ BIG NIGHT, mention them in a blurb.
+- Pull quote: if a hat trick or 4-goal game happened, quote that player or coach.
+- Be dramatic and hyperbolic — this is a sports magazine.
+- NEVER invent statistics not listed in the data above.
+- The pull_quote and bottom_line MUST reflect the featured manager's personality traits.
+ 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Respond ONLY with valid JSON, zero other text:
+{
+  "featured_team": "ONE team code from the reference list above — exact code",
+  "story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
+  "cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
+  "cover_sub": "12-18 words. Punchy supporting line.",
+  "blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "blurb_2": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "blurb_3": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
+  "pull_quote": "12-20 words. Dramatic quote shaped by manager personality traits.",
+  "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
+  "bottom_line": "7-11 words. One punchy verdict shaped by manager personality traits.",
+  "edition": "Vol. ${volNum} · Issue ${issNum}"
+}`;
+
+  // ── 12. Call edge function ─────────────────────────────────────────────────
   const result = await supabase.functions.invoke('gazette-generate', {
     body: { messages: [{ role: 'user', content: prompt }] },
   });
@@ -476,7 +666,7 @@ Use traits to write blurbs and bottom line.
   if (!match) throw new Error('No JSON found in AI response');
 
   const data = JSON.parse(match[0]);
-
+  console.log('[Gazette] edition:', data);
   return data;
 }
 
@@ -549,6 +739,8 @@ function LeagueGazette({
   isPlayoffActive,
   playoffSeriesData,
   gameStats,
+  managers,
+  teams,
 }) {
   const [edition, setEdition] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -571,40 +763,30 @@ function LeagueGazette({
           }
         } catch {}
       }
+
       setLoading(true);
       setError(null);
+
       try {
-        const { data: managers } = await supabase
-          .from('managers')
-          .select('coach_name, manager_traits');
-        console.log('managers:', managers);
-
-        const traitsMap = (managers || []).reduce((acc, m) => {
-          if (!m || !m.id || !m.manager_traits) return acc; // skip invalid or null traits
-          acc[m.id] =
-            typeof m.manager_traits === 'string'
-              ? JSON.parse(m.manager_traits)
-              : m.manager_traits;
-          return acc;
-        }, {});
-
-        console.log('traitsMap keys:', Object.keys(traitsMap));
-        console.log('traitsMap sample:', traitsMap);
-
+        // NOTE: managers and teams now come from props — no fetch needed here.
+        // This removes the bug where `id` was missing from the select, causing
+        // every manager to be skipped in the traitsMap reduce.
         const data = await fetchGazetteEdition({
           leagueLabel,
+          currentSeason,
+          teamNameMap,
           recentForm,
           winStreaks,
           lossStreaks,
-          currentSeason,
-          teamNameMap,
-          topScorers,
-          recentGames,
           isPlayoffActive,
           playoffSeriesData,
+          recentGames,
+          topScorers,
           gameStats,
-          managers,
+          managers, // ← from props, fetched in loadLeagueData with `id` included
+          teams, // ← from props
         });
+
         localStorage.setItem(
           GAZETTE_CACHE_KEY,
           JSON.stringify({ date: today, league: effectiveCacheKey, data })
@@ -629,6 +811,8 @@ function LeagueGazette({
       isPlayoffActive,
       playoffSeriesData,
       gameStats,
+      managers, // ← add to dep array
+      teams, // ← add to dep array
     ]
   );
 
@@ -1338,6 +1522,7 @@ export default function Home() {
   const [gameStats, setGameStats] = useState('');
   const [teamNameMap, setTeamNameMap] = useState({});
   const [topScorers, setTopScorers] = useState([]);
+  const [managers, setManagers] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason);
 
@@ -1381,8 +1566,13 @@ export default function Home() {
     );
     setCurrentSeason(latest);
 
+    // ── Managers — fetch with id so traitsMap can key on it ──────────────
+    const { data: managersData } = await supabase
+      .from('managers')
+      .select('id, coach_name, manager_traits');
+    setManagers(managersData || []);
+
     // ── Teams for this season → build name map (includes coach) ──────────
-    // teams table uses `abr` as the team code that matches games.home/away
     const { data: seasonTeams } = await supabase
       .from('teams')
       .select('abr, team, coach, manager_id')
@@ -2035,6 +2225,8 @@ export default function Home() {
             isPlayoffActive={isPlayoffActive}
             playoffSeriesData={playoffSeriesData}
             gameStats={gameStats}
+            managers={managers}
+            teams={teams}
           />
         </div>
 

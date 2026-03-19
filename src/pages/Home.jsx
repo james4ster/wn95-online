@@ -2367,7 +2367,7 @@ export default function Home() {
       </div>
 
       <style>{`
-        *,*::before,*::after{box-sizing:border-box;}
+       *,*::before,*::after { box-sizing:border-box; max-width:100%; }
         html,body{background:#00000a!important;}
 
         .hp {
@@ -2376,6 +2376,7 @@ export default function Home() {
           padding-bottom:56px;
           overflow-x:hidden;
           position:relative;
+          max-width: 100vw;
         }
         .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.055) 2px,rgba(0,0,0,.055) 4px);}
 
@@ -2553,6 +2554,29 @@ export default function Home() {
           .ht-brand { width:72px; } .ht-brand-top { font-size:8px; }
           .ht-clock { width:62px; } .ht-clock-time { font-size:13px; }
           .ht-text { font-size:13px; }
+        }
+        
+        /* ── Mobile hard clamp — prevents any child from forcing horizontal scroll */
+        @media(max-width:480px){
+          .hp { overflow-x:hidden; }
+          .cg { 
+            grid-template-columns: 1fr; 
+            grid-template-areas: "a" "b";
+            padding: .5rem 6px; 
+            gap: .5rem;
+            width: 100%;
+            max-width: 100vw;
+          }
+          .cg-a, .cg-b { min-width: 0; max-width: 100%; }
+          .hdtv-ticker { 
+            height: 40px;
+          }
+          .ht-brand { width: 60px; }
+          .ht-brand-top { font-size: 7px; letter-spacing: 0; }
+          .ht-brand-bottom { font-size: 7px; letter-spacing: 2px; }
+          .ht-clock { width: 56px; }
+          .ht-clock-time { font-size: 12px; }
+          .ht-text { font-size: 12px; }
         }
       `}</style>
     </div>

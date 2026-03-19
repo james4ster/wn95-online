@@ -44,6 +44,7 @@ async function fetchGazetteEdition({
 }) {
   const season = currentSeason?.lg || leagueLabel;
 
+  // Build simple lines for hot/cold teams
   const hotLines = recentForm.hot
     .slice(0, 5)
     .map((t) => `${t.team}:${t.w}W-${t.l}L`)
@@ -70,7 +71,36 @@ async function fetchGazetteEdition({
     ]),
   ];
 
-  // Rotate angle seed daily for variety
+  // --- Load manager traits for these teams from Supabase ---
+  console.log('allTeams', allTeams);
+  const { data: managersData } = await supabase
+    .from('managers')
+    .select('abr, manager_traits')
+    .in('abr', allTeams);
+
+  const traitsMap = {};
+  console.log('managersData', managersData);
+  managersData?.forEach((m) => {
+    try {
+      traitsMap[m.abr] = JSON.parse(m.manager_traits);
+    } catch {
+      traitsMap[m.abr] = {};
+    }
+  });
+  console.log('traitsMap after loop', traitsMap);
+
+  // Prepare a string summarizing each team and manager traits
+  const traitsLines = allTeams
+    .map((team) => {
+      const traits = traitsMap[team] || {};
+      const tStr = Object.entries(traits)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ');
+      return `${team} [${tStr || 'no traits'}]`;
+    })
+    .join('; ');
+
+  // Rotate angle seed daily
   const angles = [
     'hot_streak',
     'win_streak',
@@ -94,6 +124,16 @@ Win streaks: ${winLines || 'none'}
 Loss streaks: ${lossLines || 'none'}
 Valid team codes (use EXACTLY): ${allTeams.join(', ') || 'N/A'}
 
+MANAGER TRAITS:
+${traitsLines}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMPORTANT INSTRUCTIONS:
+- When writing pull_quote or bottom_line, explicitly use manager traits.
+  - Traits should influence tone, style, be specific.
+  - Example: aggressive coach → punchy quote, witty coach → clever line, strategic → emphasize tactics.
+- Use the traits naturally — don’t just list them. Blend into the text.
+
 Respond ONLY with valid JSON, zero other text:
 {
   "featured_team": "ONE team code from the valid list above — pick the most newsworthy",
@@ -115,9 +155,9 @@ Respond ONLY with valid JSON, zero other text:
     "headline": "6-9 words about a third team or league note.",
     "detail": "8-12 words."
   },
-  "pull_quote": "12-20 words. Dramatic fake quote from a player or coach on the featured team.",
-  "quote_attr": "— Fake Name, Role, ${leagueLabel}",
-  "bottom_line": "7-11 words. One punchy verdict on the league right now.",
+  "pull_quote": "12-20 words. Dramatic fake quote from a player or coach on the featured team, using manager traits if possible.",
+  "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
+  "bottom_line": "7-11 words. One punchy verdict on the league, incorporating manager traits if appropriate.",
   "edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
     Math.floor(Math.random() * 80) + 1
   }"
@@ -133,7 +173,7 @@ Respond ONLY with valid JSON, zero other text:
     result.data?.text || result.data?.message?.content?.[0]?.text || '';
   const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in response');
-  //return JSON.parse(match[0]);
+
   const parsed = JSON.parse(match[0]);
   console.log('[Gazette JSON]', parsed);
   return parsed;
@@ -255,7 +295,7 @@ function LeagueGazette({
   };
 
   // Derived display values
-  const team = edition?.featured_team || '';
+  const team = edition?.featured_team || 'SUM'; //REPLACE WITH '' AFTER TEST
   // If featured_team is a full name, find the matching code
   const teamCode =
     Object.entries(teamNameMap).find(

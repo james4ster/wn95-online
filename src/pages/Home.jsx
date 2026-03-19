@@ -884,35 +884,33 @@ function LeagueGazette({
       style={{ '--acc': meta.color, '--acc2': meta.color + '22' }}
     >
       {/* ══ MASTHEAD ══════════════════════════════════════════ */}
-      const mastheadJSX = (
-      <header className="si-mast">
-        <div className="si-mast-left">
-          <img
-            src={`/assets/leagueLogos/${lgKey}.png`}
-            alt={leagueLabel}
-            className="si-league-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-          <div>
-            <div className="si-mast-name">{leagueLabel}</div>
-            <div className="si-mast-sub">MAGAZINE</div>
-          </div>
+
+      <div className="si-mast-left">
+        <img
+          src={`/assets/leagueLogos/${lgKey}.png`}
+          alt={leagueLabel}
+          className="si-league-logo"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+        <div>
+          <div className="si-mast-name">{leagueLabel}</div>
+          <div className="si-mast-sub">MAGAZINE</div>
         </div>
-        <div className="si-mast-mid">
-          <hr className="si-hr" />
-          <span className="si-mast-date">{dateStr}</span>
-          <hr className="si-hr" />
-        </div>
-        <div className="si-mast-right">
-          {edition?.edition && (
-            <span className="si-issue">{edition.edition}</span>
-          )}
-          {/* Refresh button removed — cron controls updates, no user-triggered regeneration */}
-        </div>
-      </header>
-      );
+      </div>
+      <div className="si-mast-mid">
+        <hr className="si-hr" />
+        <span className="si-mast-date">{dateStr}</span>
+        <hr className="si-hr" />
+      </div>
+      <div className="si-mast-right">
+        {edition?.edition && (
+          <span className="si-issue">{edition.edition}</span>
+        )}
+        {/* Refresh button removed — cron controls updates, no user-triggered regeneration */}
+      </div>
+
       <div className="si-accent-rule" />
       {/* ══ BODY ══════════════════════════════════════════════ */}
       {loading && !edition ? (

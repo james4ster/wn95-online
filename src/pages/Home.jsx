@@ -772,14 +772,6 @@ function LeagueGazette({
         // This removes the bug where `id` was missing from the select, causing
         // every manager to be skipped in the traitsMap reduce.
 
-        console.log(
-          '[Gazette] teamManagerMap:',
-          JSON.stringify(teamManagerMap)
-        );
-        console.log('[Gazette] traitsMap keys:', Object.keys(traitsMap));
-        console.log('[Gazette] featuredTeamCode:', featuredTeamCode);
-        console.log('[Gazette] managerId:', managerId);
-        console.log('[Gazette] traits:', JSON.stringify(traits));
         const data = await fetchGazetteEdition({
           leagueLabel,
           currentSeason,

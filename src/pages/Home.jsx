@@ -36,23 +36,36 @@ function parseTeamData(teamRow) {
   return { city, nickname, full: fullName, coach };
 }
 
-function useLeagueCountdown(season) {
+function useLeagueCountdown(season, nextSeason) {
   const [tick, setTick] = useState(null);
   useEffect(() => {
     if (!season) return;
+
+    if (season.status === 'playoffs') {
+      setTick({ mode: 'playoffs', seasonLabel: season.lg });
+      return;
+    }
+
+    const targetDate =
+      season.status === 'offseason'
+        ? season.start_date // ← this would be on the NEXT season row
+        : season.end_date;
+
+    if (!targetDate) {
+      setTick({ mode: season.status || 'done', seasonLabel: season.lg });
+      return;
+    }
+
     const calc = () => {
-      if (!season.end_date) {
-        setTick({ done: true, seasonLabel: season.lg });
-        return;
-      }
-      const diff = new Date(season.end_date) - Date.now();
+      const diff = new Date(targetDate) - Date.now();
       if (diff <= 0) {
-        setTick({ done: true, seasonLabel: season.lg });
+        setTick({ mode: 'done', seasonLabel: season.lg });
         return;
       }
       setTick({
-        done: false,
+        mode: season.status || 'season',
         seasonLabel: season.lg,
+        nextSeasonLabel: nextSeason?.lg || null, // ← e.g. "W17"
         d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
@@ -64,7 +77,7 @@ function useLeagueCountdown(season) {
     calc();
     const id = setInterval(calc, 1000);
     return () => clearInterval(id);
-  }, [season]);
+  }, [season, nextSeason]);
   return tick;
 }
 
@@ -117,47 +130,105 @@ function ClockDisplay() {
 
 function InlineCountdown({ cfg, tick }) {
   const uc = tick?.urgent ? '#FF3B3B' : tick?.warning ? '#FFB800' : cfg.color;
+
+  const renderRight = () => {
+    if (!tick) return <span className="icd-awaiting">AWAITING</span>;
+
+    if (tick.mode === 'playoffs') {
+      return (
+        <div className="icd-complete">
+          <span style={{ fontSize: 15 }}>🏒</span>
+          <span className="icd-done-txt" style={{ color: '#00BFA5' }}>
+            PLAYOFFS
+          </span>
+        </div>
+      );
+    }
+
+    if (tick.mode === 'offseason') {
+      if (!tick.d && tick.d !== 0) {
+        // No start_date on next season — just show offseason badge
+        return (
+          <div className="icd-complete">
+            <span style={{ fontSize: 15 }}>☀️</span>
+            <span className="icd-done-txt">OFFSEASON</span>
+          </div>
+        );
+      }
+      // Has a countdown — show it
+      return (
+        <div className="icd-clock">
+          {[
+            { v: tick.d, u: 'D' },
+            { v: tick.h, u: 'H' },
+            { v: tick.m, u: 'M' },
+            { v: tick.s, u: 'S' },
+          ].map(({ v, u }) => (
+            <div key={u} className="icd-unit">
+              <span className="icd-n">{p2(v)}</span>
+              <span className="icd-u">{u}</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    if (tick.mode === 'done') {
+      return (
+        <div className="icd-complete">
+          <span style={{ fontSize: 15 }}>🏆</span>
+          <span className="icd-done-txt">COMPLETE</span>
+        </div>
+      );
+    }
+
+    // Default: season countdown
+    return (
+      <div className="icd-clock">
+        {[
+          { v: tick.d, u: 'D' },
+          { v: tick.h, u: 'H' },
+          { v: tick.m, u: 'M' },
+          { v: tick.s, u: 'S' },
+        ].map(({ v, u }) => (
+          <div key={u} className="icd-unit">
+            <span className="icd-n">{p2(v)}</span>
+            <span className="icd-u">{u}</span>
+          </div>
+        ))}
+        {tick.d < 7 && (
+          <span style={{ fontSize: 15, marginLeft: 2 }}>
+            {tick.urgent ? '🚨' : '⚡'}
+          </span>
+        )}
+      </div>
+    );
+  };
+
+  // Eyebrow label changes by mode
+  const eyebrow =
+    tick?.mode === 'offseason'
+      ? `☀️ OFFSEASON`
+      : tick?.mode === 'playoffs'
+      ? '🏒 PLAYOFFS ACTIVE'
+      : '⏱ SEASON COUNTDOWN';
+
   return (
     <div className="icd" style={{ '--ic': uc }}>
       <div className="icd-left">
-        <span className="icd-eyebrow">⏱ SEASON COUNTDOWN</span>
+        <span className="icd-eyebrow">{eyebrow}</span>
         <div className="icd-meta">
           <span className="icd-dot" />
           <span className="icd-league">{cfg.label}</span>
-          {tick?.seasonLabel && (
+          {tick?.mode === 'offseason' && tick?.nextSeasonLabel ? (
+            <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
+          ) : tick?.seasonLabel ? (
             <span className="icd-season">{tick.seasonLabel}</span>
-          )}
+          ) : null}
         </div>
       </div>
-      <div className="icd-right">
-        {!tick ? (
-          <span className="icd-awaiting">AWAITING</span>
-        ) : tick.done ? (
-          <div className="icd-complete">
-            <span style={{ fontSize: 15 }}>🏆</span>
-            <span className="icd-done-txt">COMPLETE</span>
-          </div>
-        ) : (
-          <div className="icd-clock">
-            {[
-              { v: tick.d, u: 'D' },
-              { v: tick.h, u: 'H' },
-              { v: tick.m, u: 'M' },
-              { v: tick.s, u: 'S' },
-            ].map(({ v, u }) => (
-              <div key={u} className="icd-unit">
-                <span className="icd-n">{p2(v)}</span>
-                <span className="icd-u">{u}</span>
-              </div>
-            ))}
-            {tick.d < 7 && (
-              <span style={{ fontSize: 15, marginLeft: 2 }}>
-                {tick.urgent ? '🚨' : '⚡'}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+
+      <div className="icd-right">{renderRight()}</div>
     </div>
   );
 }
@@ -1529,8 +1600,9 @@ export default function Home() {
   const [gameStats, setGameStats] = useState('');
   const [teamNameMap, setTeamNameMap] = useState({});
   const [topScorers, setTopScorers] = useState([]);
+  const [nextSeason, setNextSeason] = useState(null);
 
-  const tick = useLeagueCountdown(currentSeason);
+  const tick = useLeagueCountdown(currentSeason, nextSeason);
 
   // Fetch all teams once for the ticker helper (code → team name)
   useEffect(() => {
@@ -1567,10 +1639,22 @@ export default function Home() {
       setLoading(false);
       return;
     }
-    const latest = ps.reduce((b, s) =>
-      new Date(s.end_date) > new Date(b.end_date) ? s : b
-    );
+    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
+
+    const latest = ps.reduce((b, s) => {
+      const sPri = STATUS_PRIORITY[s.status] ?? 1;
+      const bPri = STATUS_PRIORITY[b.status] ?? 1;
+      if (sPri !== bPri) return sPri < bPri ? s : b;
+      // Same priority — fall back to most recent end_date
+      return new Date(s.end_date) > new Date(b.end_date) ? s : b;
+    });
     setCurrentSeason(latest);
+
+    /* Capture Season for Countdown */
+    const futureSeasons = (seasons || [])
+      .filter((s) => lgPrefix(s.lg) === prefix && s.lg !== latest.lg)
+      .sort((a, b) => new Date(a.end_date) - new Date(b.end_date));
+    setNextSeason(futureSeasons[0] || null);
 
     // ── Teams for this season → build name map (includes coach) ──────────
     // teams table uses `abr` as the team code that matches games.home/away
@@ -2382,7 +2466,7 @@ export default function Home() {
 
         .cg {
           display: grid;
-          grid-template-columns: 360px 1fr 360px;
+          grid-template-columns: 270px 1fr 360px;
           grid-template-areas: "a b c";
           gap: .75rem;
           padding: .75rem 14px;

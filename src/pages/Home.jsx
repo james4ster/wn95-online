@@ -829,6 +829,7 @@ function LeagueGazette({
   isPlayoffActive,
   playoffSeriesData,
   gameStats,
+  teams,
 }) {
   const [edition, setEdition] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -884,6 +885,7 @@ function LeagueGazette({
           playoffSeriesData,
           gameStats,
           managers,
+          teams: Object.entries(teamNameMap).map(([abr, t]) => ({ abr, ...t })),
         });
         localStorage.setItem(
           GAZETTE_CACHE_KEY,
@@ -1601,6 +1603,7 @@ export default function Home() {
   const [teamNameMap, setTeamNameMap] = useState({});
   const [topScorers, setTopScorers] = useState([]);
   const [nextSeason, setNextSeason] = useState(null);
+  const [newsItems, setNewsItems] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
 
@@ -1615,6 +1618,12 @@ export default function Home() {
   }, []);
 
   const loadLeagueData = useCallback(async (prefix) => {
+    const { data: testData, error: testError } = await supabase
+      .from('ticker_news')
+      .select('id, text')
+      .limit(3);
+    console.log('[ticker_news direct test]', testData, testError);
+
     if (!prefix) return;
     setLoading(true);
     setCurrentSeason(null);
@@ -1749,10 +1758,10 @@ export default function Home() {
       });
     });
     const form = Object.entries(last10)
-      .filter(([, a]) => a.length >= 3)
+      .filter(([, a]) => a.length >= 10)
       .map(([team, arr]) => {
         const w = arr.filter(Boolean).length;
-        return { team, w, l: arr.length - w, last10: arr, pct: w / arr.length };
+        return { team, w, l: arr.length - w, pct: w / arr.length, last10: arr };
       });
     form.sort((a, b) => b.pct - a.pct);
     setRecentForm({
@@ -1994,236 +2003,22 @@ export default function Home() {
     // and before the closing brace of loadLeagueData.
     // Nothing else in Home.jsx changes.
 
-    const getName = (code) =>
-      nameMap[code]?.full || getFullTeamName(code, teams) || code;
-    const getCity = (code) => nameMap[code]?.city || code;
+    setTickerItems([]);
 
-    const tickerEvents = [];
-    const evSet = new Set();
-    const push = (msg) => {
-      if (msg && !evSet.has(msg)) {
-        tickerEvents.push(msg);
-        evSet.add(msg);
+    // ── Fetch ticker news ─────────────────────────────────────────────────────
+    const tickerRes = await fetch(
+      'https://gwaiwtgwdqadxmimiskf.supabase.co/rest/v1/ticker_news?select=text&order=created_at.desc&limit=8',
+      {
+        headers: {
+          apikey:
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3YWl3dGd3ZHFhZHhtaW1pc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwOTIyMTksImV4cCI6MjA4NjY2ODIxOX0.VH-QhNSFcpNQv3VLi2Zb8riSbF2hIbjVgwBkHLuJqTo',
+          Authorization:
+            'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd3YWl3dGd3ZHFhZHhtaW1pc2tmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEwOTIyMTksImV4cCI6MjA4NjY2ODIxOX0.VH-QhNSFcpNQv3VLi2Zb8riSbF2hIbjVgwBkHLuJqTo',
+        },
       }
-    };
-
-    // ── 1. All-season standings: leader, top 3 ───────────────────────────────
-    // Derive wins from score_home/score_away (most reliable fields)
-    const allTeamStats = {};
-    games.forEach((g) => {
-      const hs = Number(g.score_home ?? -1);
-      const as = Number(g.score_away ?? -1);
-      // Skip games without scores
-      if (hs < 0 || as < 0) return;
-      const hW = hs > as;
-      const aW = as > hs;
-      [
-        [g.home, hW],
-        [g.away, aW],
-      ].forEach(([team, win]) => {
-        if (!team) return;
-        if (!allTeamStats[team]) allTeamStats[team] = { gp: 0, w: 0 };
-        allTeamStats[team].gp++;
-        if (win) allTeamStats[team].w++;
-      });
-    });
-    const ranked = Object.entries(allTeamStats)
-      .filter(([, s]) => s.gp >= 3)
-      .map(([team, s]) => ({ team, gp: s.gp, w: s.w, pct: s.w / s.gp }))
-      .sort((a, b) => b.w - a.w || b.pct - a.pct);
-
-    if (ranked.length > 0) {
-      const leader = ranked[0];
-      push(
-        `👑 ${getName(leader.team)} LEADS ${latest.lg} — ${leader.w}W · ${(
-          leader.pct * 100
-        ).toFixed(0)}% WIN RATE`
-      );
-    }
-    if (ranked.length > 1) {
-      push(
-        `🏒 ${latest.lg} CURRENT WINS LEADERS — ${ranked
-          .slice(0, 3)
-          .map((t, i) => `${i + 1}. ${getName(t.team)} (${t.w}W)`)
-          .join('  ·  ')}`
-      );
-    }
-
-    // Top 3 by win % (min 5 GP to filter out small samples)
-    const pctRanked = ranked
-      .filter((t) => t.gp >= 5)
-      .map((t) => ({ ...t }))
-      .sort((a, b) => b.pct - a.pct || b.w - a.w);
-    if (pctRanked.length > 1) {
-      push(
-        `📈 ${latest.lg} TOP WIN % — ${pctRanked
-          .slice(0, 3)
-          .map(
-            (t, i) =>
-              `${i + 1}. ${getName(t.team)} (${(t.pct * 100).toFixed(0)}%)`
-          )
-          .join('  ·  ')}`
-      );
-    }
-
-    // ── 2. Active win & loss streaks ─────────────────────────────────────────
-    const teamHist2 = {};
-    games.forEach((g) => {
-      const hs = Number(g.score_home ?? -1);
-      const as = Number(g.score_away ?? -1);
-      if (hs < 0 || as < 0) return;
-      const hW = hs > as;
-      const aW = as > hs;
-      [
-        [g.home, hW],
-        [g.away, aW],
-      ].forEach(([team, win]) => {
-        if (!team) return;
-        if (!teamHist2[team]) teamHist2[team] = [];
-        teamHist2[team].push(win);
-      });
-    });
-
-    Object.entries(teamHist2).forEach(([team, hist]) => {
-      if (!hist.length) return;
-      const first = hist[0].valueOf();
-      let count = 0;
-      for (const h of hist) {
-        if (h === first) count++;
-        else break;
-      }
-      // Only show ONE message per team — the most dramatic version
-      if (first && count >= 5)
-        push(`🚀 ${getName(team)} IS ON FIRE — ${count} IN A ROW`);
-      else if (first && count >= 5)
-        push(`🔥 ${getName(team)} — ${count}-GAME WIN STREAK`);
-      else if (!first && count >= 5)
-        push(`📉 ${getName(team)} — ${count} STRAIGHT LOSSES`);
-    });
-
-    // ── 3. Notable recent results (last 20 games) ────────────────────────────
-    const lastGames = games.slice(0, 20);
-    let highestCombined = 0;
-    let highestGame = null;
-    let biggestBlowout = 0;
-    let biggestBlowoutGame = null;
-
-    lastGames.forEach((g) => {
-      if (!g.score_home && !g.score_away) return;
-      const hs = Number(g.score_home || 0);
-      const as = Number(g.score_away || 0);
-      const combined = hs + as;
-      const diff = Math.abs(hs - as);
-
-      // Highest scoring game
-      if (combined > highestCombined) {
-        highestCombined = combined;
-        highestGame = g;
-      }
-      // Biggest blowout (4+ goal margin)
-      if (diff > biggestBlowout && diff >= 4) {
-        biggestBlowout = diff;
-        biggestBlowoutGame = g;
-      }
-    });
-
-    if (highestGame && highestCombined >= 6) {
-      push(
-        `⚡ HIGH SCORER — ${getName(highestGame.home)} ${
-          highestGame.score_home
-        }–${highestGame.score_away} ${getName(highestGame.away)}${
-          highestGame.ot ? ' (OT)' : ''
-        }`
-      );
-    }
-    if (biggestBlowoutGame) {
-      const hs = Number(biggestBlowoutGame.score_home);
-      const as = Number(biggestBlowoutGame.score_away);
-      const winner =
-        hs > as ? biggestBlowoutGame.home : biggestBlowoutGame.away;
-      push(`💥 DOMINANT WIN — ${getName(winner)} BY ${biggestBlowout} GOALS`);
-    }
-
-    // Most recent result
-    if (lastGames.length > 0 && lastGames[0].score_home != null) {
-      const g = lastGames[0];
-      push(
-        `🏒 LAST RESULT: ${getName(g.home)} ${g.score_home}–${
-          g.score_away
-        } ${getName(g.away)}${g.ot ? ' (OT)' : ''}`
-      );
-    }
-
-    // ── 4. Season total goals ────────────────────────────────────────────────
-    const totalGoals = games.reduce(
-      (sum, g) => sum + Number(g.score_home || 0) + Number(g.score_away || 0),
-      0
     );
-    if (totalGoals > 0) {
-      const gpct =
-        games.length > 0 ? (totalGoals / games.length).toFixed(1) : '0';
-      push(
-        `📈 ${latest.lg} — ${totalGoals} GOALS SCORED ACROSS ${games.length} GAMES · ${gpct} PER GAME AVG`
-      );
-    }
-
-    // ── 5. Recent form callouts (last 10) ────────────────────────────────────
-    const formList = Object.entries(last10)
-      .filter(([, a]) => a.length >= 3)
-      .map(([team, arr]) => {
-        const w = arr.filter(Boolean).length;
-        return { team, w, l: arr.length - w, pct: w / arr.length };
-      })
-      .sort((a, b) => b.pct - a.pct);
-    formList.slice(0, 2).forEach((t) => {
-      push(`🔥 ${getName(t.team)} — ${t.w}-${t.l} IN LAST 10`);
-    });
-    const coldTeam = [...formList].sort((a, b) => a.pct - b.pct)[0];
-    if (coldTeam && coldTeam.l >= 6) {
-      push(
-        `🥶 ${getName(coldTeam.team)} STRUGGLING — ${coldTeam.w}-${
-          coldTeam.l
-        } LAST 10`
-      );
-    }
-
-    // ── 6. Shutout callout — last 10 games per team ──────────────────────────
-    const teamGames = {};
-    games.forEach((g) => {
-      if (g.score_home == null || g.score_away == null) return;
-      if (!teamGames[g.home]) teamGames[g.home] = [];
-      if (!teamGames[g.away]) teamGames[g.away] = [];
-      teamGames[g.home].push({
-        scored: Number(g.score_home),
-        allowed: Number(g.score_away),
-      });
-      teamGames[g.away].push({
-        scored: Number(g.score_away),
-        allowed: Number(g.score_home),
-      });
-    });
-    const shutoutTeams = Object.entries(teamGames)
-      .map(([team, tg]) => {
-        const last10 = tg.slice(0, 10); // games already sorted desc by id
-        const sos = last10.filter((g) => g.allowed === 0).length;
-        return { team, sos, gp: last10.length };
-      })
-      .filter((t) => t.gp >= 5 && t.sos >= 3)
-      .sort((a, b) => b.sos - a.sos);
-    if (shutoutTeams.length > 0) {
-      const top = shutoutTeams[0];
-      push(
-        `🧱 ${getName(top.team)} — ${top.sos} SHUTOUTS IN LAST ${Math.min(
-          top.gp,
-          10
-        )} GAMES`
-      );
-    }
-
-    // ── 7. Games played count ────────────────────────────────────────────────
-    push(`🏒 ${latest.lg} IN PROGRESS — ${games.length} GAMES PLAYED`);
-
-    setTickerItems(tickerEvents);
+    const tickerJson = await tickerRes.json();
+    if (tickerJson?.length) setNewsItems(tickerJson.map((r) => r.text));
   }, []);
 
   useEffect(() => {
@@ -2253,8 +2048,7 @@ export default function Home() {
           minute: '2-digit',
         })
       : '';
-  const displayItems =
-    tickerItems.length > 0 ? tickerItems : loading ? [''] : [];
+  const displayItems = newsItems.length > 0 ? newsItems : [''];
 
   return (
     <div className="hp">
@@ -2310,6 +2104,10 @@ export default function Home() {
             isPlayoffActive={isPlayoffActive}
             playoffSeriesData={playoffSeriesData}
             gameStats={gameStats}
+            teams={Object.entries(teamNameMap).map(([abr, t]) => ({
+              abr,
+              ...t,
+            }))}
           />
         </div>
 
@@ -2608,8 +2406,8 @@ export default function Home() {
         .ht-fade-l { left:0; background:linear-gradient(90deg,#060a16 20%,transparent); }
         .ht-fade-r { right:0; background:linear-gradient(-90deg,#060a16 20%,transparent); }
         .ht-rail { width:100%; overflow:hidden; }
-        .ht-belt { display:inline-flex; align-items:center; white-space:nowrap; animation:beltRoll 220s linear infinite; will-change:transform; }
-        @keyframes beltRoll { 0%{transform:translateX(60vw)} 100%{transform:translateX(-100%)} }
+        .ht-belt { display:inline-flex; align-items:center; white-space:nowrap; animation:beltRoll 90s linear infinite; will-change:transform; }
+        @keyframes beltRoll { 0%{transform:translateX(100vw)} 100%{transform:translateX(-600%)} }
         .ht-story { display:inline-flex; align-items:center; }
         .ht-text { font-size:14.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; line-height:1; padding:0 0.5rem; }
         .ht-c0{color:#EEF3FF;}

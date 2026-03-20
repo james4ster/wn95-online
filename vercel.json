@@ -8,7 +8,7 @@
     {
       "path": "/api/gazette-cron",
       "schedule": "0 4 * * *"
-    }
+    },
     {
       "path": "/api/ticker-cron",
       "schedule": "0 */4 * * *"

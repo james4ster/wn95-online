@@ -2404,9 +2404,30 @@ export default function Home() {
         .ht-fade-l,.ht-fade-r { position:absolute; top:0; bottom:0; z-index:2; pointer-events:none; width:52px; }
         .ht-fade-l { left:0; background:linear-gradient(90deg,#060a16 20%,transparent); }
         .ht-fade-r { right:0; background:linear-gradient(-90deg,#060a16 20%,transparent); }
-        .ht-rail { width:100%; overflow:hidden; }
-        .ht-belt { display:inline-flex; align-items:center; white-space:nowrap; animation:beltRoll 90s linear infinite; will-change:transform; }
-        @keyframes beltRoll { 0%{transform:translateX(100vw)} 100%{transform:translateX(-600%)} }
+        .ht-rail { 
+          width:100%; 
+          overflow:hidden;
+          -webkit-overflow-scrolling: touch;
+        }
+        .ht-belt { 
+          display:inline-flex; 
+          align-items:center; 
+          white-space:nowrap; 
+          -webkit-animation:beltRoll 90s linear infinite;
+          animation:beltRoll 90s linear infinite; 
+          will-change:transform; 
+          transform: translateZ(0); 
+          -webkit-transform: translateZ(0);
+        }
+        
+        @-webkit-keyframes beltRoll { 
+          0%{-webkit-transform:translateX(100vw)} 
+          100%{-webkit-transform:translateX(-600%)} 
+        }
+        @keyframes beltRoll { 
+          0%{transform:translateX(100vw)} 
+          100%{transform:translateX(-600%)} 
+        }
         .ht-story { display:inline-flex; align-items:center; }
         .ht-text { font-size:14.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; line-height:1; padding:0 0.5rem; }
         .ht-c0{color:#EEF3FF;}

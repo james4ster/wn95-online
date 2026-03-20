@@ -327,7 +327,7 @@ export default function ScoresBar() {
     (async () => {
       const { data: seasons } = await supabase
         .from('seasons')
-        .select('lg, end_date, year')
+        .select('lg, end_date, year, status')
         .order('year', { ascending: false })
         .limit(20);
       const ps = (seasons || []).filter(
@@ -337,9 +337,16 @@ export default function ScoresBar() {
         setLoading(false);
         return;
       }
-      const latest = ps.reduce((b, s) =>
-        new Date(s.end_date) > new Date(b.end_date) ? s : b
-      );
+      const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
+
+      const latest = ps.reduce((b, s) => {
+        const sPri = STATUS_PRIORITY[s.status] ?? 1;
+        const bPri = STATUS_PRIORITY[b.status] ?? 1;
+        if (sPri !== bPri) return sPri < bPri ? s : b;
+        return new Date(s.end_date) > new Date(b.end_date) ? s : b;
+      });
+
+      console.log('[ScoresBar] latest season:', latest.lg, latest.status);
 
       // Fetch season games and playoff games in parallel
       const [{ data: seasonData }, { data: playoffData }] = await Promise.all([

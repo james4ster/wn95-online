@@ -2424,14 +2424,17 @@ export default function Home() {
         .ht-fade-l,.ht-fade-r { position:absolute; top:0; bottom:0; z-index:2; pointer-events:none; width:52px; }
         .ht-fade-l { left:0; background:linear-gradient(90deg,#060a16 20%,transparent); }
         .ht-fade-r { right:0; background:linear-gradient(-90deg,#060a16 20%,transparent); }
-        .ht-rail { width:100%; overflow:hidden; }
+        .ht-rail { width:100%; overflow:hidden; max-width:none !important; }
         .ht-belt {
           display: inline-flex;
           align-items: center;
           white-space: nowrap;
+          flex-shrink: 0;
+          max-width: none !important;
           animation: beltRoll linear infinite;
           will-change: transform;
         }
+        .ht-story, .ht-text, .ht-sep { max-width: none !important; }
         @keyframes beltRoll {
           from { transform: translateX(0); }
           to { transform: translateX(calc(var(--belt-w) * -1)); }

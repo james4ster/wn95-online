@@ -1621,8 +1621,7 @@ export default function Home() {
     const { data: testData, error: testError } = await supabase
       .from('ticker_news')
       .select('id, text')
-      .limit(3);
-    console.log('[ticker_news direct test]', testData, testError);
+      .limit(12);
 
     if (!prefix) return;
     setLoading(true);

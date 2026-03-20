@@ -1606,6 +1606,18 @@ export default function Home() {
   const [newsItems, setNewsItems] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
+  const beltRef = useRef(null);
+  const [beltDuration, setBeltDuration] = useState(30);
+
+  useEffect(() => {
+    if (!beltRef.current || !newsItems.length) return;
+    requestAnimationFrame(() => {
+      // Measure just ONE copy — the belt has two copies so half scrollWidth = one copy
+      const oneWidth = beltRef.current.scrollWidth / 2;
+      const speed = 150;
+      setBeltDuration(oneWidth / speed);
+    });
+  }, [newsItems]);
 
   // Fetch all teams once for the ticker helper (code → team name)
   useEffect(() => {
@@ -2227,18 +2239,26 @@ export default function Home() {
           <div className="ht-fade-l" />
           <div className="ht-fade-r" />
           <div className="ht-rail">
-            <div className="ht-belt">
-              {displayItems.length > 0 &&
-                displayItems.concat(displayItems).map((item, i) => (
-                  <span key={i} className="ht-story">
-                    <span className={`ht-text ht-c${i % 4}`}>{item}</span>
-                    <span className="ht-sep">
-                      <span className="ht-sep-line" />
-                      <span className="ht-sep-gem">◆</span>
-                      <span className="ht-sep-line" />
-                    </span>
+            <div
+              className="ht-belt"
+              ref={beltRef}
+              style={{
+                animationDuration: `${beltDuration}s`,
+                '--belt-w': `${
+                  beltRef.current ? beltRef.current.scrollWidth / 2 : 0
+                }px`,
+              }}
+            >
+              {displayItems.concat(displayItems).map((item, i) => (
+                <span key={i} className="ht-story">
+                  <span className={`ht-text ht-c${i % 4}`}>{item}</span>
+                  <span className="ht-sep">
+                    <span className="ht-sep-line" />
+                    <span className="ht-sep-gem">◆</span>
+                    <span className="ht-sep-line" />
                   </span>
-                ))}
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -2404,9 +2424,21 @@ export default function Home() {
         .ht-fade-l,.ht-fade-r { position:absolute; top:0; bottom:0; z-index:2; pointer-events:none; width:52px; }
         .ht-fade-l { left:0; background:linear-gradient(90deg,#060a16 20%,transparent); }
         .ht-fade-r { right:0; background:linear-gradient(-90deg,#060a16 20%,transparent); }
-        .ht-rail { width:100%; overflow:hidden; }
-        .ht-belt { display:inline-flex; align-items:center; white-space:nowrap; animation:beltRoll 90s linear infinite; will-change:transform; }
-        @keyframes beltRoll { 0%{transform:translateX(100vw)} 100%{transform:translateX(-600%)} }
+        .ht-rail { width:100%; overflow:hidden; max-width:none !important; }
+        .ht-belt {
+          display: inline-flex;
+          align-items: center;
+          white-space: nowrap;
+          flex-shrink: 0;
+          max-width: none !important;
+          animation: beltRoll linear infinite;
+          will-change: transform;
+        }
+        .ht-story, .ht-text, .ht-sep { max-width: none !important; }
+        @keyframes beltRoll {
+          from { transform: translateX(0); }
+          to { transform: translateX(calc(var(--belt-w) * -1)); }
+        }
         .ht-story { display:inline-flex; align-items:center; }
         .ht-text { font-size:14.5px; font-weight:600; letter-spacing:0.07em; text-transform:uppercase; line-height:1; padding:0 0.5rem; }
         .ht-c0{color:#EEF3FF;}
@@ -2457,7 +2489,9 @@ export default function Home() {
           .ht-brand-bottom { font-size: 7px; letter-spacing: 2px; }
           .ht-clock { width: 56px; }
           .ht-clock-time { font-size: 12px; }
-          .ht-text { font-size: 12px; }
+          .ht-text { font-size:11px; letter-spacing:0.04em; }
+          .ht-sep { margin:0 0.25rem; }
+          .ht-sep-line { width:12px; }
         }
       `}</style>
     </div>

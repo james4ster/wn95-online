@@ -2486,7 +2486,9 @@ export default function Home() {
           .ht-brand-bottom { font-size: 7px; letter-spacing: 2px; }
           .ht-clock { width: 56px; }
           .ht-clock-time { font-size: 12px; }
-          .ht-text { font-size: 12px; }
+          .ht-text { font-size:11px; letter-spacing:0.04em; }
+          .ht-sep { margin:0 0.25rem; }
+          .ht-sep-line { width:12px; }
         }
       `}</style>
     </div>

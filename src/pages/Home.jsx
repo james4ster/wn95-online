@@ -1615,7 +1615,7 @@ export default function Home() {
     requestAnimationFrame(() => {
       // Measure just ONE copy — the belt has two copies so half scrollWidth = one copy
       const oneWidth = beltRef.current.scrollWidth / 2;
-      const speed = 150;
+      const speed = 90;
       setBeltDuration(oneWidth / speed);
     });
   }, [newsItems]);

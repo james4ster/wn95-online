@@ -1,4 +1,3 @@
-/* New Ticker Version */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';
@@ -264,10 +263,17 @@ const SL_PANELS = [
     label: 'LOSS STREAKS',
     sub: 'Active loss streaks',
   },
-  { id: 'scorers', icon: '⭐', label: 'TOP SCORERS', sub: 'Season leaders' },
+  { id: 'scorers', icon: '⭐', label: 'TOP SCORERS', sub: 'Points leaders' },
 ];
 
-function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
+function Spotlight({
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  loading,
+  topSeasonScorers,
+  isPlayoffActive,
+}) {
   const [idx, setIdx] = useState(0);
   const timerRef = useRef(null);
   const startTimer = useCallback(() => {
@@ -384,6 +390,29 @@ function Spotlight({ recentForm, winStreaks, lossStreaks, loading }) {
         </div>
       ));
     }
+    if (p.id === 'scorers') {
+      if (!topSeasonScorers?.length)
+        return <div className="sl-empty">No scorer data</div>;
+      return topSeasonScorers.slice(0, 5).map((s, i) => (
+        <div key={s.name} className="sl-row">
+          <span className="sl-rank">#{i + 1}</span>
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+
+          <span className="sl-team">
+            {s.name.trim().split(' ').slice(-1)[0]}
+          </span>
+          <span className="sl-val sl-val-hot">{s.pts}</span>
+        </div>
+      ));
+    }
+
     return (
       <div>
         {[1, 2, 3, 4, 5].map((i) => (
@@ -1605,6 +1634,7 @@ export default function Home() {
   const [topScorers, setTopScorers] = useState([]);
   const [nextSeason, setNextSeason] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
+  const [topSeasonScorers, setTopSeasonScorers] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
   const beltRef = useRef(null);
@@ -1788,6 +1818,67 @@ export default function Home() {
     // Only fall back to regular-season games when there are zero playoff games.
 
     const isPlayoffActive = (allPlayoffGames || []).length > 0;
+
+    // ── Top Scorers Panel - Season/Playoff cumulative scorers ─────────────────────────────────────
+    const scorerQuery = isPlayoffActive
+      ? supabase
+          .from('game_raw_scoring')
+          .select(
+            'goal_player_name, assist_primary_name, assist_secondary_name, g_team, playoff_game_id'
+          )
+          .not('playoff_game_id', 'is', null)
+      : supabase
+          .from('game_raw_scoring')
+          .select(
+            'goal_player_name, assist_primary_name, assist_secondary_name, g_team, game_id'
+          )
+          .is('playoff_game_id', null);
+
+    const { data: allScoringData } = await scorerQuery;
+
+    if (allScoringData?.length) {
+      const playerTotals = {};
+
+      const ensure = (name, team) => {
+        if (!name) return;
+        if (!playerTotals[name])
+          playerTotals[name] = { name, team, g: 0, a: 0, gp: new Set() };
+      };
+
+      allScoringData.forEach((play) => {
+        const gameKey = play.playoff_game_id || play.game_id;
+        if (play.goal_player_name) {
+          ensure(play.goal_player_name, play.g_team);
+          playerTotals[play.goal_player_name].g++;
+          playerTotals[play.goal_player_name].gp.add(gameKey);
+          playerTotals[play.goal_player_name].team = play.g_team;
+        }
+        if (play.assist_primary_name) {
+          ensure(play.assist_primary_name, play.g_team);
+          playerTotals[play.assist_primary_name].a++;
+          playerTotals[play.assist_primary_name].gp.add(gameKey);
+        }
+        if (play.assist_secondary_name) {
+          ensure(play.assist_secondary_name, play.g_team);
+          playerTotals[play.assist_secondary_name].a++;
+          playerTotals[play.assist_secondary_name].gp.add(gameKey);
+        }
+      });
+
+      const sorted = Object.values(playerTotals)
+        .map((p) => ({
+          name: p.name,
+          team: p.team,
+          g: p.g,
+          a: p.a,
+          pts: p.g + p.a,
+          gp: p.gp.size,
+        }))
+        .sort((a, b) => b.pts - a.pts || b.g - a.g)
+        .slice(0, 10);
+
+      setTopSeasonScorers(sorted);
+    }
 
     // Recent playoff games (last 5 by id, already fetched above)
     const recentPlayoffNorm = (allPlayoffGames || []).slice(0, 5).map((g) => ({
@@ -2053,6 +2144,52 @@ export default function Home() {
     return () => clearInterval(id);
   }, []);
 
+  /* Discord Confirmed Trades channel tracker*/
+  useEffect(() => {
+    const refresh = async () => {
+      // Check cache first
+      try {
+        const cached = JSON.parse(
+          localStorage.getItem('discord_trades_cache') || '{}'
+        );
+        if (cached.data && Date.now() - cached.ts < 15 * 60 * 1000) {
+          setRecentTrades(cached.data);
+          // still fetch events separately or cache those too
+        } else {
+          const tradesResult = await supabase.functions.invoke(
+            'discord-trade-tracker'
+          );
+          if (!tradesResult.error && Array.isArray(tradesResult.data)) {
+            const data = tradesResult.data.slice(0, 5);
+            setRecentTrades(data);
+            localStorage.setItem(
+              'discord_trades_cache',
+              JSON.stringify({ data, ts: Date.now() })
+            );
+          }
+        }
+      } catch {
+        const tradesResult = await supabase.functions.invoke(
+          'discord-trade-tracker'
+        );
+        if (!tradesResult.error && Array.isArray(tradesResult.data))
+          setRecentTrades(tradesResult.data.slice(0, 5));
+      }
+
+      setEvtLoading(true);
+      const eventsResult = await supabase.functions.invoke('discord-events');
+      if (!eventsResult.error && Array.isArray(eventsResult.data))
+        setDiscordEvents(eventsResult.data.slice(0, 6));
+      else if (eventsResult.error)
+        console.warn('[discord-events]', eventsResult.error.message);
+      setEvtLoading(false);
+      supabase.functions.invoke('hyper-endpoint').catch(console.error);
+    };
+    refresh();
+    const id = setInterval(refresh, 30 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
   const fmtTime = (iso) =>
     iso
       ? new Date(iso).toLocaleTimeString('en-US', {
@@ -2075,25 +2212,23 @@ export default function Home() {
             winStreaks={winStreaks}
             lossStreaks={lossStreaks}
             loading={loading}
+            topSeasonScorers={topSeasonScorers}
+            isPlayoffActive={isPlayoffActive}
           />
           <section className="panel">
             <PanelHeader icon="🔄" title="TRANSACTIONS" />
+
             <div className="tx-body">
               {recentTrades.length === 0 ? (
                 <div className="tx-ph">
                   <span style={{ fontSize: 18, opacity: 0.2 }}>📋</span>
-                  <span className="tx-ph-msg">TRADE TRACKER COMING SOON</span>
+                  <span className="tx-ph-msg">NO RECENT TRANSACTIONS</span>
                 </div>
               ) : (
                 recentTrades.slice(0, 5).map((t, i) => (
-                  <div key={i} className="tx-row">
-                    <div className="tx-teams">
-                      <span className="tx-team">{t.from_team}</span>
-                      <span className="tx-arr">⇄</span>
-                      <span className="tx-team">{t.to_team}</span>
-                    </div>
-                    <span className="tx-player">{t.player_name}</span>
-                    <span className="tx-date">{t.trade_date}</span>
+                  <div key={i} className="tx-row tx-row-tip">
+                    <span className="tx-player">{t.text}</span>
+                    <div className="tx-tooltip">{t.text}</div>
                   </div>
                 ))
               )}
@@ -2346,7 +2481,7 @@ export default function Home() {
         .sl-row:hover{background:rgba(255,140,0,.04);}
         .sl-rank{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.2);min-width:16px;flex-shrink:0;}
         .sl-logo{width:20px;height:20px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 3px rgba(255,255,255,.15));}
-        .sl-team{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.55);min-width:24px;flex-shrink:0;}
+        .sl-team{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.55);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
         .sl-dots{display:flex;gap:2px;flex:1;align-items:center;flex-wrap:wrap;}
         .sl-dot{width:5px;height:5px;border-radius:2px;flex-shrink:0;}
         .sl-dot-w{background:#00CC55;box-shadow:0 0 3px rgba(0,204,85,.5);}
@@ -2359,6 +2494,15 @@ export default function Home() {
         .sl-bar-wrap{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;}
         .sl-bar{height:100%;background:linear-gradient(90deg,rgba(255,140,0,.3),rgba(255,215,0,.2));border-radius:3px;}
         .sl-coming{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.13);letter-spacing:1px;text-align:center;padding:.4rem;}
+
+        .sl-scorer-stats { display:flex; gap:0; align-items:center; margin-left:auto; }
+.sl-scorer-stat { 
+  font-family:'VT323',monospace; font-size:16px; color:rgba(255,255,255,.7);
+  display:flex; flex-direction:column; align-items:center; width:28px;
+  flex-shrink:0;
+}
+        .sl-scorer-label { font-family:'Press Start 2P',monospace; font-size:6px; color:rgba(255,255,255,.25); letter-spacing:1px; }
+        .sl-pts { color:#FFD700 !important; text-shadow:0 0 8px rgba(255,215,0,.4); }
 
         /* ── Transactions ── */
         .tx-body{padding:.12rem 0;}
@@ -2455,6 +2599,25 @@ export default function Home() {
         .ht-clock-time { font-size:15px; font-weight:700; color:#ECF1FF; letter-spacing:1.5px; font-variant-numeric:tabular-nums; line-height:1; }
         .ht-clock-label { font-size:8px; font-weight:700; color:rgba(255,255,255,0.28); letter-spacing:3px; line-height:1; }
 
+
+        .tx-row-tip { position: relative; }
+.tx-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 100%; left: 0;
+  background: #0d0d1e;
+  border: 1px solid rgba(135,206,235,.2);
+  border-radius: 6px;
+  padding: .4rem .6rem;
+  font-family: 'VT323', monospace;
+  font-size: 14px;
+  color: rgba(255,255,255,.8);
+  white-space: normal;
+  width: 260px;
+  z-index: 100;
+  pointer-events: none;
+}
+.tx-row-tip:hover .tx-tooltip { display: block; }
         /* ── Responsive ── */
         @media(max-width:1200px){
           .cg { grid-template-columns: 340px 1fr; grid-template-areas: "a b"; }

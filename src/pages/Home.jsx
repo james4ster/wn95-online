@@ -2037,7 +2037,7 @@ export default function Home() {
       supabase.functions.invoke('hyper-endpoint').catch(console.error);
     };
     refresh();
-    const id = setInterval(refresh, 10 * 60 * 1000);
+    const id = setInterval(refresh, 30 * 60 * 1000);
     return () => clearInterval(id);
   }, []);
 

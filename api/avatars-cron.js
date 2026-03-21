@@ -1,6 +1,11 @@
 export default async function handler(req, res) {
+  if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  try {
     const response = await fetch(
-      `${process.env.SUPABASE_URL}/functions/v1/fetch-avatars`,
+      'https://gwaiwtgwdqadxmimiskf.supabase.co/functions/v1/fetch-avatars',
       {
         method: 'POST',
         headers: {
@@ -10,7 +15,11 @@ export default async function handler(req, res) {
         body: JSON.stringify({}),
       }
     );
-  
+
     const data = await response.json();
-    res.status(200).json({ ok: true, ...data });
+    return res.status(200).json(data);
+
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
+}

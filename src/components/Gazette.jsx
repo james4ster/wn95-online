@@ -248,28 +248,17 @@ function LeagueGazette({
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (force = false) => {
-    const today = todayStamp();
-  
-    // 1. Check localStorage first
-    if (!force) {
-      try {
-        const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-        if (c.date === today && c.league === leagueLabel && c.data) {
-          setEdition(c.data);
-          return;
-        }
-      } catch {}
-    }
-  
     setLoading(true);
     setError(null);
   
     try {
-      // 2. Try gazette_cache — playoff key first, then regular
+      const today = todayStamp();
       const playoffKey = `${leagueLabel}_playoff`;
+  
+      // Try playoff cache first, then regular
       let { data: cached } = await supabase
         .from('gazette_cache')
-        .select('data, date')
+        .select('data')
         .eq('league', playoffKey)
         .eq('date', today)
         .single();
@@ -277,27 +266,24 @@ function LeagueGazette({
       if (!cached) {
         ({ data: cached } = await supabase
           .from('gazette_cache')
-          .select('data, date')
+          .select('data')
           .eq('league', leagueLabel)
           .eq('date', today)
           .single());
       }
   
       if (cached?.data) {
-        localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ 
-          date: today, league: leagueLabel, data: cached.data 
-        }));
-        setEdition(cached.data);
+        const parsed = typeof cached.data === 'string' 
+          ? JSON.parse(cached.data) 
+          : cached.data;
+        setEdition(parsed);
         return;
       }
   
-      // 3. Fall back to generating client-side
+      // Fall back to generating client-side if nothing cached yet
       const data = await fetchGazetteEdition({
         leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
       });
-      localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ 
-        date: today, league: leagueLabel, data 
-      }));
       setEdition(data);
   
     } catch (e) {
@@ -319,7 +305,7 @@ function LeagueGazette({
   };
 
   // Derived display values
-  const team = edition?.featured_team || 'SUM'; //REPLACE WITH '' AFTER TEST
+  const team = edition?.featured_team ; //REPLACE WITH '' AFTER TEST
   // If featured_team is a full name, find the matching code
   const teamCode =
     Object.entries(teamNameMap).find(

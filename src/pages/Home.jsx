@@ -463,7 +463,7 @@ function Spotlight({
    LEAGUE GAZETTE — Daily AI-Generated Newspaper
 ═══════════════════════════════════════════════════════════════ */
 
-const GAZETTE_CACHE_KEY = 'league_gazette_v6';
+
 function todayStamp() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -542,10 +542,13 @@ async function fetchGazetteEdition({
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
-
+  
     if (cached?.date === today && cached?.data) {
       console.log('[Gazette] ✅ Serving from DB cache');
-      return cached.data;
+      const parsed = typeof cached.data === 'string'
+        ? JSON.parse(cached.data)
+        : cached.data;
+      return parsed;
     }
   } catch (e) {
     console.log('[Gazette] No DB cache found, generating live');
@@ -865,43 +868,17 @@ function LeagueGazette({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  
 
   const load = useCallback(
     async (force = false) => {
-      const today = todayStamp();
-      const effectiveCacheKey = isPlayoffActive
-        ? `${leagueLabel}_playoff`
-        : leagueLabel;
-
-      if (!force) {
-        try {
-          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-          if (c.date === today && c.league === effectiveCacheKey && c.data) {
-            setEdition(c.data);
-            return;
-          }
-        } catch {}
-      }
       setLoading(true);
       setError(null);
       try {
         const { data: managers } = await supabase
           .from('managers')
-          .select('coach_name, manager_traits');
-        console.log('managers:', managers);
-
-        const traitsMap = (managers || []).reduce((acc, m) => {
-          if (!m || !m.id || !m.manager_traits) return acc; // skip invalid or null traits
-          acc[m.id] =
-            typeof m.manager_traits === 'string'
-              ? JSON.parse(m.manager_traits)
-              : m.manager_traits;
-          return acc;
-        }, {});
-
-        console.log('traitsMap keys:', Object.keys(traitsMap));
-        console.log('traitsMap sample:', traitsMap);
-
+          .select('id, coach_name, manager_traits');
+  
         const data = await fetchGazetteEdition({
           leagueLabel,
           recentForm,
@@ -914,13 +891,9 @@ function LeagueGazette({
           isPlayoffActive,
           playoffSeriesData,
           gameStats,
-          managers,
-          teams: Object.entries(teamNameMap).map(([abr, t]) => ({ abr, ...t })),
+          managers: managers || [],
+          teams,
         });
-        localStorage.setItem(
-          GAZETTE_CACHE_KEY,
-          JSON.stringify({ date: today, league: effectiveCacheKey, data })
-        );
         setEdition(data);
       } catch (e) {
         console.error('[Gazette]', e);
@@ -930,23 +903,13 @@ function LeagueGazette({
         setRefreshing(false);
       }
     },
-    [
-      leagueLabel,
-      recentForm,
-      winStreaks,
-      lossStreaks,
-      currentSeason,
-      teamNameMap,
-      topScorers,
-      isPlayoffActive,
-      playoffSeriesData,
-      gameStats,
-    ]
+    [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
+     teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats, teams]
   );
 
   useEffect(() => {
-    if (!dataLoading) load();
-  }, [dataLoading, leagueLabel]);
+    if (!dataLoading && recentForm.hot.length > 0) load();
+  }, [dataLoading, leagueLabel, isPlayoffActive]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -1635,6 +1598,7 @@ export default function Home() {
   const [nextSeason, setNextSeason] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
   const [topSeasonScorers, setTopSeasonScorers] = useState([]);
+  const [seasonTeams, setSeasonTeams] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
   const beltRef = useRef(null);
@@ -1709,16 +1673,17 @@ export default function Home() {
 
     // ── Teams for this season → build name map (includes coach) ──────────
     // teams table uses `abr` as the team code that matches games.home/away
-    const { data: seasonTeams } = await supabase
+    const { data: fetchedTeams } = await supabase
       .from('teams')
       .select('abr, team, coach, manager_id')
       .eq('lg', latest.lg);
 
     const nameMap = {};
-    (seasonTeams || []).forEach((t) => {
+    (fetchedTeams || []).forEach((t) => {
       nameMap[t.abr] = parseTeamData(t);
     });
     setTeamNameMap(nameMap);
+    setSeasonTeams(fetchedTeams || []);
 
     // ── Games (season + playoff merged) ──────────────────────────────────
     const [{ data: allGames }, { data: allPlayoffGames }] = await Promise.all([
@@ -2251,10 +2216,7 @@ export default function Home() {
             isPlayoffActive={isPlayoffActive}
             playoffSeriesData={playoffSeriesData}
             gameStats={gameStats}
-            teams={Object.entries(teamNameMap).map(([abr, t]) => ({
-              abr,
-              ...t,
-            }))}
+            teams={seasonTeams}
           />
         </div>
 

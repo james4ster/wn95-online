@@ -7,7 +7,7 @@ export default async function handler(req, res) {
   const supabaseUrl = process.env.SUPABASE_URL ?? '';
 
   // Run ticker news cron
-  const tickerRes = await fetch(`${supabaseUrl}/functions/v1/ticker-news-cron`, {
+  const tickerRes = await fetch(`${supabaseUrl}/functions/v1/ticker-cron`, {
     method: 'POST',
     headers: {
       'x-cron-secret': process.env.CRON_SECRET ?? '',

@@ -247,43 +247,67 @@ function LeagueGazette({
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(
-    async (force = false) => {
-      const today = todayStamp();
-      if (!force) {
-        try {
-          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-          if (c.date === today && c.league === leagueLabel && c.data) {
-            setEdition(c.data);
-            return;
-          }
-        } catch {}
-      }
-      setLoading(true);
-      setError(null);
+  const load = useCallback(async (force = false) => {
+    const today = todayStamp();
+  
+    // 1. Check localStorage first
+    if (!force) {
       try {
-        const data = await fetchGazetteEdition({
-          leagueLabel,
-          recentForm,
-          winStreaks,
-          lossStreaks,
-          currentSeason,
-        });
-        localStorage.setItem(
-          GAZETTE_CACHE_KEY,
-          JSON.stringify({ date: today, league: leagueLabel, data })
-        );
-        setEdition(data);
-      } catch (e) {
-        console.error('[Gazette]', e);
-        setError(true);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+        const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
+        if (c.date === today && c.league === leagueLabel && c.data) {
+          setEdition(c.data);
+          return;
+        }
+      } catch {}
+    }
+  
+    setLoading(true);
+    setError(null);
+  
+    try {
+      // 2. Try gazette_cache — playoff key first, then regular
+      const playoffKey = `${leagueLabel}_playoff`;
+      let { data: cached } = await supabase
+        .from('gazette_cache')
+        .select('data, date')
+        .eq('league', playoffKey)
+        .eq('date', today)
+        .single();
+  
+      if (!cached) {
+        ({ data: cached } = await supabase
+          .from('gazette_cache')
+          .select('data, date')
+          .eq('league', leagueLabel)
+          .eq('date', today)
+          .single());
       }
-    },
-    [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]
-  );
+  
+      if (cached?.data) {
+        localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ 
+          date: today, league: leagueLabel, data: cached.data 
+        }));
+        setEdition(cached.data);
+        return;
+      }
+  
+      // 3. Fall back to generating client-side
+      const data = await fetchGazetteEdition({
+        leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
+      });
+      localStorage.setItem(GAZETTE_CACHE_KEY, JSON.stringify({ 
+        date: today, league: leagueLabel, data 
+      }));
+      setEdition(data);
+  
+    } catch (e) {
+      console.error('[Gazette]', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]);
 
   useEffect(() => {
     if (!dataLoading && recentForm.hot.length > 0) load();

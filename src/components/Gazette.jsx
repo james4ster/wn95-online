@@ -247,43 +247,53 @@ function LeagueGazette({
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(
-    async (force = false) => {
+  const load = useCallback(async (force = false) => {
+    setLoading(true);
+    setError(null);
+  
+    try {
       const today = todayStamp();
-      if (!force) {
-        try {
-          const c = JSON.parse(localStorage.getItem(GAZETTE_CACHE_KEY) || '{}');
-          if (c.date === today && c.league === leagueLabel && c.data) {
-            setEdition(c.data);
-            return;
-          }
-        } catch {}
+      const playoffKey = `${leagueLabel}_playoff`;
+  
+      // Try playoff cache first, then regular
+      let { data: cached } = await supabase
+        .from('gazette_cache')
+        .select('data')
+        .eq('league', playoffKey)
+        .eq('date', today)
+        .single();
+  
+      if (!cached) {
+        ({ data: cached } = await supabase
+          .from('gazette_cache')
+          .select('data')
+          .eq('league', leagueLabel)
+          .eq('date', today)
+          .single());
       }
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchGazetteEdition({
-          leagueLabel,
-          recentForm,
-          winStreaks,
-          lossStreaks,
-          currentSeason,
-        });
-        localStorage.setItem(
-          GAZETTE_CACHE_KEY,
-          JSON.stringify({ date: today, league: leagueLabel, data })
-        );
-        setEdition(data);
-      } catch (e) {
-        console.error('[Gazette]', e);
-        setError(true);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  
+      if (cached?.data) {
+        const parsed = typeof cached.data === 'string' 
+          ? JSON.parse(cached.data) 
+          : cached.data;
+        setEdition(parsed);
+        return;
       }
-    },
-    [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]
-  );
+  
+      // Fall back to generating client-side if nothing cached yet
+      const data = await fetchGazetteEdition({
+        leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
+      });
+      setEdition(data);
+  
+    } catch (e) {
+      console.error('[Gazette]', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]);
 
   useEffect(() => {
     if (!dataLoading && recentForm.hot.length > 0) load();
@@ -295,7 +305,7 @@ function LeagueGazette({
   };
 
   // Derived display values
-  const team = edition?.featured_team || 'SUM'; //REPLACE WITH '' AFTER TEST
+  const team = edition?.featured_team ; //REPLACE WITH '' AFTER TEST
   // If featured_team is a full name, find the matching code
   const teamCode =
     Object.entries(teamNameMap).find(

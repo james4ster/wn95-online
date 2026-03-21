@@ -1,3 +1,4 @@
+/* redeploying to test change in vercel.json */
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';

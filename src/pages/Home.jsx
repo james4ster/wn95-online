@@ -908,8 +908,8 @@ function LeagueGazette({
   );
 
   useEffect(() => {
-    if (!dataLoading) load();
-  }, [dataLoading, leagueLabel]);
+    if (!dataLoading && recentForm.hot.length > 0) load();
+  }, [dataLoading, leagueLabel, isPlayoffActive]);
 
   const handleRefresh = () => {
     setRefreshing(true);

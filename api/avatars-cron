@@ -1,0 +1,16 @@
+export async function GET() {
+    const res = await fetch(
+      'https://<your-wn95-project-ref>.supabase.co/functions/v1/fetch-avatars',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.WN95_SUPABASE_ANON_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      }
+    );
+  
+    const data = await res.json();
+    return Response.json(data);
+  }

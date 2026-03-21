@@ -17,8 +17,5 @@
       "path": "/api/avatars-cron",
       "schedule": "0 3 * * *"
     }
-  ],
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

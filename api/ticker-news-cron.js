@@ -1,9 +1,13 @@
-/* Added avatars-cron to this function since vercel wasn't picking up the cron */
-
-import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req, res) {
   const secret = process.env.CRON_SECRET ?? '';
+
+   // Temporary debug — remove after testing
+  return res.status(200).json({ 
+    receivedHeader: req.headers['authorization'],
+    secretLength: secret.length,
+    secretFirst4: secret.slice(0, 4)
+  });
+  
   if (req.headers['authorization'] !== `Bearer ${secret}`) {
     return res.status(401).json({ error: 'Unauthorized' });
   }

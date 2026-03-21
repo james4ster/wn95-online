@@ -4,7 +4,7 @@ export default async function handler(req, res) {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${process.env.WN95_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${process.env.SUPABASE_ANON_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({}),

@@ -907,9 +907,16 @@ function LeagueGazette({
      teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats, teams]
   );
 
-  useEffect(() => {
-    if (!dataLoading && recentForm.hot.length > 0) load();
-  }, [dataLoading, leagueLabel, isPlayoffActive]);
+  const loadedKeyRef = useRef(null);
+
+useEffect(() => {
+  if (!dataLoading && recentForm.hot.length > 0) {
+    const key = `${leagueLabel}-${isPlayoffActive}`;
+    if (loadedKeyRef.current === key) return; // already loaded for this state
+    loadedKeyRef.current = key;
+    load();
+  }
+}, [dataLoading, leagueLabel, isPlayoffActive]);
 
   const handleRefresh = () => {
     setRefreshing(true);

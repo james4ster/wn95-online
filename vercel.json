@@ -14,7 +14,7 @@
       "schedule": "0 16 * * *"
     },
     {
-      "path": "/api/cron/refresh-avatars",
+      "path": "/api/refresh-avatars",
       "schedule": "0 3 * * *"
     }
   ],

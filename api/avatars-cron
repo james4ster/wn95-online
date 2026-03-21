@@ -1,6 +1,6 @@
-export async function GET() {
-    const res = await fetch(
-      'https://<your-wn95-project-ref>.supabase.co/functions/v1/fetch-avatars',
+export default async function handler(req, res) {
+    const response = await fetch(
+      `${process.env.WN95_SUPABASE_URL}/functions/v1/fetch-avatars`,
       {
         method: 'POST',
         headers: {
@@ -11,6 +11,6 @@ export async function GET() {
       }
     );
   
-    const data = await res.json();
-    return Response.json(data);
+    const data = await response.json();
+    res.status(200).json({ ok: true, ...data });
   }

@@ -153,7 +153,7 @@ const POS_COLORS = {
   },
 };
 function PosBadge({ pos }) {
-  const p = (pos || '').trim().toUpperCase();
+  const p = (pos || '-').trim().toUpperCase();
   const c = POS_COLORS[p] || {
     bg: 'rgba(255,255,255,.07)',
     border: 'rgba(255,255,255,.2)',
@@ -310,7 +310,7 @@ function PickRow({ pick, idx }) {
           textAlign: 'center',
         }}
       >
-        #{pick.pick ?? '–'}
+        #{pick.pick ?? '-'}
       </span>
 
       {/* Team logo + code */}
@@ -331,7 +331,7 @@ function PickRow({ pick, idx }) {
 
       {/* Position */}
       <div style={{ display: 'flex', justifyContent: 'center' }}>
-        <PosBadge pos={pick.pos} />
+      <PosBadge pos={pick.player ? pick.pos : '-'} />
       </div>
 
       {/* Player name */}
@@ -347,7 +347,7 @@ function PickRow({ pick, idx }) {
           whiteSpace: 'nowrap',
         }}
       >
-        {pick.player}
+        {pick.player || 'PASS'}
       </span>
 
       {/* Transaction badge */}
@@ -855,7 +855,7 @@ function DraftByManager({ selectedLeague }) {
                       #{p.pick ?? '–'}
                     </span>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      <PosBadge pos={p.pos} />
+                    <PosBadge pos={p.player && p.player.trim() ? p.pos : '-'} />
                     </div>
                     <span
                       className="txn-player-name"
@@ -869,7 +869,7 @@ function DraftByManager({ selectedLeague }) {
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {p.player}
+                      {p.player && p.player.trim() ? p.player : 'PASS'}
                     </span>
                     <div
                       style={{ display: 'flex', justifyContent: 'flex-end' }}

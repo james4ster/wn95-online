@@ -868,7 +868,7 @@ function LeagueGazette({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [seasonTeams, setSeasonTeams] = useState([]);
+  
 
   const load = useCallback(
     async (force = false) => {
@@ -1598,6 +1598,7 @@ export default function Home() {
   const [nextSeason, setNextSeason] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
   const [topSeasonScorers, setTopSeasonScorers] = useState([]);
+  const [seasonTeams, setSeasonTeams] = useState([]);
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
   const beltRef = useRef(null);
@@ -1672,13 +1673,13 @@ export default function Home() {
 
     // ── Teams for this season → build name map (includes coach) ──────────
     // teams table uses `abr` as the team code that matches games.home/away
-    const { data: seasonTeams } = await supabase
+    const { data: fetchedTeams } = await supabase
       .from('teams')
       .select('abr, team, coach, manager_id')
       .eq('lg', latest.lg);
 
     const nameMap = {};
-    (seasonTeams || []).forEach((t) => {
+    (fetchedTeams || []).forEach((t) => {
       nameMap[t.abr] = parseTeamData(t);
     });
     setTeamNameMap(nameMap);

@@ -1,6 +1,12 @@
 export default async function handler(req, res) {
+  const secret = process.env.CRON_SECRET ?? '';
+  if (req.headers['authorization'] !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
   const supabaseUrl = process.env.SUPABASE_URL ?? '';
 
+  // Run ticker news cron
   const tickerRes = await fetch(`${supabaseUrl}/functions/v1/ticker-news-cron`, {
     method: 'POST',
     headers: {
@@ -10,6 +16,7 @@ export default async function handler(req, res) {
   });
   const tickerData = await tickerRes.json();
 
+  // Refresh Discord avatars
   const avatarRes = await fetch(`${supabaseUrl}/functions/v1/fetch-avatars`, {
     method: 'POST',
     headers: {

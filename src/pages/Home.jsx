@@ -531,30 +531,46 @@ async function fetchGazetteEdition({
   }, {});
 
   // ── Cache key
-  const cacheKey = isPlayoffActive ? `${leagueLabel}_playoff` : leagueLabel;
-
-  // ── Try DB cache first
-  try {
-    const { data: cached } = await supabase
-      .from('gazette_cache')
-      .select('data, date')
-      .eq('league', cacheKey)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+  // ── Try DB cache first — always check playoff key first
+try {
+  const playoffKey = `${leagueLabel}_playoff`;
   
-    if (cached?.date === today && cached?.data) {
-      console.log('[Gazette] ✅ Serving from DB cache');
-      const parsed = typeof cached.data === 'string'
-        ? JSON.parse(cached.data)
-        : cached.data;
-      return parsed;
-    }
-  } catch (e) {
-    console.log('[Gazette] No DB cache found, generating live');
+  // Check playoff cache first regardless of isPlayoffActive
+  const { data: playoffCached } = await supabase
+    .from('gazette_cache')
+    .select('data, date')
+    .eq('league', playoffKey)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (playoffCached?.date === today && playoffCached?.data) {
+    console.log('[Gazette] ✅ Serving from playoff DB cache');
+    const parsed = typeof playoffCached.data === 'string'
+      ? JSON.parse(playoffCached.data)
+      : playoffCached.data;
+    return parsed;
   }
 
-  console.log('[Gazette] ⚠️ Cache miss — calling AI');
+  // Fall back to regular cache only if no playoff cache exists
+  const { data: cached } = await supabase
+    .from('gazette_cache')
+    .select('data, date')
+    .eq('league', cacheKey)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (cached?.date === today && cached?.data) {
+    console.log('[Gazette] ✅ Serving from DB cache');
+    const parsed = typeof cached.data === 'string'
+      ? JSON.parse(cached.data)
+      : cached.data;
+    return parsed;
+  }
+} catch (e) {
+  console.log('[Gazette] No DB cache found, generating live');
+}
 
   const tn = (code) =>
     teamNameMap[code] || { city: code, nickname: code, full: code };
@@ -894,6 +910,7 @@ function LeagueGazette({
           managers: managers || [],
           teams,
         });
+        console.log('[Gazette] edition set, team:', data?.featured_team, 'teamNameMap keys:', Object.keys(teamNameMap));
         setEdition(data);
       } catch (e) {
         console.error('[Gazette]', e);
@@ -907,9 +924,16 @@ function LeagueGazette({
      teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats, teams]
   );
 
+  const loadedKeyRef = useRef(null);
+
   useEffect(() => {
-    if (!dataLoading && recentForm.hot.length > 0) load();
-  }, [dataLoading, leagueLabel, isPlayoffActive]);
+    if (!dataLoading && recentForm.hot.length > 0 && Object.keys(teamNameMap).length > 0) {
+      const key = `${leagueLabel}-${isPlayoffActive}`;
+      if (loadedKeyRef.current === key) return;
+      loadedKeyRef.current = key;
+      load();
+    }
+  }, [dataLoading, leagueLabel, isPlayoffActive, teamNameMap]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -940,6 +964,8 @@ function LeagueGazette({
 
   // Full name for the hero footer — key into map by teamCode, not team
   const featFullName = teamNameMap[teamCode]?.full || teamCode;
+
+  console.log('[Gazette render] team:', team, 'teamCode:', teamCode, 'teamNameMap TBP:', teamNameMap['TBP']);
 
   return (
     <div
@@ -1032,14 +1058,14 @@ function LeagueGazette({
                   <div className="si-hero-vignette" />
                 </div>
                 <div className="si-hero-body">
-                  <img
-                    src={`/assets/teamLogos/${teamCode}.png`}
-                    alt={teamCode}
-                    className="si-hero-logo"
-                    onError={(e) => {
-                      e.currentTarget.style.opacity = '0';
-                    }}
-                  />
+                <img
+                  src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
+                  alt={teamCode}
+                  className="si-hero-logo"
+                  onError={(e) => {
+                    e.currentTarget.style.opacity = '0';
+                  }}
+                />
                 </div>
                 <div className="si-hero-foot">
                   {/* Show full team name in hero footer */}
@@ -1694,11 +1720,9 @@ export default function Home() {
         )
         .eq('lg', latest.lg)
         .order('id', { ascending: false }),
-      supabase
+        supabase
         .from('playoff_games')
-        .select(
-          'id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length'
-        )
+        .select('id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length,game_date')
         .eq('lg', latest.lg)
         .not('team_a_score', 'is', null)
         .order('id', { ascending: false }),
@@ -1901,9 +1925,15 @@ export default function Home() {
 
     // ── Top scorers — playoff takes priority over regular season ──────────────
     // Use playoff_game_id from recentPlayoffNorm; only use season IDs as fallback.
-    const recentPlayoffIds = (allPlayoffGames || [])
-      .slice(0, 5)
-      .map((g) => g.id);
+    // Use most recently played series only
+      const maxDate = (allPlayoffGames || []).reduce((best, g) => 
+      (g.game_date ?? '') > best ? (g.game_date ?? '') : best, '');
+      const mostRecentGame = (allPlayoffGames || []).find((g) => g.game_date === maxDate);
+      const recentSeriesGames = (allPlayoffGames || []).filter(
+      (g) => g.round === mostRecentGame?.round && 
+            g.series_number === mostRecentGame?.series_number
+      );
+    const recentPlayoffIds = recentSeriesGames.slice(0, 5).map((g) => g.id);
     const recentSeasonIds = isPlayoffActive
       ? [] // suppress season scoring when playoffs are active
       : (allGames || []).slice(0, 5).map((g) => g.id);

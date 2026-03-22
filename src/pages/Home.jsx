@@ -894,6 +894,7 @@ function LeagueGazette({
           managers: managers || [],
           teams,
         });
+        console.log('[Gazette] edition set, team:', data?.featured_team, 'teamNameMap keys:', Object.keys(teamNameMap));
         setEdition(data);
       } catch (e) {
         console.error('[Gazette]', e);
@@ -909,14 +910,14 @@ function LeagueGazette({
 
   const loadedKeyRef = useRef(null);
 
-useEffect(() => {
-  if (!dataLoading && recentForm.hot.length > 0) {
-    const key = `${leagueLabel}-${isPlayoffActive}`;
-    if (loadedKeyRef.current === key) return; // already loaded for this state
-    loadedKeyRef.current = key;
-    load();
-  }
-}, [dataLoading, leagueLabel, isPlayoffActive]);
+  useEffect(() => {
+    if (!dataLoading && recentForm.hot.length > 0 && Object.keys(teamNameMap).length > 0) {
+      const key = `${leagueLabel}-${isPlayoffActive}`;
+      if (loadedKeyRef.current === key) return;
+      loadedKeyRef.current = key;
+      load();
+    }
+  }, [dataLoading, leagueLabel, isPlayoffActive, teamNameMap]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -947,6 +948,8 @@ useEffect(() => {
 
   // Full name for the hero footer — key into map by teamCode, not team
   const featFullName = teamNameMap[teamCode]?.full || teamCode;
+
+  console.log('[Gazette render] team:', team, 'teamCode:', teamCode, 'teamNameMap TBP:', teamNameMap['TBP']);
 
   return (
     <div
@@ -1039,14 +1042,14 @@ useEffect(() => {
                   <div className="si-hero-vignette" />
                 </div>
                 <div className="si-hero-body">
-                  <img
-                    src={`/assets/teamLogos/${teamCode}.png`}
-                    alt={teamCode}
-                    className="si-hero-logo"
-                    onError={(e) => {
-                      e.currentTarget.style.opacity = '0';
-                    }}
-                  />
+                <img
+                  src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
+                  alt={teamCode}
+                  className="si-hero-logo"
+                  onError={(e) => {
+                    e.currentTarget.style.opacity = '0';
+                  }}
+                />
                 </div>
                 <div className="si-hero-foot">
                   {/* Show full team name in hero footer */}

@@ -1720,11 +1720,9 @@ export default function Home() {
         )
         .eq('lg', latest.lg)
         .order('id', { ascending: false }),
-      supabase
+        supabase
         .from('playoff_games')
-        .select(
-          'id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length'
-        )
+        .select('id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length,game_date')
         .eq('lg', latest.lg)
         .not('team_a_score', 'is', null)
         .order('id', { ascending: false }),
@@ -1927,9 +1925,15 @@ export default function Home() {
 
     // ── Top scorers — playoff takes priority over regular season ──────────────
     // Use playoff_game_id from recentPlayoffNorm; only use season IDs as fallback.
-    const recentPlayoffIds = (allPlayoffGames || [])
-      .slice(0, 5)
-      .map((g) => g.id);
+    // Use most recently played series only
+      const maxDate = (allPlayoffGames || []).reduce((best, g) => 
+      (g.game_date ?? '') > best ? (g.game_date ?? '') : best, '');
+      const mostRecentGame = (allPlayoffGames || []).find((g) => g.game_date === maxDate);
+      const recentSeriesGames = (allPlayoffGames || []).filter(
+      (g) => g.round === mostRecentGame?.round && 
+            g.series_number === mostRecentGame?.series_number
+      );
+    const recentPlayoffIds = recentSeriesGames.slice(0, 5).map((g) => g.id);
     const recentSeasonIds = isPlayoffActive
       ? [] // suppress season scoring when playoffs are active
       : (allGames || []).slice(0, 5).map((g) => g.id);

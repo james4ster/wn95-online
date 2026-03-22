@@ -440,7 +440,7 @@ function MatchupCard({ slot, seasonGames, cardRef, flipped = false }) {
 }
 
 // ChampCard also reads winsNeeded/seriesLength from slot
-function ChampCard({ slot, selectedLeague, cardRef }) {
+function ChampCard({ slot, selectedLeague, cardRef, seasonGames }) {
   const [tErr, setTErr] = useState(false);
   const tSrc = selectedLeague?.toUpperCase().startsWith('Q')
     ? '/assets/awards/q_champ.png'
@@ -537,7 +537,7 @@ function ChampCard({ slot, selectedLeague, cardRef }) {
         }
         <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,140,0,.2),transparent)' }} />
         <CRow team={botTeam} seed={botSeed} wins={botW || 0} isWinner={winner === botTeam} />
-        {!winner && <BottomBar topW={topW || 0} botW={botW || 0} winner={winner} topTeam={topTeam} botTeam={botTeam} seasonGames={null} />}
+        {!winner && <BottomBar topW={topW || 0} botW={botW || 0} winner={winner} topTeam={topTeam} botTeam={botTeam} seasonGames={seasonGames} />}
 
         {winner && (
           <div style={{
@@ -812,7 +812,7 @@ export default function PlayoffBracket({
         </div>
 
         <div style={{ flexShrink: 0, zIndex: 1, position: 'relative', alignSelf: 'center' }}>
-          <ChampCard slot={champSlot} selectedLeague={selectedLeague} cardRef={champRef} />
+        <ChampCard slot={champSlot} selectedLeague={selectedLeague} cardRef={champRef} seasonGames={seasonGames} />
         </div>
 
         <div style={{

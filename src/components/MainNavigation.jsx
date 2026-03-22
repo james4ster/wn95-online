@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from './LeagueContext';
+import ThemeToggle from './ThemeToggle';
 
 export default function MainNavigation() {
   const [leagues, setLeagues] = useState([]);
@@ -121,7 +122,8 @@ export default function MainNavigation() {
         </div>
 
         {/* RIGHT — DISCORD, pinned to match home grid right edge */}
-        <div className="nav-right">
+        <div className="nav-right" style={{ gap: '0.5rem' }}>
+          <ThemeToggle />
           <a
             href="https://discord.gg/QxRDBgz3"
             target="_blank"

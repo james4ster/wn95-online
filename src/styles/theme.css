@@ -1,0 +1,201 @@
+/* ═══════════════════════════════════════════════════════════════
+   WN95 THEME VARIABLES
+   Import this file in your main entry point (main.jsx or index.css)
+   Dark mode is the default. Light mode activates via [data-theme="light"]
+   on the <html> element.
+═══════════════════════════════════════════════════════════════ */
+
+:root {
+    /* ── Backgrounds ── */
+    --bg-page:        #00000a;
+    --bg-surface:     #0a0a18;
+    --bg-card:        #0d0d14;
+    --bg-hover:       rgba(255,255,255,.04);
+    --bg-active:      rgba(255,140,0,.11);
+  
+    /* ── Borders ── */
+    --border-subtle:  rgba(255,255,255,.04);
+    --border-dim:     rgba(255,255,255,.07);
+    --border-default: rgba(135,206,235,.1);
+    --border-strong:  rgba(135,206,235,.25);
+  
+    /* ── Text ── */
+    --text-primary:   rgba(255,255,255,.88);
+    --text-secondary: rgba(255,255,255,.55);
+    --text-muted:     rgba(255,255,255,.28);
+    --text-faint:     rgba(255,255,255,.14);
+  
+    /* ── Brand accents ── */
+    --accent-blue:    #87CEEB;
+    --accent-orange:  #FF8C00;
+    --accent-gold:    #FFD700;
+    --accent-green:   #00CC55;
+    --accent-red:     #FF3B3B;
+    --accent-purple:  #E040FB;
+    --accent-teal:    #00BFA5;
+  
+    /* ── Semantic win/loss ── */
+    --color-win:      #00CC55;
+    --color-loss:     #448AFF;
+    --color-win-bg:   rgba(0,200,83,.12);
+    --color-loss-bg:  rgba(68,138,255,.12);
+    --color-win-border:  rgba(0,200,83,.28);
+    --color-loss-border: rgba(68,138,255,.28);
+  
+    /* ── Scoreboard header ── */
+    --scoreboard-bg:         #000;
+    --scoreboard-border:     #333;
+    --scoreboard-led:        #FFD700;
+    --scoreboard-led-glow:   #FF8C00;
+  
+    /* ── Ticker ── */
+    --ticker-bg:      #060a16;
+    --ticker-brand:   #B50000;
+    --ticker-border:  #D95E00;
+  
+    /* ── Nav/Tabs ── */
+    --tab-bg:         rgba(255,255,255,.03);
+    --tab-border:     rgba(255,255,255,.1);
+    --tab-text:       rgba(255,255,255,.32);
+    --tab-on-bg:      rgba(255,140,0,.11);
+    --tab-on-border:  rgba(255,140,0,.6);
+    --tab-on-text:    #FF8C00;
+  
+    /* ── Panel headers ── */
+    --panel-header-bg:     linear-gradient(90deg,rgba(255,140,0,.07) 0%,transparent 100%);
+    --panel-header-border: rgba(255,140,0,.1);
+    --panel-header-text:   #FF8C00;
+    --panel-icon-shadow:   rgba(255,140,0,.3);
+  
+    /* ── Gazette magazine ── */
+    --gaz-bg:         #09090e;
+    --gaz-card:       #0d0d14;
+    --gaz-border:     rgba(255,255,255,.07);
+    --gaz-text:       rgba(225,220,210,.85);
+    --gaz-muted:      rgba(180,175,160,.42);
+    --gaz-hed:        rgba(235,228,210,.92);
+    --gaz-dek:        rgba(190,184,168,.65);
+  
+    /* ── Countdown widget ── */
+    --icd-eyebrow:    rgba(255,140,0,.5);
+  
+    /* ── Spotlight dots ── */
+    --dot-win:        #00CC55;
+    --dot-loss:       #4477CC;
+  
+    /* ── Skeleton shimmer ── */
+    --skel-from:      rgba(255,255,255,.025);
+    --skel-mid:       rgba(255,255,255,.055);
+  
+    /* ── Discord events ── */
+    --discord-border:    rgba(88,101,242,.18);
+    --discord-cal-bg:    rgba(88,101,242,.1);
+    --discord-cal-border:rgba(88,101,242,.25);
+    --discord-cal-text:  #7289DA;
+    --discord-join-text: #5865F2;
+    --discord-join-bg:   rgba(88,101,242,.07);
+    --discord-join-border:rgba(88,101,242,.3);
+    --discord-row-hover: rgba(88,101,242,.07);
+  
+    /* ── Scanlines ── */
+    --scanlines: rgba(0,0,0,.055);
+  }
+  
+  /* ═══════════════════════════════════════════════════════════════
+     LIGHT MODE OVERRIDES
+  ═══════════════════════════════════════════════════════════════ */
+  [data-theme="light"] {
+    /* ── Backgrounds ── */
+    --bg-page:        #f0f2f5;
+    --bg-surface:     #ffffff;
+    --bg-card:        #f8f9fb;
+    --bg-hover:       rgba(26,111,212,.06);
+    --bg-active:      rgba(26,111,212,.1);
+  
+    /* ── Borders ── */
+    --border-subtle:  rgba(0,0,0,.06);
+    --border-dim:     rgba(0,0,0,.1);
+    --border-default: rgba(0,0,0,.12);
+    --border-strong:  rgba(26,111,212,.3);
+  
+    /* ── Text ── */
+    --text-primary:   rgba(0,0,0,.88);
+    --text-secondary: rgba(0,0,0,.6);
+    --text-muted:     rgba(0,0,0,.38);
+    --text-faint:     rgba(0,0,0,.18);
+  
+    /* ── Brand accents ── */
+    --accent-blue:    #1a6fd4;
+    --accent-orange:  #c45a00;
+    --accent-gold:    #a07800;
+    --accent-green:   #007a3d;
+    --accent-red:     #cc2200;
+    --accent-purple:  #9c27b0;
+    --accent-teal:    #00796b;
+  
+    /* ── Semantic win/loss ── */
+    --color-win:         #007a3d;
+    --color-loss:        #1a6fd4;
+    --color-win-bg:      rgba(0,122,61,.1);
+    --color-loss-bg:     rgba(26,111,212,.1);
+    --color-win-border:  rgba(0,122,61,.3);
+    --color-loss-border: rgba(26,111,212,.3);
+  
+    /* ── Scoreboard header — keep dark for impact ── */
+    --scoreboard-bg:       #0d1a2e;
+    --scoreboard-border:   #1a3a5c;
+    --scoreboard-led:      #FFD700;
+    --scoreboard-led-glow: #FF8C00;
+  
+    /* ── Ticker — keep dark ── */
+    --ticker-bg:      #0d1a2e;
+    --ticker-brand:   #cc2200;
+    --ticker-border:  #c45a00;
+  
+    /* ── Nav/Tabs ── */
+    --tab-bg:         rgba(0,0,0,.03);
+    --tab-border:     rgba(0,0,0,.12);
+    --tab-text:       rgba(0,0,0,.45);
+    --tab-on-bg:      rgba(26,111,212,.1);
+    --tab-on-border:  rgba(26,111,212,.5);
+    --tab-on-text:    #1a6fd4;
+  
+    /* ── Panel headers ── */
+    --panel-header-bg:     linear-gradient(90deg,rgba(26,111,212,.07) 0%,transparent 100%);
+    --panel-header-border: rgba(26,111,212,.15);
+    --panel-header-text:   #1a6fd4;
+    --panel-icon-shadow:   rgba(26,111,212,.2);
+  
+    /* ── Gazette ── */
+    --gaz-bg:         #ffffff;
+    --gaz-card:       #f8f9fb;
+    --gaz-border:     rgba(0,0,0,.1);
+    --gaz-text:       rgba(0,0,0,.82);
+    --gaz-muted:      rgba(0,0,0,.48);
+    --gaz-hed:        rgba(0,0,0,.9);
+    --gaz-dek:        rgba(0,0,0,.58);
+  
+    /* ── Countdown ── */
+    --icd-eyebrow:    rgba(26,111,212,.6);
+  
+    /* ── Spotlight dots ── */
+    --dot-win:        #007a3d;
+    --dot-loss:       #1a6fd4;
+  
+    /* ── Skeleton shimmer ── */
+    --skel-from:      rgba(0,0,0,.04);
+    --skel-mid:       rgba(0,0,0,.08);
+  
+    /* ── Discord events ── */
+    --discord-border:     rgba(88,101,242,.2);
+    --discord-cal-bg:     rgba(88,101,242,.08);
+    --discord-cal-border: rgba(88,101,242,.2);
+    --discord-cal-text:   #5865F2;
+    --discord-join-text:  #5865F2;
+    --discord-join-bg:    rgba(88,101,242,.06);
+    --discord-join-border:rgba(88,101,242,.25);
+    --discord-row-hover:  rgba(88,101,242,.05);
+  
+    /* ── Scanlines — off in light mode ── */
+    --scanlines: rgba(0,0,0,0);
+  }

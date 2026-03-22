@@ -2397,7 +2397,7 @@ export default function Home() {
 
       <style>{`
        *,*::before,*::after { box-sizing:border-box; max-width:100%; }
-        html,body{background:#00000a!important;}
+       html,body{background:var(--bg-page)!important;}
 
         .hp {
           min-height:100vh;

@@ -531,30 +531,46 @@ async function fetchGazetteEdition({
   }, {});
 
   // ── Cache key
-  const cacheKey = isPlayoffActive ? `${leagueLabel}_playoff` : leagueLabel;
-
-  // ── Try DB cache first
-  try {
-    const { data: cached } = await supabase
-      .from('gazette_cache')
-      .select('data, date')
-      .eq('league', cacheKey)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+  // ── Try DB cache first — always check playoff key first
+try {
+  const playoffKey = `${leagueLabel}_playoff`;
   
-    if (cached?.date === today && cached?.data) {
-      console.log('[Gazette] ✅ Serving from DB cache');
-      const parsed = typeof cached.data === 'string'
-        ? JSON.parse(cached.data)
-        : cached.data;
-      return parsed;
-    }
-  } catch (e) {
-    console.log('[Gazette] No DB cache found, generating live');
+  // Check playoff cache first regardless of isPlayoffActive
+  const { data: playoffCached } = await supabase
+    .from('gazette_cache')
+    .select('data, date')
+    .eq('league', playoffKey)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (playoffCached?.date === today && playoffCached?.data) {
+    console.log('[Gazette] ✅ Serving from playoff DB cache');
+    const parsed = typeof playoffCached.data === 'string'
+      ? JSON.parse(playoffCached.data)
+      : playoffCached.data;
+    return parsed;
   }
 
-  console.log('[Gazette] ⚠️ Cache miss — calling AI');
+  // Fall back to regular cache only if no playoff cache exists
+  const { data: cached } = await supabase
+    .from('gazette_cache')
+    .select('data, date')
+    .eq('league', cacheKey)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (cached?.date === today && cached?.data) {
+    console.log('[Gazette] ✅ Serving from DB cache');
+    const parsed = typeof cached.data === 'string'
+      ? JSON.parse(cached.data)
+      : cached.data;
+    return parsed;
+  }
+} catch (e) {
+  console.log('[Gazette] No DB cache found, generating live');
+}
 
   const tn = (code) =>
     teamNameMap[code] || { city: code, nickname: code, full: code };

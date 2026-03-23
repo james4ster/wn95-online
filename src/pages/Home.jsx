@@ -42,9 +42,37 @@ function useLeagueCountdown(season, nextSeason) {
     if (!season) return;
 
     if (season.status === 'playoffs') {
-      setTick({ mode: 'playoffs', seasonLabel: season.lg });
-      return;
-    }
+  if (nextSeason?.start_date) {
+    const targetDate = nextSeason.start_date;
+
+    const calc = () => {
+      const diff = new Date(targetDate) - Date.now();
+      if (diff <= 0) {
+        setTick({ mode: 'done', seasonLabel: nextSeason.lg });
+        return;
+      }
+
+      setTick({
+        mode: 'playoffs', // still playoffs mode
+        seasonLabel: nextSeason.lg,
+        d: Math.floor(diff / 86400000),
+        h: Math.floor((diff % 86400000) / 3600000),
+        m: Math.floor((diff % 3600000) / 60000),
+        s: Math.floor((diff % 60000) / 1000),
+        urgent: diff < 48 * 3600000,
+        warning: diff < 7 * 86400000,
+      });
+    };
+
+    calc();
+    const id = setInterval(calc, 1000);
+    return () => clearInterval(id);
+  }
+
+  // fallback (no next season date)
+  setTick({ mode: 'playoffs', seasonLabel: season.lg });
+  return;
+}
 
     const targetDate =
       season.status === 'offseason'

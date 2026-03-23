@@ -65,7 +65,7 @@ function useLeagueCountdown(season, nextSeason) {
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
-        nextSeasonLabel: nextSeason?.lg || null, // ← e.g. "W17"
+        
         d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),

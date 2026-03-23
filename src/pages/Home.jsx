@@ -269,14 +269,13 @@ function InlineCountdown({ cfg, tick }) {
       <div className="icd-left">
         <span className="icd-eyebrow">{eyebrow}</span>
         <div className="icd-meta">
-          <span className="icd-dot" />
-          <span className="icd-league">{cfg.label}</span>
-          {tick?.mode === 'offseason' && tick?.nextSeasonLabel ? (
-            <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
-          ) : tick?.seasonLabel ? (
-            <span className="icd-season">{tick.seasonLabel}</span>
-          ) : null}
-        </div>
+  <span className="icd-dot" />
+  <span className="icd-league">{cfg.label}</span>
+  {/* only show nextSeasonLabel if different from tick.seasonLabel */}
+  {tick?.mode === 'offseason' && tick?.nextSeasonLabel && tick.nextSeasonLabel !== tick.seasonLabel ? (
+    <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
+  ) : null}
+</div>
       </div>
 
       <div className="icd-right">{renderRight()}</div>

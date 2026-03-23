@@ -65,6 +65,7 @@ function useLeagueCountdown(season, nextSeason) {
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
+        
         d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
@@ -2437,8 +2438,8 @@ export default function Home() {
         .icd-complete{display:flex;align-items:center;gap:.3rem;}
         .icd-done-txt{font-family:'Press Start 2P',monospace;font-size:10px;color:color-mix(in srgb,var(--ic) 70%,rgba(255,255,255,.3));letter-spacing:1px;}
         .icd-clock{display:flex;align-items:center;gap:.25rem;}
-        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.2rem .38rem;min-width:38px;}
-        .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
+        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.12rem .24rem; min-width:28px;}
+        .icd-n{font-family:'VT323',monospace;font-size:20px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
 
         /* ── Panels ── */

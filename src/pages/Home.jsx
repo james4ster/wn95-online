@@ -65,7 +65,6 @@ function useLeagueCountdown(season, nextSeason) {
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
-        nextSeasonLabel: nextSeason?.lg || null, // ← e.g. "W17"
         d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
@@ -1680,7 +1679,7 @@ export default function Home() {
       setLoading(false);
       return;
     }
-    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
+    const STATUS_PRIORITY = { playoffs: 0, offseason: 1, season: 2 };
 
     const latest = ps.reduce((b, s) => {
       const sPri = STATUS_PRIORITY[s.status] ?? 1;

@@ -23,12 +23,12 @@ const PosBadge = ({ pos }) =>
   pos ? <span className={`pos-badge pos-${pos}`}>{pos}</span> : null;
 
 const handLabel = (h) => {
-  if (h === "L" || h === "l") return "L";
-  if (h === "R" || h === "r") return "R";
-  if (h === 0   || h === "0" || h === false) return "L";
-  if (h === 1   || h === "1" || h === true)  return "R";
-  return h ? String(h).toUpperCase() : "";
-};
+    if (h === "L" || h === "l") return "L";
+    if (h === "R" || h === "r") return "R";
+    if (h === 0   || h === "0" || h === false) return "R"; // flipped
+    if (h === 1   || h === "1" || h === true)  return "L"; // flipped
+    return h ? String(h).toUpperCase() : "";
+  };
 
 const TOOLTIP_ATTRS = [
   { key: "agl",     label: "AGL" },

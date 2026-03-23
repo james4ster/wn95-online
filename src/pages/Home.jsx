@@ -1048,13 +1048,16 @@ function LeagueGazette({
               <div className="si-hero">
                 <div className="si-hero-bg">
                   <img
-                    src={`/assets/banners/${teamCode}.png`}
-                    alt=""
-                    className="si-hero-banner"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
+  src={
+    edition?.champion_team
+      ? `/assets/team-art/champ/${edition.champion_team}.jpg`
+      : `/assets/banners/${teamCode}.png`
+  }
+  alt=""
+  className="si-hero-banner"
+  style={{ opacity: edition?.champion_team ? 0.55 : 0.13 }}
+  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+/>
                   <div className="si-hero-vignette" />
                 </div>
                 <div className="si-hero-body">

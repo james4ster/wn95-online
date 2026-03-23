@@ -1049,10 +1049,10 @@ function LeagueGazette({
                 <div className="si-hero-bg">
                   <img
   src={
-    edition?.champion_team
-      ? `/assets/team-art/champ/${edition.champion_team}.jpg`
-      : `/assets/banners/${teamCode}.png`
-  }
+  edition?.champion_team
+    ? `/assets/team-art/champ/${edition.champion_team}.png`
+    : `/assets/banners/${teamCode}.png`
+}
   alt=""
   className="si-hero-banner"
   style={{ opacity: edition?.champion_team ? 0.55 : 0.13 }}

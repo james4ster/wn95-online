@@ -22,7 +22,7 @@ const OvrBadge = ({ ovr }) =>
 const PosBadge = ({ pos }) =>
   pos ? <span className={`pos-badge pos-${pos}`}>{pos}</span> : null;
 
-const handLabel = (h) => {
+  const handLabel = (h) => {
     if (h === "L" || h === "l") return "L";
     if (h === "R" || h === "r") return "R";
     if (h === 0   || h === "0" || h === false) return "R"; // flipped
@@ -566,15 +566,13 @@ export default function Teams() {
           color:#FF8C00; letter-spacing:2px; text-shadow:0 0 5px #FF8C00;
         }
         .arcade-select {
-          background:linear-gradient(180deg,#1a1a2e 0%,#0a0a15 100%);
-          color:#87CEEB; border:3px solid #87CEEB; padding:.75rem 1rem;
-          font-family:'VT323',monospace; font-size:1.2rem; cursor:pointer;
-          border-radius:8px; transition:all .3s ease; letter-spacing:1px; min-width:200px;
-          box-shadow:0 0 10px rgba(135,206,235,.3),inset 0 0 10px rgba(135,206,235,.1);
+          background:rgba(5,5,20,.9); color:#87CEEB; border:2px solid rgba(135,206,235,.3);
+          padding:.55rem 1.1rem; font-family:'VT323',monospace; font-size:1.3rem;
+          border-radius:8px; cursor:pointer; outline:none; min-width:160px;
+          transition:border-color .2s,box-shadow .2s;
         }
         .arcade-select:hover:not(:disabled) {
-          border-color:#FF8C00; color:#FF8C00;
-          box-shadow:0 0 15px rgba(255,140,0,.5),inset 0 0 15px rgba(255,140,0,.1);
+          { border-color:#87CEEB; box-shadow:0 0 12px rgba(135,206,235,.2); },inset 0 0 15px rgba(255,140,0,.1);
           transform:translateY(-2px);
         }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }

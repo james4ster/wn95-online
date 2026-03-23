@@ -38,44 +38,48 @@ function parseTeamData(teamRow) {
 
 function useLeagueCountdown(season, nextSeason) {
   const [tick, setTick] = useState(null);
+
   useEffect(() => {
     if (!season) return;
 
+    // ── Special case: playoffs but next season has a start_date
     if (season.status === 'playoffs' && nextSeason?.start_date) {
-  const targetDate = nextSeason.start_date;
+      const targetDate = nextSeason.start_date; // countdown to next season
 
-  const calc = () => {
-    const diff = new Date(targetDate) - Date.now();
-    if (diff <= 0) {
-      setTick({ mode: 'done', seasonLabel: nextSeason.lg });
+      const calc = () => {
+        const diff = new Date(targetDate) - Date.now();
+        if (diff <= 0) {
+          setTick({ mode: 'done', seasonLabel: nextSeason.lg });
+          return;
+        }
+
+        setTick({
+          mode: 'offseason',           // show countdown
+          seasonLabel: nextSeason.lg,  // next season label
+          d: Math.floor(diff / 86400000),
+          h: Math.floor((diff % 86400000) / 3600000),
+          m: Math.floor((diff % 3600000) / 60000),
+          s: Math.floor((diff % 60000) / 1000),
+          urgent: diff < 48 * 3600000,
+          warning: diff < 7 * 86400000,
+        });
+      };
+
+      calc();
+      const id = setInterval(calc, 1000);
+      return () => clearInterval(id);
+    }
+
+    // ── Fallback if no next season date
+    if (season.status === 'playoffs') {
+      setTick({ mode: 'playoffs', seasonLabel: season.lg });
       return;
     }
 
-    setTick({
-      mode: 'offseason',           // 👈 changed from 'playoffs' to 'offseason'
-      seasonLabel: nextSeason.lg,  // 👈 show next season label
-      d: Math.floor(diff / 86400000),
-      h: Math.floor((diff % 86400000) / 3600000),
-      m: Math.floor((diff % 3600000) / 60000),
-      s: Math.floor((diff % 60000) / 1000),
-      urgent: diff < 48 * 3600000,
-      warning: diff < 7 * 86400000,
-    });
-  };
-
-  calc();
-  const id = setInterval(calc, 1000);
-  return () => clearInterval(id);
-}
-
-// fallback if no next season date
-setTick({ mode: 'playoffs', seasonLabel: season.lg });
-return;
-}
-
+    // ── Regular season / offseason countdown
     const targetDate =
       season.status === 'offseason'
-        ? season.start_date // ← this would be on the NEXT season row
+        ? season.start_date
         : season.end_date;
 
     if (!targetDate) {
@@ -89,10 +93,10 @@ return;
         setTick({ mode: 'done', seasonLabel: season.lg });
         return;
       }
+
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
-        
         d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
@@ -101,10 +105,12 @@ return;
         warning: diff < 7 * 86400000,
       });
     };
+
     calc();
     const id = setInterval(calc, 1000);
     return () => clearInterval(id);
   }, [season, nextSeason]);
+
   return tick;
 }
 

@@ -54,9 +54,9 @@ function useLeagueCountdown(season, nextSeason) {
         }
 
         setTick({
-          mode: 'offseason',           // show countdown
-          seasonLabel: nextSeason.lg,  // next season label
-          d: Math.floor(diff / 86400000),
+          mode: 'offseason',
+          seasonLabel: nextSeason.lg,
+          d: Math.ceil(diff / 86400000),  // ← round up
           h: Math.floor((diff % 86400000) / 3600000),
           m: Math.floor((diff % 3600000) / 60000),
           s: Math.floor((diff % 60000) / 1000),
@@ -97,7 +97,9 @@ function useLeagueCountdown(season, nextSeason) {
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
-        d: Math.floor(diff / 86400000),
+        
+        // ✅ Use ceil instead of floor for days
+        d: Math.ceil(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
         s: Math.floor((diff % 60000) / 1000),

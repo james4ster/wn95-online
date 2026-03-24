@@ -38,48 +38,17 @@ function parseTeamData(teamRow) {
 
 function useLeagueCountdown(season, nextSeason) {
   const [tick, setTick] = useState(null);
-
   useEffect(() => {
     if (!season) return;
 
-    // ── Special case: playoffs but next season has a start_date
-    if (season.status === 'playoffs' && nextSeason?.start_date) {
-      const targetDate = nextSeason.start_date; // countdown to next season
-
-      const calc = () => {
-        const diff = new Date(targetDate) - Date.now();
-        if (diff <= 0) {
-          setTick({ mode: 'done', seasonLabel: nextSeason.lg });
-          return;
-        }
-
-        setTick({
-          mode: 'offseason',
-          seasonLabel: nextSeason.lg,
-          d: Math.ceil(diff / 86400000),  // ← round up
-          h: Math.floor((diff % 86400000) / 3600000),
-          m: Math.floor((diff % 3600000) / 60000),
-          s: Math.floor((diff % 60000) / 1000),
-          urgent: diff < 48 * 3600000,
-          warning: diff < 7 * 86400000,
-        });
-      };
-
-      calc();
-      const id = setInterval(calc, 1000);
-      return () => clearInterval(id);
-    }
-
-    // ── Fallback if no next season date
     if (season.status === 'playoffs') {
       setTick({ mode: 'playoffs', seasonLabel: season.lg });
       return;
     }
 
-    // ── Regular season / offseason countdown
     const targetDate =
       season.status === 'offseason'
-        ? season.start_date
+        ? season.start_date // ← this would be on the NEXT season row
         : season.end_date;
 
     if (!targetDate) {
@@ -93,13 +62,11 @@ function useLeagueCountdown(season, nextSeason) {
         setTick({ mode: 'done', seasonLabel: season.lg });
         return;
       }
-
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
-        
-        // ✅ Use ceil instead of floor for days
-        d: Math.ceil(diff / 86400000),
+        nextSeasonLabel: nextSeason?.lg || null, // ← e.g. "W17"
+        d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
         s: Math.floor((diff % 60000) / 1000),
@@ -107,12 +74,10 @@ function useLeagueCountdown(season, nextSeason) {
         warning: diff < 7 * 86400000,
       });
     };
-
     calc();
     const id = setInterval(calc, 1000);
     return () => clearInterval(id);
   }, [season, nextSeason]);
-
   return tick;
 }
 
@@ -170,33 +135,15 @@ function InlineCountdown({ cfg, tick }) {
     if (!tick) return <span className="icd-awaiting">AWAITING</span>;
 
     if (tick.mode === 'playoffs') {
-  // ✅ If we have countdown → show it
-  if (tick.d != null) {
-    return (
-      <div className="icd-clock">
-        {[
-          { v: tick.d, u: 'D' },
-          { v: tick.h, u: 'H' },
-          { v: tick.m, u: 'M' },
-          { v: tick.s, u: 'S' },
-        ].map(({ v, u }) => (
-          <div key={u} className="icd-unit">
-            <span className="icd-n">{p2(v)}</span>
-            <span className="icd-u">{u}</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
-
-  // fallback
-  return (
-    <div className="icd-complete">
-      <span style={{ fontSize: 15 }}>🏒</span>
-      <span className="icd-done-txt">PLAYOFFS</span>
-    </div>
-  );
-}
+      return (
+        <div className="icd-complete">
+          <span style={{ fontSize: 15 }}>🏒</span>
+          <span className="icd-done-txt" style={{ color: '#00BFA5' }}>
+            PLAYOFFS
+          </span>
+        </div>
+      );
+    }
 
     if (tick.mode === 'offseason') {
       if (!tick.d && tick.d !== 0) {
@@ -260,24 +207,25 @@ function InlineCountdown({ cfg, tick }) {
 
   // Eyebrow label changes by mode
   const eyebrow =
-  tick?.mode === 'offseason' || tick?.mode === 'playoffs'
-    ? <span className="icd-season">{tick.seasonLabel} STARTS</span>
-    : tick?.seasonLabel
-      ? <span className="icd-season">{tick.seasonLabel}</span>
-      : null;
+    tick?.mode === 'offseason'
+      ? `☀️ OFFSEASON`
+      : tick?.mode === 'playoffs'
+      ? '🏒 PLAYOFFS ACTIVE'
+      : '⏱ SEASON COUNTDOWN';
 
   return (
     <div className="icd" style={{ '--ic': uc }}>
       <div className="icd-left">
         <span className="icd-eyebrow">{eyebrow}</span>
         <div className="icd-meta">
-  <span className="icd-dot" />
-  <span className="icd-league">{cfg.label}</span>
-  {/* only show nextSeasonLabel if different from tick.seasonLabel */}
-  {tick?.mode === 'offseason' && tick?.nextSeasonLabel && tick.nextSeasonLabel !== tick.seasonLabel ? (
-    <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
-  ) : null}
-</div>
+          <span className="icd-dot" />
+          <span className="icd-league">{cfg.label}</span>
+          {tick?.mode === 'offseason' && tick?.nextSeasonLabel ? (
+            <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
+          ) : tick?.seasonLabel ? (
+            <span className="icd-season">{tick.seasonLabel}</span>
+          ) : null}
+        </div>
       </div>
 
       <div className="icd-right">{renderRight()}</div>
@@ -553,15 +501,28 @@ async function fetchGazetteEdition({
   gameStats,
   managers,
   teams,
+  championTeam,
 }) {
   const today = new Date().toISOString().split('T')[0];
   const season = currentSeason?.lg || leagueLabel;
+  const isOffseason = currentSeason?.status === 'offseason';
+
+  // ── Unified cache key
+  let cacheKey;
+
+    if (isOffseason) {
+      cacheKey = `${leagueLabel}_offseason`;
+    } else if (isPlayoffActive) {
+      cacheKey = `${leagueLabel}_playoff`;
+    } else {
+      cacheKey = `${leagueLabel}_${season}`;
+    }
 
   // ── Map manager_id → traits safely
   const traitsMap = (managers || []).reduce((acc, m) => {
     if (m?.manager_traits) {
       try {
-        const key = m.id ?? m.coach_name; // fallback
+        const key = m.id ?? m.coach_name;
         acc[key] =
           typeof m.manager_traits === 'string'
             ? JSON.parse(m.manager_traits)
@@ -573,56 +534,31 @@ async function fetchGazetteEdition({
     return acc;
   }, {});
 
-  console.log('[Gazette] traitsMap keys:', Object.keys(traitsMap));
-  console.log('[Gazette] traitsMap sample:', Object.values(traitsMap)[0] || {});
-
   // ── Map team_code → manager_id
   const teamManagerMap = (teams || []).reduce((acc, t) => {
     if (t.manager_id) acc[t.abr] = t.manager_id;
     return acc;
   }, {});
 
-  // ── Cache key
-  // ── Try DB cache first — always check playoff key first
-try {
-  const playoffKey = `${leagueLabel}_playoff`;
-  
-  // Check playoff cache first regardless of isPlayoffActive
-  const { data: playoffCached } = await supabase
-    .from('gazette_cache')
-    .select('data, date')
-    .eq('league', playoffKey)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+  // ── Try DB cache
+  try {
+    const { data: cached } = await supabase
+      .from('gazette_cache')
+      .select('data, date')
+      .eq('league', cacheKey)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
-  if (playoffCached?.date === today && playoffCached?.data) {
-    console.log('[Gazette] ✅ Serving from playoff DB cache');
-    const parsed = typeof playoffCached.data === 'string'
-      ? JSON.parse(playoffCached.data)
-      : playoffCached.data;
-    return parsed;
+    if (cached?.date === today && cached?.data) {
+      console.log('[Gazette] ✅ Serving from DB cache:', cacheKey);
+      return typeof cached.data === 'string'
+        ? JSON.parse(cached.data)
+        : cached.data;
+    }
+  } catch (e) {
+    console.log('[Gazette] No DB cache found, generating live');
   }
-
-  // Fall back to regular cache only if no playoff cache exists
-  const { data: cached } = await supabase
-    .from('gazette_cache')
-    .select('data, date')
-    .eq('league', cacheKey)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  if (cached?.date === today && cached?.data) {
-    console.log('[Gazette] ✅ Serving from DB cache');
-    const parsed = typeof cached.data === 'string'
-      ? JSON.parse(cached.data)
-      : cached.data;
-    return parsed;
-  }
-} catch (e) {
-  console.log('[Gazette] No DB cache found, generating live');
-}
 
   const tn = (code) =>
     teamNameMap[code] || { city: code, nickname: code, full: code };
@@ -671,9 +607,7 @@ try {
     .map((g) => {
       const home = tn(g.home).full;
       const away = tn(g.away).full;
-      return `${home} ${g.score_home}-${g.score_away} ${away}${
-        g.ot ? ' (OT)' : ''
-      }`;
+      return `${home} ${g.score_home}-${g.score_away} ${away}${g.ot ? ' (OT)' : ''}`;
     })
     .join(' | ');
 
@@ -696,7 +630,21 @@ try {
     })
     .join('\n');
 
-  // ── Playoff summary
+  // ── Offseason champion block
+  const offseasonBlock = isOffseason && championTeam
+    ? `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏆 OFFSEASON — CHAMPION FEATURE
+The ${leagueLabel} champion is: ${teamNameMap[championTeam]?.full || championTeam} (${championTeam})
+Season: ${season}
+- featured_team MUST be "${championTeam}" — no other team is acceptable
+- story_type MUST be "milestone"
+- Cover the championship: their run through the playoffs, their coach's style, what made them dominant.
+- Reference that the next season is approaching and whether they can repeat.
+- Use the manager traits for the champion's coach heavily in the pull_quote and bottom_line.`
+    : '';
+
+  // ── Playoff summary block
   const playoffBlock =
     isPlayoffActive && playoffSeriesData?.length
       ? `
@@ -724,59 +672,51 @@ ${playoffSeriesData
 - Reference round numbers and series scores in your writing.`
       : '';
 
+  // ── Relevant teams for traits
   const relevantTeams = Array.from(
     new Set([
-      ...(Array.isArray(recentForm?.hot)
-        ? recentForm.hot.map((t) => t.team)
-        : []),
-      ...(Array.isArray(recentForm?.cold)
-        ? recentForm.cold.map((t) => t.team)
-        : []),
+      ...(Array.isArray(recentForm?.hot) ? recentForm.hot.map((t) => t.team) : []),
+      ...(Array.isArray(recentForm?.cold) ? recentForm.cold.map((t) => t.team) : []),
       ...(Array.isArray(winStreaks) ? winStreaks.map((s) => s.team) : []),
       ...(Array.isArray(lossStreaks) ? lossStreaks.map((s) => s.team) : []),
       ...(Array.isArray(playoffSeriesData)
         ? playoffSeriesData.flatMap((s) => [s.team_code_a, s.team_code_b])
         : []),
+      ...(championTeam ? [championTeam] : []),
     ])
   );
 
-  // ── Build traits lines safely
+  // ── Build traits lines
   const traitsLines =
     relevantTeams
       .map((code) => {
         const managerId = teamManagerMap[code];
         const traits = traitsMap[managerId];
-        const coachName =
-          (teams.find((t) => t.abr === code) ?? {}).coach ?? 'Unknown';
-
+        const coachName = (teams.find((t) => t.abr === code) ?? {}).coach ?? 'Unknown';
         if (!traits) return null;
-
         const teamName = teamNameMap[code]?.full || code;
         return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
       })
       .filter(Boolean)
       .join('\n') || 'No traits available';
 
-  console.log('[Gazette] Traits lines:\n', traitsLines);
-
-  // ── Build prompt
+  // ── Angle
   const angles = [
-    'hot_streak',
-    'win_streak',
-    'cold_streak',
-    'loss_streak',
-    'big_win',
-    'playoff_push',
-    'milestone',
-    'comeback',
-    'rivalry',
+    'hot_streak', 'win_streak', 'cold_streak', 'loss_streak',
+    'big_win', 'playoff_push', 'milestone', 'comeback', 'rivalry',
   ];
-  const angleHint = angles[new Date().getDate() % angles.length];
+  const angleHint = isOffseason
+    ? 'DYNASTY'
+    : angles[new Date().getDate() % angles.length];
 
+  // ── Prompt
   const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
 Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
 ${playoffBlock}
-
+${offseasonBlock}
+${isOffseason && championTeam
+  ? `\n- OFFSEASON MODE: featured_team is locked to "${championTeam}". Do NOT feature any other team. This is a championship retrospective.\n`
+  : ''}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
   TEAM TRAITS
 ${traitsLines}
@@ -793,16 +733,12 @@ Cold teams (last 10): ${coldLines || 'none'}
 Active win streaks: ${winLines || 'none'}
 Active loss streaks: ${lossLines || 'none'}
 ${scorerLines ? `Recent game top scorers: ${scorerLines}` : ''}
-${
-  gameLines
-    ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}`
-    : 'No games in last 24 hours.'
-}
-${
-  gameStats
-    ? `\nDetailed game stats (USE THESE ONLY — never invent stats not listed here):\n${gameStats}`
-    : ''
-}
+${gameLines
+  ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}`
+  : 'No games in last 24 hours.'}
+${gameStats
+  ? `\nDetailed game stats (USE THESE ONLY — never invent stats not listed here):\n${gameStats}`
+  : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WRITING RULES
@@ -828,9 +764,7 @@ Respond ONLY with valid JSON, zero other text:
 "pull_quote": "12-20 words. Dramatic fake quote.",
 "quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
 "bottom_line": "7-11 words. Use the manager traits for tone.",
-"edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${
-    Math.floor(Math.random() * 80) + 1
-  }"
+"edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${Math.floor(Math.random() * 80) + 1}"
 }`;
 
   // ── Call the AI
@@ -840,8 +774,7 @@ Respond ONLY with valid JSON, zero other text:
 
   if (result.error) throw new Error(result.error.message);
 
-  const raw =
-    result.data?.text || result.data?.message?.content?.[0]?.text || '';
+  const raw = result.data?.text || result.data?.message?.content?.[0]?.text || '';
   const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
   if (!match) throw new Error('No JSON found in response');
   const data = JSON.parse(match[0]);
@@ -853,7 +786,7 @@ Respond ONLY with valid JSON, zero other text:
       date: today,
       data,
     });
-    console.log('[Gazette] ✅ Written to DB cache');
+    console.log('[Gazette] ✅ Written to DB cache:', cacheKey);
   } catch (e) {
     console.warn('[Gazette] Failed to write to DB cache:', e);
   }
@@ -931,12 +864,68 @@ function LeagueGazette({
   playoffSeriesData,
   gameStats,
   teams,
+  championTeam,
 }) {
   const [edition, setEdition] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [featuredSrc, setFeaturedSrc] = useState(null);
+  const [useBanner, setUseBanner] = useState(false);
+  const probeRef = useRef(null);
   
+  const team = edition?.featured_team || '';
+  // Resolve to a team code even if AI returned a full name
+  const teamCode =
+    Object.entries(teamNameMap).find(
+      ([code, info]) => info.full === team || code === team
+    )?.[0] || team;
+
+    useEffect(() => {
+      if (!teamCode) return;
+      setFeaturedSrc(null);
+      setUseBanner(false);
+    
+      const isOffseason = currentSeason?.status === 'offseason';
+    
+      if (edition?.champion_team && currentSeason?.status === 'playoffs') {
+        setFeaturedSrc(`/assets/team-art/champ/${teamCode}.png`);
+        return;
+      }
+    
+      const found = [];
+      let cancelled = false;
+    
+      const check = (n) => {
+        if (cancelled) return;
+        if (n > 10) {
+          found.length > 0
+            ? setFeaturedSrc(found[Math.floor(Math.random() * found.length)])
+            : setUseBanner(true);
+          return;
+        }
+        const url = `/assets/team-art/random/${teamCode}${n}.png`;
+        const img = new Image();
+        img.onload = () => {
+          if (!cancelled) {
+            found.push(url);
+            check(n + 1);
+          }
+        };
+        img.onerror = () => {
+          if (!cancelled) check(n + 1);
+        };
+        img.src = url;
+      };
+    
+      check(1);
+    
+      return () => {
+        cancelled = true;
+      };
+    }, [teamCode, edition?.champion_team, currentSeason?.status]);
+  
+   
 
   const load = useCallback(
     async (force = false) => {
@@ -961,6 +950,7 @@ function LeagueGazette({
           gameStats,
           managers: managers || [],
           teams,
+          championTeam,
         });
         console.log('[Gazette] edition set, team:', data?.featured_team, 'teamNameMap keys:', Object.keys(teamNameMap));
         setEdition(data);
@@ -973,7 +963,7 @@ function LeagueGazette({
       }
     },
     [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
-     teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats, teams]
+      teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats, teams, championTeam]
   );
 
   const loadedKeyRef = useRef(null);
@@ -992,12 +982,7 @@ function LeagueGazette({
     load(true);
   };
 
-  const team = edition?.featured_team || '';
-  // Resolve to a team code even if AI returned a full name
-  const teamCode =
-    Object.entries(teamNameMap).find(
-      ([code, info]) => info.full === team || code === team
-    )?.[0] || team;
+  
   const meta = getMeta(edition?.story_type);
   const lgKey = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
   const dateStr = new Date().toLocaleDateString('en-US', {
@@ -1098,20 +1083,24 @@ function LeagueGazette({
             {/* CENTER — team hero */}
             <div className="si-col-center">
               <div className="si-hero">
-                <div className="si-hero-bg">
-                  <img
-  src={
-  edition?.champion_team
-    ? `/assets/team-art/champ/${edition.champion_team}.png`
-    : `/assets/banners/${teamCode}.png`
-}
-  alt=""
-  className="si-hero-banner"
-  style={{ opacity: edition?.champion_team ? 0.55 : 0.13 }}
-  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-/>
-                  <div className="si-hero-vignette" />
-                </div>
+              <div className="si-hero-bg">
+              {featuredSrc ? (
+                <img
+                  src={featuredSrc}
+                  alt=""
+                  className={edition?.champion_team ? 'si-hero-champ' : 'si-hero-featured'}
+                  onError={() => setUseBanner(true)}
+                />
+              ) : (
+                <img
+                  src={`/assets/banners/${teamCode}.png`}
+                  alt=""
+                  className="si-hero-banner"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+              )}
+              <div className="si-hero-vignette" />
+            </div>
                 <div className="si-hero-body">
                 <img
                   src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
@@ -1475,6 +1464,22 @@ function LeagueGazette({
           font-family:'Press Start 2P',monospace; font-size:7.5px;
           color:rgba(255,255,255,.65); letter-spacing:1px; line-height:1;
         }
+        .si-hero-featured {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%;
+          object-fit: cover;
+          opacity: 0.55;
+          filter: saturate(1.4);
+          transition: opacity 0.4s ease;
+        }
+        .si-hero-champ {
+          position: absolute; inset: 0;
+          width: 100%; height: 100%;
+          object-fit: cover;
+          opacity: 0.72;
+          filter: saturate(1.6) brightness(1.05);
+          transition: opacity 0.4s ease;
+        }
         .si-hero-code {
           font-family:'VT323',monospace; font-size:12px;
           color:rgba(255,255,255,.25); letter-spacing:2px; line-height:1;
@@ -1685,6 +1690,8 @@ export default function Home() {
   const beltRef = useRef(null);
   const [beltDuration, setBeltDuration] = useState(30);
 
+  const [championTeam, setChampionTeam] = useState(null);
+
   useEffect(() => {
     if (!beltRef.current || !newsItems.length) return;
     requestAnimationFrame(() => {
@@ -1723,6 +1730,7 @@ export default function Home() {
     setIsPlayoffActive(false);
     setPlayoffSeriesData([]);
     setGameStats('');
+    setChampionTeam(null);
 
     // ── Seasons ──────────────────────────────────────────────────────────
     const { data: seasons } = await supabase
@@ -1735,7 +1743,7 @@ export default function Home() {
       setLoading(false);
       return;
     }
-    const STATUS_PRIORITY = { playoffs: 0, offseason: 1, season: 2 };
+    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
 
     const latest = ps.reduce((b, s) => {
       const sPri = STATUS_PRIORITY[s.status] ?? 1;
@@ -1745,6 +1753,30 @@ export default function Home() {
       return new Date(s.end_date) > new Date(b.end_date) ? s : b;
     });
     setCurrentSeason(latest);
+
+
+    // Resolve champion team abr for offseason display
+      let resolvedChampion = null;
+      if (latest.status === 'offseason' && latest.season_champion_manager_id) {
+        // Champion is on the current (offseason) season row
+        const { data: champTeam } = await supabase
+          .from('teams')
+          .select('abr')
+          .eq('manager_id', latest.season_champion_manager_id)
+          .eq('lg', latest.lg)
+          .single();
+        resolvedChampion = champTeam?.abr || null;
+      } else if (latest.status === 'playoffs' && latest.season_champion_manager_id) {
+        // Champion already crowned during playoffs
+        const { data: champTeam } = await supabase
+          .from('teams')
+          .select('abr')
+          .eq('manager_id', latest.season_champion_manager_id)
+          .eq('lg', latest.lg)
+          .single();
+        resolvedChampion = champTeam?.abr || null;
+      }
+      setChampionTeam(resolvedChampion);
 
     /* Capture Season for Countdown */
     const futureSeasons = (seasons || [])
@@ -2302,6 +2334,7 @@ export default function Home() {
             playoffSeriesData={playoffSeriesData}
             gameStats={gameStats}
             teams={seasonTeams}
+            championTeam={championTeam}
           />
         </div>
 
@@ -2493,8 +2526,8 @@ export default function Home() {
         .icd-complete{display:flex;align-items:center;gap:.3rem;}
         .icd-done-txt{font-family:'Press Start 2P',monospace;font-size:10px;color:color-mix(in srgb,var(--ic) 70%,rgba(255,255,255,.3));letter-spacing:1px;}
         .icd-clock{display:flex;align-items:center;gap:.25rem;}
-        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.12rem .24rem; min-width:28px;}
-        .icd-n{font-family:'VT323',monospace;font-size:20px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
+        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.2rem .38rem;min-width:38px;}
+        .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
 
         /* ── Panels ── */

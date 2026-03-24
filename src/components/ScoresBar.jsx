@@ -337,13 +337,18 @@ export default function ScoresBar() {
         setLoading(false);
         return;
       }
-      const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
+      const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2, null: 3 };
 
+      const getPriority = (status) => {
+        if (!status) return 3; // treat null as lowest priority
+        return STATUS_PRIORITY[status] ?? 1;
+      };
+      
       const latest = ps.reduce((b, s) => {
-        const sPri = STATUS_PRIORITY[s.status] ?? 1;
-        const bPri = STATUS_PRIORITY[b.status] ?? 1;
+        const sPri = getPriority(s.status);
+        const bPri = getPriority(b.status);
         if (sPri !== bPri) return sPri < bPri ? s : b;
-        return new Date(s.end_date) > new Date(b.end_date) ? s : b;
+        return new Date(s.end_date || 0) > new Date(b.end_date || 0) ? s : b;
       });
 
       console.log('[ScoresBar] latest season:', latest.lg, latest.status);

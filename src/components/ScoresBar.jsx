@@ -322,38 +322,42 @@ export default function ScoresBar() {
 
   useEffect(() => {
     if (!selectedLeague) return;
+  
     setLoading(true);
     setGames([]);
+  
     (async () => {
+      // 1️⃣ Fetch seasons for this league
       const { data: seasons } = await supabase
         .from('seasons')
         .select('lg, end_date, year, status')
         .order('year', { ascending: false })
         .limit(20);
-      const ps = (seasons || []).filter(
+  
+      const leagueSeasons = (seasons || []).filter(
         (s) => lgPrefix(s.lg) === selectedLeague
       );
-      if (!ps.length) {
+  
+      if (!leagueSeasons.length) {
         setLoading(false);
         return;
       }
-      const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2, null: 3 };
-
-      const getPriority = (status) => {
-        if (!status) return 3; // treat null as lowest priority
-        return STATUS_PRIORITY[status] ?? 1;
-      };
-      
-      const latest = ps.reduce((b, s) => {
-        const sPri = getPriority(s.status);
-        const bPri = getPriority(b.status);
-        if (sPri !== bPri) return sPri < bPri ? s : b;
-        return new Date(s.end_date || 0) > new Date(b.end_date || 0) ? s : b;
-      });
-
+  
+      // 2️⃣ Pick the latest season
+      const latest = (() => {
+        // pick active season first
+        const active = leagueSeasons.find(s => s.status === 'season');
+        if (active) return active;
+  
+        // fallback to the season with the latest end_date
+        return leagueSeasons.sort(
+          (a, b) => new Date(b.end_date) - new Date(a.end_date)
+        )[0];
+      })();
+  
       console.log('[ScoresBar] latest season:', latest.lg, latest.status);
-
-      // Fetch season games and playoff games in parallel
+  
+      // 3️⃣ Fetch season games and playoff games in parallel
       const [{ data: seasonData }, { data: playoffData }] = await Promise.all([
         supabase
           .from('games')
@@ -374,8 +378,8 @@ export default function ScoresBar() {
           .order('id', { ascending: false })
           .limit(8),
       ]);
-
-      // Normalize playoff rows to same shape as games rows
+  
+      // 4️⃣ Normalize playoff rows
       const playoffRows = (playoffData || []).map((g) => ({
         lg: g.lg,
         legacy_game_id: g.id + 1000000, // offset so they sort above season games
@@ -390,12 +394,12 @@ export default function ScoresBar() {
         round: g.round,
         game_number: g.game_number,
       }));
-
-      // Merge, sort by recency (playoff rows float to top via offset), take 8
+  
+      // 5️⃣ Merge, sort, slice 8
       const all = [...playoffRows, ...(seasonData || [])]
         .sort((a, b) => (b.legacy_game_id || 0) - (a.legacy_game_id || 0))
         .slice(0, 8);
-
+  
       setGames(all);
       setLoading(false);
     })();

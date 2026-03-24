@@ -545,15 +545,15 @@ function LeagueGazette({
       <style>{`
         /* ── Variables & reset ── */
         .si-wrap {
-          --si-bg:      #09090e;
-          --si-bg-card: #0d0d14;
-          --si-border:  rgba(255,255,255,.07);
-          --si-text:    rgba(225,220,210,.85);
-          --si-muted:   rgba(180,175,160,.42);
+          --si-bg:      var(--gaz-bg);
+          --si-bg-card: var(--gaz-card);
+          --si-border:  var(--gaz-border);
+          --si-text:    var(--gaz-text);
+          --si-muted:   var(--gaz-muted);
           --si-serif:   'Georgia', 'Times New Roman', serif;
           font-family: 'VT323', monospace;
-          background: var(--si-bg);
-          border: 1px solid var(--si-border);
+          background: var(--gaz-bg) !important;
+          border: 1px solid var(--gaz-border) !important;
           border-radius: 10px;
           overflow: hidden;
           position: relative;
@@ -573,7 +573,7 @@ function LeagueGazette({
           gap: .8rem;
           padding: .6rem .95rem .5rem;
           border-bottom: 1px solid var(--si-border);
-          background: var(--si-bg);
+          background: var(--gaz-bg) !important;
         }
         .si-mast-left {
           display:flex; align-items:center; gap:.4rem; flex-shrink:0;
@@ -584,7 +584,7 @@ function LeagueGazette({
         }
         .si-mast-name {
           font-family:'Press Start 2P',monospace; font-size:11px;
-          color:#fff; letter-spacing:2px; line-height:1;
+          color:var(--gaz-hed); letter-spacing:2px; line-height:1;
         }
         .si-mast-sub {
           font-family:'Press Start 2P',monospace; font-size:6px;
@@ -644,7 +644,7 @@ function LeagueGazette({
         .si-cover-line {
           font-family:'Press Start 2P',monospace;
           font-size:clamp(12px,1.45vw,17px);
-          color:#fff; letter-spacing:1.5px; margin:0;
+          color:var(--gaz-hed); letter-spacing:1.5px; margin:0;
           line-height:1.55; text-transform:uppercase;
         }
         .si-cover-sub {
@@ -685,7 +685,8 @@ function LeagueGazette({
         }
         .si-blurb-hed {
           font-family:'VT323',monospace; font-size:17px;
-          color:rgba(228,222,205,.82); line-height:1.3; margin-bottom:.1rem;
+          color:var(--gaz-hed); line-height:1.3;
+          margin-bottom:.1rem;
           letter-spacing:.3px;
         }
         .si-blurb-dek {
@@ -790,7 +791,7 @@ function LeagueGazette({
         }
         .si-quote-text {
           font-family:'VT323',monospace; font-size:16px;
-          color:rgba(230,222,205,.68); font-style:italic;
+          color:var(--gaz-text); font-style:italic;
           margin:0 0 .22rem; line-height:1.4; letter-spacing:.3px;
         }
         .si-quote-attr {
@@ -801,7 +802,7 @@ function LeagueGazette({
         .si-table-hd {
           display:flex; align-items:center; gap:.28rem;
           font-family:'Press Start 2P',monospace; font-size:6.5px;
-          color:rgba(255,255,255,.22); letter-spacing:2px;
+          color:var(--gaz-muted); letter-spacing:2px;
           margin-bottom:.05rem; text-transform:uppercase;
         }
         .si-table-dot {
@@ -819,7 +820,7 @@ function LeagueGazette({
         }
         .si-table-team {
           flex:1; font-family:'Press Start 2P',monospace; font-size:7px;
-          color:rgba(210,205,190,.45); letter-spacing:.5px;
+          color:var(--gaz-dek); letter-spacing:.5px;
           white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
         }
         .si-table-val {
@@ -913,6 +914,53 @@ function LeagueGazette({
           .si-skel-grid { grid-template-columns:1fr; }
           .si-skel-hero { min-height:130px; }
         }
+
+        /* ── Gazette light mode ── */
+        [data-theme="light"] .si-wrap {
+          --si-bg:     #ffffff;
+          --si-bg-card:#f8f9fb;
+          --si-border: rgba(0,0,0,.1);
+          --si-text:   rgba(0,0,0,.82);
+          --si-muted:  rgba(0,0,0,.48);
+          background: var(--si-bg);
+          border-color: var(--si-border);
+        }
+        [data-theme="light"] .si-mast {
+          background: #ffffff;
+          border-bottom-color: rgba(0,0,0,.1);
+        }
+        [data-theme="light"] .si-mast-name { color: rgba(0,0,0,.88); }
+        [data-theme="light"] .si-mast-sub  { color: rgba(0,0,0,.45); }
+        [data-theme="light"] .si-mast-date { color: rgba(0,0,0,.65); }
+        [data-theme="light"] .si-issue     { color: rgba(0,0,0,.5); }
+        [data-theme="light"] .si-cover-line { color: rgba(0,0,0,.9); }
+        [data-theme="light"] .si-cover-sub  { color: rgba(0,0,0,.55); }
+        [data-theme="light"] .si-blurb-hed  { color: rgba(0,0,0,.82); }
+        [data-theme="light"] .si-blurb-dek  { color: rgba(0,0,0,.52); }
+        [data-theme="light"] .si-blurb { border-bottom-color: rgba(0,0,0,.07); }
+        [data-theme="light"] .si-col-left  { border-right-color: rgba(0,0,0,.1); }
+        [data-theme="light"] .si-col-right { border-left-color:  rgba(0,0,0,.1); }
+        [data-theme="light"] .si-quote { background: rgba(0,0,0,.03); }
+        [data-theme="light"] .si-quote-text { color: rgba(0,0,0,.72); }
+        [data-theme="light"] .si-table-hd   { color: rgba(0,0,0,.38); }
+        [data-theme="light"] .si-table-team { color: rgba(0,0,0,.55); }
+        [data-theme="light"] .si-table-row:hover { background: rgba(0,0,0,.03); }
+        [data-theme="light"] .si-footer { 
+          background: rgba(0,0,0,.02); 
+          border-top-color: rgba(0,0,0,.1); 
+        }
+        [data-theme="light"] .si-footer-text { color: rgba(0,0,0,.55); }
+        [data-theme="light"] .si-hr { border-top-color: rgba(0,0,0,.1); }
+        [data-theme="light"] .si-cover-strip { border-bottom-color: rgba(0,0,0,.1); }
+        [data-theme="light"] .si-skel-b {
+          background: linear-gradient(90deg, rgba(0,0,0,.04), rgba(0,0,0,.08), rgba(0,0,0,.04));
+        }
+        [data-theme="light"] .si-refresh {
+          color: rgba(0,0,0,.4);
+          background: rgba(0,0,0,.04);
+          border-color: rgba(0,0,0,.12);
+        }
+        
       `}</style>
     </div>
   );

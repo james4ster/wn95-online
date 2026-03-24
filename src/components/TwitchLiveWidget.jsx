@@ -305,6 +305,14 @@ export default function TwitchLiveWidget() {
           font-size: .95rem; color: rgba(255,255,255,.2);
           padding: .6rem 1rem; text-align: center; letter-spacing: 1px;
         }
+
+        [data-theme="light"] .twg-title { color: rgba(0,0,0,.7); text-shadow: none; }
+        [data-theme="light"] .twg-uname { color: rgba(0,0,0,.75); }
+        [data-theme="light"] .twg-uname-off { color: rgba(0,0,0,.4); }
+        [data-theme="light"] .twg-err-msg { color: rgba(0,0,0,.5); }
+        [data-theme="light"] .twg-badge-off { color: rgba(0,0,0,.35); border-color: rgba(0,0,0,.15); }
+        [data-theme="light"] .twg-panel { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.1); }
+        [data-theme="light"] .twg-hdr { background: rgba(26,111,212,.05); border-bottom-color: rgba(26,111,212,.1); }
       `}</style>
     </>
   );

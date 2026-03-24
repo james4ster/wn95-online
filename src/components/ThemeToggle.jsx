@@ -10,37 +10,25 @@ export default function ThemeToggle() {
 
   return (
     <button
-      onClick={toggleTheme}
-      title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-      style={{
-        background: 'none',
-        border: '1.5px solid var(--border-dim)',
-        borderRadius: 6,
-        cursor: 'pointer',
-        padding: '4px 10px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        transition: 'all .15s',
-        color: 'var(--text-secondary)',
-      }}
-      onMouseEnter={e => {
-        e.currentTarget.style.borderColor = 'var(--accent-blue)';
-        e.currentTarget.style.color = 'var(--accent-blue)';
-      }}
-      onMouseLeave={e => {
-        e.currentTarget.style.borderColor = 'var(--border-dim)';
-        e.currentTarget.style.color = 'var(--text-secondary)';
-      }}
-    >
-      <span style={{ fontSize: 14 }}>{isLight ? '☀️' : '🌙'}</span>
-      <span style={{
-        fontFamily: "'Press Start 2P', monospace",
-        fontSize: 8,
-        letterSpacing: 1,
-      }}>
-       {isLight ? 'LIGHT' : 'DARK'}
-      </span>
-    </button>
+  onClick={toggleTheme}
+  title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+  style={{
+    background: isLight ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.3)',
+    border: `1px solid ${isLight ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.15)'}`,
+    borderRadius: '6px',
+    cursor: 'pointer',
+    padding: '4px 10px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    transition: 'all 0.15s',
+    color: isLight ? '#ffffff' : 'var(--text-secondary)',
+  }}
+>
+  <span style={{ fontSize: 14 }}>{isLight ? '☀️' : '🌙'}</span>
+  <span style={{ fontFamily: '"Press Start 2P", monospace', fontSize: 8, letterSpacing: 1 }}>
+    {isLight ? 'LIGHT' : 'DARK'}
+  </span>
+</button>
   );
 }

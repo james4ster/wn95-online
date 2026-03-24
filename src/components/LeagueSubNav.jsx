@@ -164,6 +164,31 @@ export default function LeagueSubNav() {
         @media (max-width: 480px) {
           .snl { padding: 0 0.6rem; height: 42px; }
         }
+      
+        /* ── Light mode overrides ── */
+        [data-theme="light"] .league-subnav {
+          background: linear-gradient(180deg, #dde1e8 0%, #e8eaf0 100%);
+          border-bottom-color: #1a6fd4;
+          box-shadow: 0 3px 16px rgba(26,111,212,.15), inset 0 -1px 8px rgba(26,111,212,.06);
+        }
+        [data-theme="light"] .snl {
+          color: rgba(0,0,0,.88);
+        }
+        [data-theme="light"] .snl::after {
+          background: linear-gradient(90deg, transparent, #1a6fd4, transparent);
+        }
+        [data-theme="light"] .snl:hover {
+          color: #1a6fd4;
+          background: rgba(26,111,212,.05);
+        }
+        [data-theme="light"] .snl-on {
+          color: #1a6fd4;
+          background: rgba(26,111,212,.08);
+          border-bottom-color: #1a6fd4;
+        }
+        [data-theme="light"] .snl-on::after {
+          background: linear-gradient(90deg, transparent, #1a6fd4, transparent);
+        }
       `}</style>
     </div>
   );

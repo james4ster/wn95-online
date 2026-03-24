@@ -42,14 +42,41 @@ function useLeagueCountdown(season, nextSeason) {
     if (!season) return;
 
     if (season.status === 'playoffs') {
+      if (nextSeason?.start_date) {
+        const targetDate = nextSeason.start_date;
+    
+        const calc = () => {
+          const diff = new Date(targetDate) - Date.now();
+          if (diff <= 0) {
+            setTick({ mode: 'done', seasonLabel: nextSeason.lg });
+            return;
+          }
+    
+          setTick({
+            mode: 'playoffs', // 👈 still playoffs mode!
+            seasonLabel: nextSeason.lg,
+  d: Math.ceil(diff / 86400000),  // ← round up
+  h: Math.floor((diff % 86400000) / 3600000),
+  m: Math.floor((diff % 3600000) / 60000),
+  s: Math.floor((diff % 60000) / 1000),
+  urgent: diff < 48 * 3600000,
+  warning: diff < 7 * 86400000,
+});
+        };
+    
+        calc();
+        const id = setInterval(calc, 1000);
+        return () => clearInterval(id);
+      }
+    
+      // fallback if no next season date
       setTick({ mode: 'playoffs', seasonLabel: season.lg });
       return;
     }
 
-    const targetDate =
-      season.status === 'offseason'
-        ? season.start_date // ← this would be on the NEXT season row
-        : season.end_date;
+    const targetDate = season.status === 'offseason'
+  ? season.start_date   // ← W17 doesn't have its OWN start_date filled yet
+  : season.end_date;
 
     if (!targetDate) {
       setTick({ mode: season.status || 'done', seasonLabel: season.lg });
@@ -65,8 +92,9 @@ function useLeagueCountdown(season, nextSeason) {
       setTick({
         mode: season.status || 'season',
         seasonLabel: season.lg,
-        nextSeasonLabel: nextSeason?.lg || null, // ← e.g. "W17"
-        d: Math.floor(diff / 86400000),
+        
+        // ✅ Use ceil instead of floor for days
+        d: Math.ceil(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
         s: Math.floor((diff % 60000) / 1000),
@@ -135,12 +163,30 @@ function InlineCountdown({ cfg, tick }) {
     if (!tick) return <span className="icd-awaiting">AWAITING</span>;
 
     if (tick.mode === 'playoffs') {
+      // ✅ If we have countdown → show it
+      if (tick.d != null) {
+        return (
+          <div className="icd-clock">
+            {[
+              { v: tick.d, u: 'D' },
+              { v: tick.h, u: 'H' },
+              { v: tick.m, u: 'M' },
+              { v: tick.s, u: 'S' },
+            ].map(({ v, u }) => (
+              <div key={u} className="icd-unit">
+                <span className="icd-n">{p2(v)}</span>
+                <span className="icd-u">{u}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+    
+      // fallback
       return (
         <div className="icd-complete">
           <span style={{ fontSize: 15 }}>🏒</span>
-          <span className="icd-done-txt" style={{ color: '#00BFA5' }}>
-            PLAYOFFS
-          </span>
+          <span className="icd-done-txt">PLAYOFFS</span>
         </div>
       );
     }
@@ -207,25 +253,24 @@ function InlineCountdown({ cfg, tick }) {
 
   // Eyebrow label changes by mode
   const eyebrow =
-    tick?.mode === 'offseason'
-      ? `☀️ OFFSEASON`
-      : tick?.mode === 'playoffs'
-      ? '🏒 PLAYOFFS ACTIVE'
-      : '⏱ SEASON COUNTDOWN';
+  tick?.mode === 'offseason' || tick?.mode === 'playoffs'
+  ? <span className="icd-season">{tick.seasonLabel} STARTS</span>
+  : tick?.seasonLabel
+  ? <span className="icd-season">{tick.seasonLabel}</span>
+  : null
 
   return (
     <div className="icd" style={{ '--ic': uc }}>
       <div className="icd-left">
         <span className="icd-eyebrow">{eyebrow}</span>
         <div className="icd-meta">
-          <span className="icd-dot" />
-          <span className="icd-league">{cfg.label}</span>
-          {tick?.mode === 'offseason' && tick?.nextSeasonLabel ? (
-            <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
-          ) : tick?.seasonLabel ? (
-            <span className="icd-season">{tick.seasonLabel}</span>
-          ) : null}
-        </div>
+  <span className="icd-dot" />
+  <span className="icd-league">{cfg.label}</span>
+  {/* only show nextSeasonLabel if different from tick.seasonLabel */}
+  {tick?.mode === 'offseason' && tick?.nextSeasonLabel && tick.nextSeasonLabel !== tick.seasonLabel ? (
+    <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
+  ) : null}
+</div>
       </div>
 
       <div className="icd-right">{renderRight()}</div>
@@ -544,13 +589,14 @@ try {
     .limit(1)
     .single();
 
-  if (playoffCached?.date === today && playoffCached?.data) {
-    console.log('[Gazette] ✅ Serving from playoff DB cache');
-    const parsed = typeof playoffCached.data === 'string'
-      ? JSON.parse(playoffCached.data)
-      : playoffCached.data;
-    return parsed;
-  }
+    if (playoffCached?.date === today && playoffCached?.data) {
+      console.log('[Gazette] ✅ Serving from playoff DB cache');
+      const parsed = typeof playoffCached.data === 'string'
+        ? JSON.parse(playoffCached.data)
+        : playoffCached.data;
+      console.log('[Gazette] champion_team in cache:', parsed?.champion_team); // ← add this
+      return parsed;
+    }
 
   // Fall back to regular cache only if no playoff cache exists
   const { data: cached } = await supabase
@@ -1047,14 +1093,17 @@ function LeagueGazette({
             <div className="si-col-center">
               <div className="si-hero">
                 <div className="si-hero-bg">
-                  <img
-                    src={`/assets/banners/${teamCode}.png`}
-                    alt=""
-                    className="si-hero-banner"
-                    onError={(e) => {
-                      e.currentTarget.style.display = 'none';
-                    }}
-                  />
+                <img
+  src={
+    edition?.champion_team
+      ? `/assets/team-art/champ/${edition.champion_team}.jpg`
+      : `/assets/banners/${teamCode}.png`
+  }
+  alt=""
+  className="si-hero-banner"
+  style={{ opacity: edition?.champion_team ? 0.55 : 0.13 }}
+  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+/>
                   <div className="si-hero-vignette" />
                 </div>
                 <div className="si-hero-body">
@@ -1680,7 +1729,7 @@ export default function Home() {
       setLoading(false);
       return;
     }
-    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
+    const STATUS_PRIORITY = { playoffs: 0, offseason: 1, season: 2 };
 
     const latest = ps.reduce((b, s) => {
       const sPri = STATUS_PRIORITY[s.status] ?? 1;
@@ -2401,13 +2450,13 @@ export default function Home() {
 
         .hp {
           min-height:100vh;
-          background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),#00000a;
+          background:radial-gradient(ellipse 120% 40% at 50% -5%,#0f0f28 0%,transparent 60%),var(--bg-page);
           padding-bottom:56px;
           overflow-x:hidden;
           position:relative;
           max-width: 100vw;
         }
-        .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.055) 2px,rgba(0,0,0,.055) 4px);}
+        .scanlines{position:fixed;inset:0;pointer-events:none;z-index:9997;background:repeating-linear-gradient(0deg,transparent,transparent 2px,var(--scanlines) 2px,var(--scanlines) 4px);}
 
         .cg {
           display: grid;
@@ -2427,114 +2476,114 @@ export default function Home() {
         .icd{display:flex;align-items:center;justify-content:space-between;gap:.55rem;padding:.58rem .82rem;background:color-mix(in srgb,var(--ic) 8%,rgba(0,0,0,.65));border:1.5px solid color-mix(in srgb,var(--ic) 32%,transparent);border-radius:10px;position:relative;overflow:hidden;}
         .icd::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 65% 100% at 0% 50%,color-mix(in srgb,var(--ic) 12%,transparent),transparent 70%);}
         .icd-left{display:flex;flex-direction:column;gap:.2rem;}
-        .icd-eyebrow{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,140,0,.5);letter-spacing:2px;}
+        .icd-eyebrow{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--icd-eyebrow);letter-spacing:2px;}
         .icd-meta{display:flex;align-items:center;gap:.38rem;}
         .icd-dot{width:6px;height:6px;border-radius:50%;background:var(--ic);box-shadow:0 0 5px var(--ic);animation:icPulse 2s ease-in-out infinite;flex-shrink:0;}
         @keyframes icPulse{0%,100%{opacity:1}50%{opacity:.35}}
         .icd-league{font-family:'Press Start 2P',monospace;font-size:12px;color:var(--ic);letter-spacing:2px;}
         .icd-season{font-family:'VT323',monospace;font-size:17px;color:color-mix(in srgb,var(--ic) 55%,rgba(255,255,255,.25));}
         .icd-right{display:flex;align-items:center;flex-shrink:0;}
-        .icd-awaiting{font-family:'Press Start 2P',monospace;font-size:10px;color:rgba(255,255,255,.2);letter-spacing:1px;}
+        .icd-awaiting{font-family:'Press Start 2P',monospace;font-size:10px;color:var(--text-muted);letter-spacing:1px;}
         .icd-complete{display:flex;align-items:center;gap:.3rem;}
         .icd-done-txt{font-family:'Press Start 2P',monospace;font-size:10px;color:color-mix(in srgb,var(--ic) 70%,rgba(255,255,255,.3));letter-spacing:1px;}
         .icd-clock{display:flex;align-items:center;gap:.25rem;}
-        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.2rem .38rem;min-width:38px;}
-        .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
+        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.12rem .24rem; min-width:28px;}
+        .icd-n{font-family:'VT323',monospace;font-size:20px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
 
         /* ── Panels ── */
-        .panel{border:1.5px solid rgba(135,206,235,.1);border-radius:10px;overflow:hidden;background:linear-gradient(155deg,rgba(255,255,255,.02) 0%,rgba(0,0,0,.3) 100%);}
-        .ph{display:flex;align-items:center;gap:.38rem;padding:.48rem .82rem;background:linear-gradient(90deg,rgba(255,140,0,.07) 0%,transparent 100%);border-bottom:1px solid rgba(255,140,0,.1);flex-wrap:wrap;}
+        .panel{border:1.5px solid var(--border-default);border-radius:10px;overflow:hidden;background:linear-gradient(155deg,var(--bg-hover) 0%,rgba(0,0,0,.3) 100%);}
+        .ph{display:flex;align-items:center;gap:.38rem;padding:.48rem .82rem;background:var(--panel-header-bg);border-bottom:1px solid var(--panel-header-border);flex-wrap:wrap;}
         .ph-icon{font-size:13px;flex-shrink:0;}
-        .ph-title{flex:1;font-family:'Press Start 2P',monospace;font-size:11px;color:#FF8C00;letter-spacing:2px;text-shadow:0 0 6px rgba(255,140,0,.3);}
+        .ph-title{flex:1;font-family:'Press Start 2P',monospace;font-size:11px;color:var(--panel-header-text);letter-spacing:2px;text-shadow:0 0 6px var(--panel-icon-shadow);}
         .ph-action{flex-shrink:0;}
-        .discord-join{font-family:'Press Start 2P',monospace;font-size:9px;color:#5865F2;text-decoration:none;letter-spacing:1px;border:1px solid rgba(88,101,242,.3);border-radius:4px;padding:.2rem .42rem;background:rgba(88,101,242,.07);transition:all .15s;white-space:nowrap;}
+        .discord-join{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--discord-join-text);text-decoration:none;letter-spacing:1px;border:1px solid var(--discord-join-border);border-radius:4px;padding:.2rem .42rem;background:var(--discord-join-bg);transition:all .15s;white-space:nowrap;}
         .discord-join:hover{color:#7289DA;border-color:rgba(88,101,242,.55);}
-        .panel-empty{padding:.82rem;font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,.2);text-align:center;letter-spacing:2px;}
-        .skel{background:linear-gradient(90deg,rgba(255,255,255,.03),rgba(255,255,255,.07),rgba(255,255,255,.03));background-size:200% 100%;animation:shimmer 1.6s infinite;border-radius:4px;}
+        .panel-empty{padding:.82rem;font-family:'VT323',monospace;font-size:17px;color:var(--text-muted);text-align:center;letter-spacing:2px;}
+        .skel{background:linear-gradient(90deg,var(--skel-from),var(--skel-mid),var(--skel-from));background-size:200% 100%;animation:shimmer 1.6s infinite;border-radius:4px;}
         @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 
         /* ── Spotlight ── */
         .sl-panel{overflow:visible;}
-        .sl-tabs{display:flex;border-bottom:1px solid rgba(255,140,0,.1);background:rgba(0,0,0,.25);}
-        .sl-tab{flex:1;padding:.35rem .15rem;font-size:14px;background:transparent;border:none;border-right:1px solid rgba(255,255,255,.04);cursor:pointer;transition:all .14s;color:rgba(255,255,255,.3);line-height:1;}
+        .sl-tabs{display:flex;border-bottom:1px solid var(--panel-header-border);background:rgba(0,0,0,.25);}
+        .sl-tab{flex:1;padding:.35rem .15rem;font-size:14px;background:transparent;border:none;border-right:1px solid var(--border-subtle);cursor:pointer;transition:all .14s;color:var(--text-muted);line-height:1;}
         .sl-tab:last-child{border-right:none;}
-        .sl-tab:hover{background:rgba(255,140,0,.07);filter:brightness(1.4);}
-        .sl-tab-on{background:rgba(255,140,0,.1)!important;border-bottom:2px solid #FF8C00!important;filter:brightness(1.6)!important;}
-        .sl-titlebar{display:flex;flex-direction:column;gap:.07rem;padding:.38rem .68rem .3rem;background:linear-gradient(90deg,rgba(255,140,0,.06) 0%,transparent 100%);border-bottom:1px solid rgba(255,255,255,.04);}
-        .sl-title{font-family:'Press Start 2P',monospace;font-size:10px;color:#FF8C00;letter-spacing:1.5px;text-shadow:0 0 8px rgba(255,140,0,.3);}
-        .sl-sub{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.22);letter-spacing:.5px;}
+        .sl-tab:hover{background:var(--tab-on-bg);filter:brightness(1.4);}
+        .sl-tab-on{background:var(--tab-on-bg)!important;border-bottom:2px solid var(--accent-orange)!important;filter:brightness(1.6)!important;}
+        .sl-titlebar{display:flex;flex-direction:column;gap:.07rem;padding:.38rem .68rem .3rem;background:var(--panel-header-bg);border-bottom:1px solid var(--border-subtle);}
+        .sl-title{font-family:'Press Start 2P',monospace;font-size:10px;color:var(--panel-header-text);letter-spacing:1.5px;text-shadow:0 0 8px var(--panel-icon-shadow);}
+        .sl-sub{font-family:'VT323',monospace;font-size:14px;color:var(--text-muted);letter-spacing:.5px;}
         .sl-body{padding:.18rem 0 .06rem;min-height:115px;}
-        .sl-prog-wrap{height:3px;background:rgba(255,255,255,.05);overflow:hidden;}
-        .sl-prog{height:100%;background:linear-gradient(90deg,#FF8C00,#FFD700);animation:slp 8s linear forwards;}
+        .sl-prog-wrap{height:3px;background:var(--border-subtle);overflow:hidden;}
+        .sl-prog{height:100%;background:linear-gradient(90deg,var(--accent-orange),var(--accent-gold));animation:slp 8s linear forwards;}
         @keyframes slp{from{width:0%}to{width:100%}}
-        .sl-row{display:flex;align-items:center;gap:.3rem;padding:.2rem .62rem;border-bottom:1px solid rgba(255,255,255,.04);transition:background .1s;}
+        .sl-row{display:flex;align-items:center;gap:.3rem;padding:.2rem .62rem;border-bottom:1px solid var(--border-subtle);transition:background .1s;}
         .sl-row:last-child{border-bottom:none;}
-        .sl-row:hover{background:rgba(255,140,0,.04);}
-        .sl-rank{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.2);min-width:16px;flex-shrink:0;}
+        .sl-row:hover{background:var(--bg-active);}
+        .sl-rank{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--text-muted);min-width:16px;flex-shrink:0;}
         .sl-logo{width:20px;height:20px;object-fit:contain;flex-shrink:0;filter:drop-shadow(0 0 3px rgba(255,255,255,.15));}
-        .sl-team{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.55);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .sl-team{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--text-secondary);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
         .sl-dots{display:flex;gap:2px;flex:1;align-items:center;flex-wrap:wrap;}
         .sl-dot{width:5px;height:5px;border-radius:2px;flex-shrink:0;}
-        .sl-dot-w{background:#00CC55;box-shadow:0 0 3px rgba(0,204,85,.5);}
-        .sl-dot-l{background:#4477CC;box-shadow:0 0 3px rgba(68,119,204,.4);}
-        .sl-dots-more{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.3);margin-left:1px;}
+        .sl-dot-w{background:var(--dot-win);box-shadow:0 0 3px var(--color-win-border);}
+        .sl-dot-l{background:var(--dot-loss);box-shadow:0 0 3px var(--color-loss-border);}
+        .sl-dots-more{font-family:'VT323',monospace;font-size:14px;color:var(--text-muted);margin-left:1px;}
         .sl-val{font-family:'Press Start 2P',monospace;font-size:10px;flex-shrink:0;min-width:26px;text-align:right;}
-        .sl-val-hot{color:#00CC55;text-shadow:0 0 7px rgba(0,204,85,.4);}
-        .sl-val-cold{color:#6B9FFF;text-shadow:0 0 7px rgba(107,159,255,.35);}
-        .sl-empty{font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,.2);text-align:center;padding:1.2rem;letter-spacing:1px;}
-        .sl-bar-wrap{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;}
-        .sl-bar{height:100%;background:linear-gradient(90deg,rgba(255,140,0,.3),rgba(255,215,0,.2));border-radius:3px;}
-        .sl-coming{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.13);letter-spacing:1px;text-align:center;padding:.4rem;}
+        .sl-val-hot{color:var(--color-win);text-shadow:0 0 7px var(--color-win-border);}
+        .sl-val-cold{color:var(--color-loss);text-shadow:0 0 7px var(--color-loss-border);}
+        .sl-empty{font-family:'VT323',monospace;font-size:17px;color:var(--text-muted);text-align:center;padding:1.2rem;letter-spacing:1px;}
+        .sl-bar-wrap{flex:1;height:4px;background:var(--border-subtle);border-radius:3px;overflow:hidden;}
+        .sl-bar{height:100%;background:linear-gradient(90deg,var(--tab-on-bg),rgba(255,215,0,.2));border-radius:3px;}
+        .sl-coming{font-family:'Press Start 2P',monospace;font-size:8px;color:var(--text-faint);letter-spacing:1px;text-align:center;padding:.4rem;}
 
         .sl-scorer-stats { display:flex; gap:0; align-items:center; margin-left:auto; }
-.sl-scorer-stat { 
-  font-family:'VT323',monospace; font-size:16px; color:rgba(255,255,255,.7);
-  display:flex; flex-direction:column; align-items:center; width:28px;
-  flex-shrink:0;
-}
-        .sl-scorer-label { font-family:'Press Start 2P',monospace; font-size:6px; color:rgba(255,255,255,.25); letter-spacing:1px; }
-        .sl-pts { color:#FFD700 !important; text-shadow:0 0 8px rgba(255,215,0,.4); }
+        .sl-scorer-stat { 
+          font-family:'VT323',monospace; font-size:16px; color:var(--text-secondary);
+          display:flex; flex-direction:column; align-items:center; width:28px;
+          flex-shrink:0;
+        }
+        .sl-scorer-label { font-family:'Press Start 2P',monospace; font-size:6px; color:var(--text-muted); letter-spacing:1px; }
+        .sl-pts { color:var(--accent-gold) !important; text-shadow:0 0 8px rgba(255,215,0,.4); }
 
         /* ── Transactions ── */
         .tx-body{padding:.12rem 0;}
         .tx-ph{display:flex;flex-direction:column;align-items:center;gap:.28rem;padding:.62rem .8rem;}
-        .tx-ph-msg{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.14);letter-spacing:1px;text-align:center;}
-        .tx-row{display:flex;align-items:center;gap:.28rem;padding:.22rem .66rem;border-bottom:1px solid rgba(255,255,255,.03);}
+        .tx-ph-msg{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--text-faint);letter-spacing:1px;text-align:center;}
+        .tx-row{display:flex;align-items:center;gap:.28rem;padding:.22rem .66rem;border-bottom:1px solid var(--border-subtle);}
         .tx-row:last-child{border-bottom:none;}
         .tx-teams{display:flex;align-items:center;gap:.14rem;}
-        .tx-team{font-family:'Press Start 2P',monospace;font-size:9px;color:#87CEEB;}
-        .tx-arr{color:#FF8C00;font-size:15px;}
-        .tx-player{flex:1;font-family:'VT323',monospace;font-size:16px;color:#E0E0E0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-        .tx-date{font-family:'VT323',monospace;font-size:14px;color:rgba(255,255,255,.2);flex-shrink:0;}
+        .tx-team{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--accent-blue);}
+        .tx-arr{color:var(--accent-orange);font-size:15px;}
+        .tx-player{flex:1;font-family:'VT323',monospace;font-size:16px;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .tx-date{font-family:'VT323',monospace;font-size:14px;color:var(--text-muted);flex-shrink:0;}
 
         /* ── Right cluster ── */
-        .media-cluster{display:flex;flex-direction:column;gap:0;border:1.5px solid rgba(88,101,242,.18);border-radius:10px;overflow:hidden;}
-        .media-cluster>.panel{border:none;border-radius:0;border-bottom:1px solid rgba(88,101,242,.12);}
+        .media-cluster{display:flex;flex-direction:column;gap:0;border:1.5px solid var(--discord-border);border-radius:10px;overflow:hidden;}
+        .media-cluster>.panel{border:none;border-radius:0;border-bottom:1px solid var(--discord-border);}
         .media-cluster>.panel:last-child{border-bottom:none;}
         .media-cluster>.twg-panel{border-bottom:1px solid rgba(0,255,100,.1);}
         .events{padding:.04rem 0;}
-        .ev-row{display:flex;align-items:flex-start;gap:.48rem;padding:.38rem .72rem;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.03);transition:background .12s;}
+        .ev-row{display:flex;align-items:flex-start;gap:.48rem;padding:.38rem .72rem;text-decoration:none;border-bottom:1px solid var(--border-subtle);transition:background .12s;}
         .ev-row:last-child{border-bottom:none;}
-        .ev-row:hover{background:rgba(88,101,242,.07);}
-        .ev-cal{display:flex;flex-direction:column;align-items:center;background:rgba(88,101,242,.1);border:1px solid rgba(88,101,242,.25);border-radius:5px;padding:.16rem .36rem;min-width:33px;flex-shrink:0;margin-top:2px;}
-        .ev-mon{font-family:'Press Start 2P',monospace;font-size:8px;color:#7289DA;text-transform:uppercase;}
-        .ev-day{font-family:'VT323',monospace;font-size:25px;color:#fff;line-height:1;}
+        .ev-row:hover{background:var(--discord-row-hover);}
+        .ev-cal{display:flex;flex-direction:column;align-items:center;background:var(--discord-cal-bg);border:1px solid var(--discord-cal-border);border-radius:5px;padding:.16rem .36rem;min-width:33px;flex-shrink:0;margin-top:2px;}
+        .ev-mon{font-family:'Press Start 2P',monospace;font-size:8px;color:var(--discord-cal-text);text-transform:uppercase;}
+        .ev-day{font-family:'VT323',monospace;font-size:25px;color:var(--text-primary);line-height:1;}
         .ev-info{flex:1;display:flex;flex-direction:column;gap:.08rem;min-width:0;}
-        .ev-name{font-family:'Press Start 2P',monospace;font-size:9px;color:#E0E0E0;line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-        .ev-time{font-family:'VT323',monospace;font-size:15px;color:rgba(135,206,235,.5);margin-top:.04rem;}
+        .ev-name{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--text-primary);line-height:1.5;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+        .ev-time{font-family:'VT323',monospace;font-size:15px;color:var(--accent-blue);opacity:.5;margin-top:.04rem;}
         .ev-right{display:flex;flex-direction:column;align-items:flex-end;gap:.14rem;flex-shrink:0;padding-top:2px;}
         .ev-live{font-family:'Press Start 2P',monospace;font-size:8px;background:rgba(0,255,100,.12);border:1px solid rgba(0,255,100,.38);color:#00FF64;padding:.1rem .28rem;border-radius:3px;animation:blink 1.4s ease-in-out infinite;}
-        .ev-du{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,255,255,.28);letter-spacing:1px;}
+        .ev-du{font-family:'Press Start 2P',monospace;font-size:9px;color:var(--text-muted);letter-spacing:1px;}
         .ev-today{color:#00FF64;text-shadow:0 0 8px rgba(0,255,100,.4);animation:blink 1.4s ease-in-out infinite;}
-        .ev-tmrw{color:#FFD700;}
+        .ev-tmrw{color:var(--accent-gold);}
         .ev-cta{text-align:left!important;padding:.8rem!important;}
         .ev-cta p{margin:0 0 .22rem;font-size:15px!important;}
-        .ev-setup{font-size:13px!important;color:rgba(255,255,255,.15)!important;}
-        .ev-setup code{background:rgba(255,255,255,.07);padding:.05rem .18rem;border-radius:3px;}
+        .ev-setup{font-size:13px!important;color:var(--text-faint)!important;}
+        .ev-setup code{background:var(--bg-hover);padding:.05rem .18rem;border-radius:3px;}
         @keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 
-        /* ── HDTV Ticker ── */
+        /* ── HDTV Ticker — intentionally kept dark in both modes ── */
         .hdtv-ticker {
           position:fixed; bottom:0; left:0; right:0; height:48px;
           display:flex; align-items:stretch; z-index:200;
@@ -2591,25 +2640,25 @@ export default function Home() {
         .ht-clock-time { font-size:15px; font-weight:700; color:#ECF1FF; letter-spacing:1.5px; font-variant-numeric:tabular-nums; line-height:1; }
         .ht-clock-label { font-size:8px; font-weight:700; color:rgba(255,255,255,0.28); letter-spacing:3px; line-height:1; }
 
-
         .tx-row-tip { position: relative; }
-.tx-tooltip {
-  display: none;
-  position: absolute;
-  bottom: 100%; left: 0;
-  background: #0d0d1e;
-  border: 1px solid rgba(135,206,235,.2);
-  border-radius: 6px;
-  padding: .4rem .6rem;
-  font-family: 'VT323', monospace;
-  font-size: 14px;
-  color: rgba(255,255,255,.8);
-  white-space: normal;
-  width: 260px;
-  z-index: 100;
-  pointer-events: none;
-}
-.tx-row-tip:hover .tx-tooltip { display: block; }
+        .tx-tooltip {
+          display: none;
+          position: absolute;
+          bottom: 100%; left: 0;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-default);
+          border-radius: 6px;
+          padding: .4rem .6rem;
+          font-family: 'VT323', monospace;
+          font-size: 14px;
+          color: var(--text-primary);
+          white-space: normal;
+          width: 260px;
+          z-index: 100;
+          pointer-events: none;
+        }
+        .tx-row-tip:hover .tx-tooltip { display: block; }
+
         /* ── Responsive ── */
         @media(max-width:1200px){
           .cg { grid-template-columns: 340px 1fr; grid-template-areas: "a b"; }
@@ -2625,7 +2674,7 @@ export default function Home() {
           .ht-text { font-size:13px; }
         }
         
-        /* ── Mobile hard clamp — prevents any child from forcing horizontal scroll */
+        /* ── Mobile hard clamp ── */
         @media(max-width:480px){
           .hp { overflow-x:hidden; }
           .cg { 
@@ -2637,9 +2686,7 @@ export default function Home() {
             max-width: 100vw;
           }
           .cg-a, .cg-b { min-width: 0; max-width: 100%; }
-          .hdtv-ticker { 
-            height: 40px;
-          }
+          .hdtv-ticker { height: 40px; }
           .ht-brand { width: 60px; }
           .ht-brand-top { font-size: 7px; letter-spacing: 0; }
           .ht-brand-bottom { font-size: 7px; letter-spacing: 2px; }
@@ -2648,6 +2695,17 @@ export default function Home() {
           .ht-text { font-size:11px; letter-spacing:0.04em; }
           .ht-sep { margin:0 0.25rem; }
           .ht-sep-line { width:12px; }
+        }
+
+        [data-theme="light"] .sl-team { color: rgba(0,0,0,.75); }
+        [data-theme="light"] .sl-rank { color: rgba(0,0,0,.5); }
+        [data-theme="light"] .sl-sub  { color: rgba(0,0,0,.55); }
+        [data-theme="light"] .tx-player { color: rgba(0,0,0,.82); }
+        [data-theme="light"] .ev-name   { color: rgba(0,0,0,.82); }
+        [data-theme="light"] .icd-awaiting { color: rgba(0,0,0,.4); }
+        [data-theme="light"] .panel { 
+          background: linear-gradient(155deg, rgba(0,0,0,.03) 0%, rgba(0,0,0,.06) 100%);
+          border-color: rgba(0,0,0,.12);
         }
       `}</style>
     </div>

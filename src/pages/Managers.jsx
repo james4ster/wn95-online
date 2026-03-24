@@ -714,7 +714,10 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
         .control-panel { display:flex; gap:2rem; justify-content:center; margin-bottom:1.5rem; flex-wrap:wrap; }
         .control-group { display:flex; flex-direction:column; gap:.5rem; }
         .control-group label { font-family:'Press Start 2P',monospace; font-size:.7rem; color:#FFD700; letter-spacing:2px; }
-        .arcade-select { background:linear-gradient(180deg,#1a1a2e,#0a0a15); color:#87CEEB; border:3px solid #87CEEB; padding:.75rem 1rem; font-family:'VT323',monospace; font-size:1.2rem; cursor:pointer; border-radius:8px; transition:all .3s; }
+        .arcade-select {  background:rgba(5,5,20,.9); color:#87CEEB; border:2px solid rgba(135,206,235,.3);
+          padding:.55rem 1.1rem; font-family:'VT323',monospace; font-size:1.3rem;
+          border-radius:8px; cursor:pointer; outline:none; min-width:160px;
+          transition:border-color .2s,box-shadow .2s; }
         .arcade-select--wide { min-width:320px; }
         .arcade-select:hover:not(:disabled) { border-color:#FFD700; color:#FFD700; transform:translateY(-2px); }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { useLeague } from "../components/LeagueContext";
 import { supabase } from "../utils/supabaseClient";
 
@@ -11,7 +11,6 @@ const ovrClass = (o) => {
   return "ovr-low";
 };
 
-// BUG FIX 1: was ovrClass(o) — 'o' is undefined in this scope, must be 'ovr'
 const OvrBadge = ({ ovr }) =>
   ovr != null ? (
     <span className={`ovr-badge ${ovrClass(ovr)}`}>{ovr}</span>
@@ -22,13 +21,13 @@ const OvrBadge = ({ ovr }) =>
 const PosBadge = ({ pos }) =>
   pos ? <span className={`pos-badge pos-${pos}`}>{pos}</span> : null;
 
-  const handLabel = (h) => {
-    if (h === "L" || h === "l") return "L";
-    if (h === "R" || h === "r") return "R";
-    if (h === 0   || h === "0" || h === false) return "R"; // flipped
-    if (h === 1   || h === "1" || h === true)  return "L"; // flipped
-    return h ? String(h).toUpperCase() : "";
-  };
+const handLabel = (h) => {
+  if (h === "L" || h === "l") return "L";
+  if (h === "R" || h === "r") return "R";
+  if (h === 0   || h === "0" || h === false) return "L";
+  if (h === 1   || h === "1" || h === true)  return "R";
+  return h ? String(h).toUpperCase() : "";
+};
 
 const TOOLTIP_ATTRS = [
   { key: "agl",     label: "AGL" },
@@ -46,6 +45,9 @@ const TOOLTIP_ATTRS = [
 ];
 
 const POS_ORDER = { F: 0, D: 1, G: 2 };
+
+const ATTR_SELECT =
+  "player_master_id, player_name, year, ovr, agl, spd, ofa, dfa, shp_pkc, chk, sth, sha, end_str, rgh_stl, pas_gvr, agr_gvl, star_rating";
 
 // ─── Paginated RPC fetch ──────────────────────────────────────────────────────
 async function rpcAllPages(rpcName, params) {
@@ -73,6 +75,18 @@ async function tableAllPages(builtQuery) {
     from += 1000;
   }
   return rows;
+}
+
+// ─── Parallel chunked fetch ───────────────────────────────────────────────────
+// Fires all chunks simultaneously instead of one-by-one
+async function parallelChunkFetch(keys, buildQuery, chunkSize = 400) {
+  if (!keys.length) return [];
+  const chunks = [];
+  for (let i = 0; i < keys.length; i += chunkSize) {
+    chunks.push(keys.slice(i, i + chunkSize));
+  }
+  const results = await Promise.all(chunks.map((chunk) => tableAllPages(buildQuery(chunk))));
+  return results.flat();
 }
 
 // ─── Tooltip ─────────────────────────────────────────────────────────────────
@@ -104,7 +118,6 @@ function AttrTooltip({ playerName, seasonLabel, attrs, anchorEl }) {
       </div>
       <div className="tt-ovr-row">
         OVR&nbsp;
-        {/* BUG FIX 2: was ovrClass(attrs.o) — must be attrs.ovr */}
         <span className={`ovr-badge ${ovrClass(attrs.ovr)}`}>{attrs.ovr}</span>
         {attrs.star_rating != null && (
           <span className="tt-stars">
@@ -182,7 +195,7 @@ export default function Teams() {
     })();
   }, [selectedLeague]);
 
-  // ── Single combined fetch ─────────────────────────────────────────────────
+  // ── Main combined fetch — roster + attributes fired in parallel ────────────
   useEffect(() => {
     if (!selectedSeason || !seasons.length) {
       setTeamPlayers({}); setAttrLookup({}); setDisplayYears([]); return;
@@ -198,21 +211,28 @@ export default function Teams() {
     (async () => {
       setLoading(true);
 
-      const rosterRows = await rpcAllPages("get_roster_with_attributes", {
-        season_lg: selectedSeason,
-      });
+      // ── Fire roster RPC and standings fetch in parallel ──────────────────
+      const [rosterRows, standingsData] = await Promise.all([
+        rpcAllPages("get_roster_with_attributes", { season_lg: selectedSeason }),
+        supabase
+          .from("standings")
+          .select("team, season_rank, gp, w, l, t, otl, pts, gf, ga")
+          .eq("season", selectedSeason)
+          .then(({ data }) => data || []),
+      ]);
 
-      console.log(`[Stage 1] ${rosterRows.length} rows for ${selectedSeason} (year ${selYear})`);
-      if (rosterRows.length) {
-        const s = rosterRows[0];
-        console.log("  keys:", Object.keys(s).join(", "));
-        console.log("  player_master_id:", s.player_master_id, "  pos:", s.pos, "  hand:", s.hand);
-      }
+      // Resolve standings immediately — no separate useEffect needed
+      const sMap = {};
+      standingsData.forEach(s => { sMap[s.team] = s; });
+      setStandingsMap(sMap);
+
+      console.log(`[Stage 1] ${rosterRows.length} roster rows for ${selectedSeason} (year ${selYear})`);
 
       if (!rosterRows.length) {
         setTeamPlayers({}); setAttrLookup({}); setDisplayYears([]); setLoading(false); return;
       }
 
+      // ── Build teamPlayers map ─────────────────────────────────────────────
       const tp = {};
       rosterRows.forEach(r => {
         if (!r.team_code || !r.player_name) return;
@@ -225,34 +245,42 @@ export default function Teams() {
         }
       });
 
+      // ── Build initial attrLookup from RPC rows ────────────────────────────
+      // LOGIC CHANGE: every player in tp gets an entry so they show in the
+      // roster even with no attributes for the selected year.
       const al = {};
+      // Pre-seed every rostered player so they always appear
+      Object.values(tp).forEach(teamMap => {
+        Object.keys(teamMap).forEach(name => {
+          if (!al[name]) al[name] = {};
+        });
+      });
+      // Fill in whatever the RPC returned
       rosterRows.forEach(r => {
         if (!r.player_name) return;
         if (!al[r.player_name]) al[r.player_name] = {};
         al[r.player_name][r.year] = r;
       });
 
+      // ── Fetch future-season attributes in parallel chunks ─────────────────
       const ids   = [...new Set(rosterRows.map(r => r.player_master_id).filter(Boolean))];
       const names = [...new Set(rosterRows.map(r => r.player_name).filter(Boolean))];
-      console.log(`[Stage 2] ids: ${ids.length}, names: ${names.length}`);
 
       let futureRows = [];
 
       if (ids.length > 0) {
-        console.log("  Using player_master_id join");
-        const CHUNK = 400;
-        for (let i = 0; i < ids.length; i += CHUNK) {
-          const chunk = ids.slice(i, i + CHUNK);
-          const rows = await tableAllPages(
+        console.log(`[Stage 2] id-join, ${ids.length} players`);
+        futureRows = await parallelChunkFetch(
+          ids,
+          (chunk) =>
             supabase
               .from("player_attributes_by_season")
-              .select("player_master_id, year, ovr, agl, spd, ofa, dfa, shp_pkc, chk, sth, sha, end_str, rgh_stl, pas_gvr, agr_gvl, star_rating")
+              .select(ATTR_SELECT)
               .in("player_master_id", chunk)
               .gt("year", selYear)
-              .order("year", { ascending: true })
-          );
-          futureRows = futureRows.concat(rows);
-        }
+              .order("year", { ascending: true }),
+          400,
+        );
         const idToName = {};
         rosterRows.forEach(r => { if (r.player_master_id) idToName[r.player_master_id] = r.player_name; });
         futureRows.forEach(r => {
@@ -262,20 +290,18 @@ export default function Teams() {
           al[name][r.year] = r;
         });
       } else {
-        console.log("  Falling back to player_name join");
-        const CHUNK = 200;
-        for (let i = 0; i < names.length; i += CHUNK) {
-          const chunk = names.slice(i, i + CHUNK);
-          const rows = await tableAllPages(
+        console.log(`[Stage 2] name-join fallback, ${names.length} players`);
+        futureRows = await parallelChunkFetch(
+          names,
+          (chunk) =>
             supabase
               .from("player_attributes_by_season")
-              .select("player_name, year, ovr, agl, spd, ofa, dfa, shp_pkc, chk, sth, sha, end_str, rgh_stl, pas_gvr, agr_gvl, star_rating")
+              .select(ATTR_SELECT)
               .in("player_name", chunk)
               .gt("year", selYear)
-              .order("year", { ascending: true })
-          );
-          futureRows = futureRows.concat(rows);
-        }
+              .order("year", { ascending: true }),
+          200,
+        );
         futureRows.forEach(r => {
           if (!r.player_name) return;
           if (!al[r.player_name]) al[r.player_name] = {};
@@ -283,11 +309,14 @@ export default function Teams() {
         });
       }
 
-      console.log(`[Stage 2] ${futureRows.length} future rows`);
+      console.log(`[Stage 2] ${futureRows.length} future-season rows`);
 
-      const allYears = [...new Set(
-        Object.values(al).flatMap(byYear => Object.keys(byYear).map(Number))
-      )].sort((a, b) => a - b);
+      // ── Derive display years — always include selYear even if no attr rows ─
+      // LOGIC CHANGE: selYear is injected so roster-only players get a column
+      const allYears = [...new Set([
+        selYear,
+        ...Object.values(al).flatMap(byYear => Object.keys(byYear).map(Number)),
+      ])].sort((a, b) => a - b);
 
       console.log(`[Derived] ${Object.keys(tp).length} teams, years: ${allYears.join(", ")}`);
 
@@ -296,39 +325,48 @@ export default function Teams() {
       setDisplayYears(allYears);
       setLoading(false);
     })();
+  // standingsMap intentionally removed from deps — handled inside this effect
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedSeason, seasons]);
 
-  // ── Standings ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!selectedSeason) { setStandingsMap({}); return; }
-    (async () => {
-      const { data } = await supabase
-        .from("standings")
-        .select("team, season_rank, gp, w, l, t, otl, pts, gf, ga")
-        .eq("season", selectedSeason);
-      const map = {};
-      (data || []).forEach(s => { map[s.team] = s; });
-      setStandingsMap(map);
-    })();
-  }, [selectedSeason]);
-
-  // ── Derived ───────────────────────────────────────────────────────────────
+  // ── Derived / memoized ────────────────────────────────────────────────────
   const selSeasonObj = seasons.find(s => s.lg === selectedSeason);
   const selYear      = selSeasonObj?.year ?? null;
-  const colLabel     = y => yearToLabel[y] ?? String(y);
-  const sortedTeams  = Object.keys(teamPlayers).sort();
 
-  const toggleTeam  = code => setExpandedTeams(prev => {
+  const colLabel = useCallback(
+    (y) => yearToLabel[y] ?? String(y),
+    [yearToLabel],
+  );
+
+  const sortedTeams = useMemo(
+    () => Object.keys(teamPlayers).sort(),
+    [teamPlayers],
+  );
+
+  // Pre-sort players per team once rather than on every render
+  const sortedPlayersByTeam = useMemo(() => {
+    const out = {};
+    sortedTeams.forEach(code => {
+      out[code] = Object.values(teamPlayers[code]).sort((a, b) => {
+        const pa = POS_ORDER[a.pos] ?? 9;
+        const pb = POS_ORDER[b.pos] ?? 9;
+        return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
+      });
+    });
+    return out;
+  }, [teamPlayers, sortedTeams]);
+
+  const toggleTeam  = useCallback(code => setExpandedTeams(prev => {
     const n = new Set(prev); n.has(code) ? n.delete(code) : n.add(code); return n;
-  });
-  const expandAll   = () => setExpandedTeams(new Set(sortedTeams));
-  const collapseAll = () => setExpandedTeams(new Set());
+  }), []);
+  const expandAll   = useCallback(() => setExpandedTeams(new Set(sortedTeams)), [sortedTeams]);
+  const collapseAll = useCallback(() => setExpandedTeams(new Set()), []);
 
   const showTooltip = useCallback((e, playerName, year, attrs) => {
     if (!attrs) return;
     e.stopPropagation();
     setTooltip({ playerName, seasonLabel: colLabel(year), attrs, anchorEl: e.currentTarget });
-  }, [yearToLabel]);
+  }, [colLabel]);
   const hideTooltip = useCallback(() => setTooltip(null), []);
 
   useEffect(() => {
@@ -391,15 +429,9 @@ export default function Teams() {
       ) : (
         <div className="teams-list">
           {sortedTeams.map(teamCode => {
-            const playersByName = teamPlayers[teamCode];
-            const isOpen        = expandedTeams.has(teamCode);
-            const teamStat      = standingsMap[teamCode];
-
-            const sortedPlayers = Object.values(playersByName).sort((a, b) => {
-              const pa = POS_ORDER[a.pos] ?? 9;
-              const pb = POS_ORDER[b.pos] ?? 9;
-              return pa !== pb ? pa - pb : a.name.localeCompare(b.name);
-            });
+            const isOpen   = expandedTeams.has(teamCode);
+            const teamStat = standingsMap[teamCode];
+            const sortedPlayers = sortedPlayersByTeam[teamCode] ?? [];
 
             return (
               <div key={teamCode} className="team-block">
@@ -424,7 +456,6 @@ export default function Teams() {
                     </div>
                     <div className="thdr-identity">
                       <span className="thdr-code">{teamCode}</span>
-                     
                     </div>
                     <TeamStatStrip stat={teamStat} />
                   </div>
@@ -476,8 +507,6 @@ export default function Teams() {
                                   const row = byYear[y];
                                   const ovr = row?.ovr ?? null;
                                   const isCur = y === selYear;
-                                  // BUG FIX 3: was ovrClass(row?.o) and OvrClass(row.o)
-                                  // 'o' doesn't exist — must be row?.ovr; OvrClass → ovrClass
                                   const tierCls = ovrClass(ovr);
                                   return (
                                     <td key={y}
@@ -566,13 +595,15 @@ export default function Teams() {
           color:#FF8C00; letter-spacing:2px; text-shadow:0 0 5px #FF8C00;
         }
         .arcade-select {
-          background:rgba(5,5,20,.9); color:#87CEEB; border:2px solid rgba(135,206,235,.3);
-          padding:.55rem 1.1rem; font-family:'VT323',monospace; font-size:1.3rem;
-          border-radius:8px; cursor:pointer; outline:none; min-width:160px;
-          transition:border-color .2s,box-shadow .2s;
+          background:linear-gradient(180deg,#1a1a2e 0%,#0a0a15 100%);
+          color:#87CEEB; border:3px solid #87CEEB; padding:.75rem 1rem;
+          font-family:'VT323',monospace; font-size:1.2rem; cursor:pointer;
+          border-radius:8px; transition:all .3s ease; letter-spacing:1px; min-width:200px;
+          box-shadow:0 0 10px rgba(135,206,235,.3),inset 0 0 10px rgba(135,206,235,.1);
         }
         .arcade-select:hover:not(:disabled) {
-          { border-color:#87CEEB; box-shadow:0 0 12px rgba(135,206,235,.2); },inset 0 0 15px rgba(255,140,0,.1);
+          border-color:#FF8C00; color:#FF8C00;
+          box-shadow:0 0 15px rgba(255,140,0,.5),inset 0 0 15px rgba(255,140,0,.1);
           transform:translateY(-2px);
         }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }
@@ -754,7 +785,6 @@ export default function Teams() {
         .cell-ovr-past { opacity:.4; }
         .cell-hoverable { cursor:pointer; }
 
-        /* Tier-tinted cell hover — tierCls is on the <td> so these compound selectors work */
         .cell-hoverable.ovr-elite:hover {
           background:rgba(0,255,100,.22) !important; opacity:1 !important;
           box-shadow:0 0 10px rgba(0,255,100,.5);
@@ -776,26 +806,22 @@ export default function Teams() {
           display:inline-block; font-family:'Press Start 2P',monospace;
           font-size:.5rem; padding:.16rem .38rem; border-radius:4px; letter-spacing:1px;
         }
-        /* Elite (80+) — Green, highest */
         .ovr-elite {
           background:rgba(0,255,100,.15);
           border:1px solid rgba(0,255,100,.55);
           color:#00FF64;
           text-shadow:0 0 6px rgba(0,255,100,.5);
         }
-        /* Good (65–79) — Gold/Yellow */
         .ovr-good {
           background:rgba(255,215,0,.15);
           border:1px solid rgba(255,215,0,.55);
           color:#FFD700;
         }
-        /* Average (50–64) — Softer yellow */
         .ovr-avg {
           background:rgba(255,215,0,.08);
           border:1px solid rgba(255,215,0,.30);
           color:#E6C200;
         }
-        /* Low (<50) — Gray */
         .ovr-low {
           background:rgba(255,255,255,.05);
           border:1px solid rgba(255,255,255,.12);
@@ -845,11 +871,10 @@ export default function Teams() {
         }
         .tt-label { font-family:'Press Start 2P',monospace; font-size:.33rem; color:rgba(135,206,235,.5); letter-spacing:1px; }
         .tt-val { font-family:'VT323',monospace; font-size:1.05rem; line-height:1; color:#E0E0E0; }
-        /* Tooltip stat values — aligned with badge tier colors (FIXED from old scheme) */
-        .tt-val.ovr-elite { color:#00FF64; }            /* Green  — highest */
-        .tt-val.ovr-good  { color:#FFD700; }            /* Gold   — above avg */
-        .tt-val.ovr-avg   { color:#E6C200; }            /* Soft yellow — average */
-        .tt-val.ovr-low   { color:rgba(255,255,255,.4); } /* Gray — low */
+        .tt-val.ovr-elite { color:#00FF64; }
+        .tt-val.ovr-good  { color:#FFD700; }
+        .tt-val.ovr-avg   { color:#E6C200; }
+        .tt-val.ovr-low   { color:rgba(255,255,255,.4); }
 
         /* RESPONSIVE */
         @media (max-width:900px) {

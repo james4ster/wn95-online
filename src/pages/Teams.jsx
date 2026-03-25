@@ -383,11 +383,34 @@ export default function Teams() {
     <div className="teams-page" onClick={() => setTooltip(null)}>
 
       {/* HEADER */}
-      <div className="scoreboard-header-container">
-        <div className="scoreboard-header">
-          <div className="led-text">TEAM ROSTERS</div>
-        </div>
-      </div>
+      <div className="scoreboard-header-container" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+  <div className="scoreboard-header">
+    <div className="led-text">TEAM ROSTERS</div>
+  </div>
+
+  {/* Temporary flashing note */}
+  <div
+    style={{
+      fontSize: '1.2rem',          // slightly bigger text
+      color: 'red',                // your preferred color
+      marginTop: '4px',
+      animation: 'flash 1s infinite' // flashing effect
+    }}
+  >
+    The attributes are not fucking correct yet, just ignore them....
+  </div>
+
+  {/* Inline keyframes for flashing */}
+  <style>
+    {`
+      @keyframes flash {
+        0%, 50%, 100% { opacity: 1; }
+        25%, 75% { opacity: 0; }
+      }
+    `}
+  </style>
+</div>
+
 
       {/* CONTROLS */}
       <div className="control-panel">

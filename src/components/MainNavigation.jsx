@@ -456,6 +456,10 @@ export default function MainNavigation() {
           .discord-label { display: none; }
           .discord-btn-inner { padding: 0.5rem 0.75rem; }
           .league-dropdown-menu { min-width: 230px; }
+          .main-navigation {
+            position: static;
+            top: auto;
+          }
         }
       `}</style>
     </nav>

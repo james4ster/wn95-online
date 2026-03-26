@@ -157,7 +157,7 @@ export default function LeagueSubNav() {
         }
 
         @media (max-width: 768px) {
-          .league-subnav { top: 64px; }
+          .league-subnav { top: 64px; position: static; top: auto;}
           .snl { padding: 0 0.85rem; }
           .snt { display: none; }
         }

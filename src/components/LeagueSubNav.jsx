@@ -1,3 +1,4 @@
+/* removed stick from mobile */
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useLeague } from './LeagueContext';
@@ -157,7 +158,7 @@ export default function LeagueSubNav() {
         }
 
         @media (max-width: 768px) {
-          .league-subnav { top: 64px; }
+          .league-subnav { top: 64px; position: static; top: auto;}
           .snl { padding: 0 0.85rem; }
           .snt { display: none; }
         }

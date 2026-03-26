@@ -1,3 +1,4 @@
+/* removed stick from mobile */
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useLeague } from './LeagueContext';

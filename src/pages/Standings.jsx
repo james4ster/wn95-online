@@ -85,31 +85,42 @@ function computeStandings(games) {
       away._results.push('T');
     } else if (sh > sa) {
       if (isOT) {
+        home.w++;
         home.otw++;
         home.pts += 2;
+    
         away.otl++;
         away.pts += 1;
+    
         home._results.push('OTW');
         away._results.push('OTL');
       } else {
         home.w++;
         home.pts += 2;
+    
         away.l++;
+    
         home._results.push('W');
         away._results.push('L');
       }
+    
     } else {
       if (isOT) {
+        away.w++;
         away.otw++;
         away.pts += 2;
+    
         home.otl++;
         home.pts += 1;
+    
         away._results.push('OTW');
         home._results.push('OTL');
       } else {
         away.w++;
         away.pts += 2;
+    
         home.l++;
+    
         away._results.push('W');
         home._results.push('L');
       }

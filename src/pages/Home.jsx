@@ -1617,12 +1617,14 @@ export default function Home() {
             'goal_player_name, assist_primary_name, assist_secondary_name, g_team, playoff_game_id'
           )
           .not('playoff_game_id', 'is', null)
+          .eq('season', latest.lg)
       : supabase
           .from('game_raw_scoring')
           .select(
             'goal_player_name, assist_primary_name, assist_secondary_name, g_team, game_id'
           )
-          .is('playoff_game_id', null);
+          .is('playoff_game_id', null)
+          .eq('season', latest.lg);
 
     const { data: allScoringData } = await scorerQuery;
 
@@ -2226,22 +2228,65 @@ export default function Home() {
         .cg-c { grid-area:c; display:flex; flex-direction:column; align-self:start; }
 
         /* ── Countdown ── */
-        .icd{display:flex;align-items:center;justify-content:space-between;gap:.55rem;padding:.58rem .82rem;background:color-mix(in srgb,var(--ic) 8%,rgba(0,0,0,.65));border:1.5px solid color-mix(in srgb,var(--ic) 32%,transparent);border-radius:10px;position:relative;overflow:hidden;}
+        .icd {
+          display: flex;
+          flex-direction: column;  /* ← stack vertically */
+          align-items: flex-start;
+          gap: .3rem;
+          padding: .58rem .82rem;
+          background: color-mix(in srgb, var(--ic) 8%, rgba(0,0,0,.65));
+          border: 1.5px solid color-mix(in srgb, var(--ic) 32%, transparent);
+          border-radius: 10px;
+          position: relative;
+          overflow: hidden;
+        }
         .icd::before{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse 65% 100% at 0% 50%,color-mix(in srgb,var(--ic) 12%,transparent),transparent 70%);}
-        .icd-left{display:flex;flex-direction:column;gap:.2rem;}
+        .icd-left {
+          display: flex;
+          flex-direction: column;
+          gap: .2rem;
+          min-width: 0;
+          width: 100%;  /* ← full width now */
+        }
         .icd-eyebrow{font-family:'Press Start 2P',monospace;font-size:9px;color:rgba(255,140,0,.5);letter-spacing:2px;}
         .icd-meta{display:flex;align-items:center;gap:.38rem;}
         .icd-dot{width:6px;height:6px;border-radius:50%;background:var(--ic);box-shadow:0 0 5px var(--ic);animation:icPulse 2s ease-in-out infinite;flex-shrink:0;}
         @keyframes icPulse{0%,100%{opacity:1}50%{opacity:.35}}
-        .icd-league{font-family:'Press Start 2P',monospace;font-size:12px;color:var(--ic);letter-spacing:2px;}
+        .icd-league{font-family:'Press Start 2P',monospace;font-size: 10px;color:var(--ic);letter-spacing:2px;}
         .icd-season{font-family:'VT323',monospace;font-size:17px;color:color-mix(in srgb,var(--ic) 55%,rgba(255,255,255,.25));}
-        .icd-right{display:flex;align-items:center;flex-shrink:0;}
+        .icd-right {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+          width: 100%;  /* ← full width */
+        }
         .icd-awaiting{font-family:'Press Start 2P',monospace;font-size:10px;color:rgba(255,255,255,.2);letter-spacing:1px;}
         .icd-complete{display:flex;align-items:center;gap:.3rem;}
         .icd-done-txt{font-family:'Press Start 2P',monospace;font-size:10px;color:color-mix(in srgb,var(--ic) 70%,rgba(255,255,255,.3));letter-spacing:1px;}
-        .icd-clock{display:flex;align-items:center;gap:.25rem;}
-        .icd-unit{display:flex;flex-direction:column;align-items:center;background:rgba(0,0,0,.6);border:1px solid color-mix(in srgb,var(--ic) 22%,transparent);border-radius:5px;padding:.2rem .38rem;min-width:38px;}
-        .icd-n{font-family:'VT323',monospace;font-size:27px;line-height:1;color:var(--ic);text-shadow:0 0 11px color-mix(in srgb,var(--ic) 65%,transparent);}
+        .icd-clock {
+          display: flex;
+          align-items: center;
+          gap: .25rem;
+          width: 100%;
+          justify-content: space-between;  /* ← spread units across full width */
+        }
+        .icd-unit {
+          flex: 1;  /* ← each unit takes equal space */
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: rgba(0,0,0,.6);
+          border: 1px solid color-mix(in srgb, var(--ic) 22%, transparent);
+          border-radius: 5px;
+          padding: .2rem .22rem;
+        }
+        .icd-n {
+          font-family: 'VT323', monospace;
+          font-size: 26px;
+          line-height: 1;
+          color: var(--ic);
+          text-shadow: 0 0 11px color-mix(in srgb, var(--ic) 65%, transparent);
+        }
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
 
         /* ── Panels ── */

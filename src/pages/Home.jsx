@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';
 import { useLeague } from '../components/LeagueContext';
@@ -485,311 +485,44 @@ const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
    Fetch from Supabase edge fn
    Now receives: teamNameMap (abr→{city,nickname,full}) + topScorers
 ───────────────────────────────────────────────────────────── */
-async function fetchGazetteEdition({
-  leagueLabel,
-  recentForm,
-  winStreaks,
-  lossStreaks,
-  currentSeason,
-  teamNameMap,
-  topScorers,
-  recentGames,
-  isPlayoffActive,
-  playoffSeriesData,
-  gameStats,
-  managers,
-  teams,
-  championTeam,
-}) {
+async function fetchGazetteEdition({ leagueLabel, currentSeason, isPlayoffActive }) {
   const today = new Date().toISOString().split('T')[0];
-  const season = currentSeason?.lg || leagueLabel;
   const isOffseason = currentSeason?.status === 'offseason';
+  const season = currentSeason?.lg || leagueLabel;
 
-  // ── Unified cache key
   let cacheKey;
+  if (isOffseason) {
+    cacheKey = `${leagueLabel}_offseason`;
+  } else if (isPlayoffActive) {
+    cacheKey = `${leagueLabel}_playoff`;
+  } else {
+    cacheKey = `${leagueLabel}_${season}`;
+  }
 
-    if (isOffseason) {
-      cacheKey = `${leagueLabel}_offseason`;
-    } else if (isPlayoffActive) {
-      cacheKey = `${leagueLabel}_playoff`;
-    } else {
-      cacheKey = `${leagueLabel}_${season}`;
-    }
-
-  // ── Map manager_id → traits safely
-  const traitsMap = (managers || []).reduce((acc, m) => {
-    if (m?.manager_traits) {
-      try {
-        const key = m.id ?? m.coach_name;
-        acc[key] =
-          typeof m.manager_traits === 'string'
-            ? JSON.parse(m.manager_traits)
-            : m.manager_traits;
-      } catch (err) {
-        console.warn('[Gazette] Failed to parse traits for', m.coach_name, err);
-      }
-    }
-    return acc;
-  }, {});
-
-  // ── Map team_code → manager_id
-  const teamManagerMap = (teams || []).reduce((acc, t) => {
-    if (t.manager_id) acc[t.abr] = t.manager_id;
-    return acc;
-  }, {});
-
-  // ── Try DB cache
   try {
-    const { data: cached } = await supabase
+    const res = await supabase
       .from('gazette_cache')
       .select('data, date')
       .eq('league', cacheKey)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
-    if (cached?.date === today && cached?.data) {
-      console.log('[Gazette] ✅ Serving from DB cache:', cacheKey);
-      return typeof cached.data === 'string'
-        ? JSON.parse(cached.data)
-        : cached.data;
+    const cached = res.data;
+    if (!cached?.data) {
+      console.log('[Gazette] No cache found for', cacheKey);
+      return null;
     }
+    if (cached.date === today) {
+      console.log('[Gazette] ✅ Serving cached edition for', cacheKey);
+      return typeof cached.data === 'string' ? JSON.parse(cached.data) : cached.data;
+    }
+    console.log('[Gazette] Cache is stale for', cacheKey);
+    return null;
   } catch (e) {
-    console.log('[Gazette] No DB cache found, generating live');
+    console.log('[Gazette] Cache lookup failed:', e.message);
+    return null;
   }
-
-  const tn = (code) =>
-    teamNameMap[code] || { city: code, nickname: code, full: code };
-
-  // ── Build streak lines
-  const hotLines = (recentForm?.hot || [])
-    .slice(0, 5)
-    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
-    .join(' | ');
-  const coldLines = (recentForm?.cold || [])
-    .slice(0, 5)
-    .map((t) => `${tn(t.team).full} [${t.team}]: ${t.w}W-${t.l}L last 10`)
-    .join(' | ');
-  const winLines = (winStreaks || [])
-    .slice(0, 5)
-    .map((s) => `${tn(s.team).full} [${s.team}]: W${s.count}`)
-    .join(' | ');
-  const lossLines = (lossStreaks || [])
-    .slice(0, 5)
-    .map((s) => `${tn(s.team).full} [${s.team}]: L${s.count}`)
-    .join(' | ');
-
-  // ── Top scorers
-  const scorerLines = (topScorers || [])
-    .slice(0, 6)
-    .map((s) => {
-      const n = tn(s.g_team);
-      const ach = s.fourGoalGame
-        ? ' 🔥 4-GOAL GAME'
-        : s.hatTrick
-        ? ' 🎩 HAT TRICK'
-        : s.bigNight
-        ? ' ⭐ BIG NIGHT'
-        : '';
-      const best =
-        s.bestGame && s.bestGame.g + s.bestGame.a > 0
-          ? ` (best game: ${s.bestGame.g}G ${s.bestGame.a}A)`
-          : '';
-      return `${s.goal_player_name} (${n.full} / ${s.g_team}): ${s.goals}G ${s.assists}A${best}${ach}`;
-    })
-    .join(' | ');
-
-  // ── Recent games
-  const gameLines = (recentGames || [])
-    .slice(0, 8)
-    .map((g) => {
-      const home = tn(g.home).full;
-      const away = tn(g.away).full;
-      return `${home} ${g.score_home}-${g.score_away} ${away}${g.ot ? ' (OT)' : ''}`;
-    })
-    .join(' | ');
-
-  // ── Name references
-  const allCodes = [
-    ...new Set([
-      ...(recentForm?.hot || []).map((t) => t.team),
-      ...(recentForm?.cold || []).map((t) => t.team),
-      ...(winStreaks || []).map((s) => s.team),
-      ...(lossStreaks || []).map((s) => s.team),
-    ]),
-  ];
-
-  const nameRef = allCodes
-    .map((code) => {
-      const n = tn(code);
-      return `${code} = "${n.full}" (city: ${n.city}, nickname: ${n.nickname}${
-        n.coach ? `, coach: ${n.coach}` : ''
-      })`;
-    })
-    .join('\n');
-
-  // ── Offseason champion block
-  const offseasonBlock = isOffseason && championTeam
-    ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏆 OFFSEASON — CHAMPION FEATURE
-The ${leagueLabel} champion is: ${teamNameMap[championTeam]?.full || championTeam} (${championTeam})
-Season: ${season}
-- featured_team MUST be "${championTeam}" — no other team is acceptable
-- story_type MUST be "milestone"
-- Cover the championship: their run through the playoffs, their coach's style, what made them dominant.
-- Reference that the next season is approaching and whether they can repeat.
-- Use the manager traits for the champion's coach heavily in the pull_quote and bottom_line.`
-    : '';
-
-  // ── Playoff summary block
-  const playoffBlock =
-    isPlayoffActive && playoffSeriesData?.length
-      ? `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏒 PLAYOFF MODE — ACTIVE
-${playoffSeriesData
-  .map((s) => {
-    const teamA = tn(s.team_code_a).full;
-    const teamB = tn(s.team_code_b).full;
-    const winsA = s.wins_a ?? 0;
-    const winsB = s.wins_b ?? 0;
-    const needed = Math.ceil((s.series_length ?? 7) / 2);
-    const leader = winsA > winsB ? teamA : winsB > winsA ? teamB : null;
-    const advanced = winsA >= needed ? teamA : winsB >= needed ? teamB : null;
-    const statusLine = advanced
-      ? `🏆 ${advanced} ADVANCES to Round ${s.round + 1}!`
-      : leader
-      ? `${leader} leads ${Math.max(winsA, winsB)}-${Math.min(winsA, winsB)}`
-      : `Series tied ${winsA}-${winsB}`;
-    return `Round ${s.round} | ${teamA} vs ${teamB} | ${statusLine}`;
-  })
-  .join('\n')}
-- If a team just clinched a series (ADVANCES), that is THE lead story — cover_line must reflect it.
-- Use story_type "milestone" for a clinch, "playoff_push" for a close series lead.
-- Reference round numbers and series scores in your writing.`
-      : '';
-
-  // ── Relevant teams for traits
-  const relevantTeams = Array.from(
-    new Set([
-      ...(Array.isArray(recentForm?.hot) ? recentForm.hot.map((t) => t.team) : []),
-      ...(Array.isArray(recentForm?.cold) ? recentForm.cold.map((t) => t.team) : []),
-      ...(Array.isArray(winStreaks) ? winStreaks.map((s) => s.team) : []),
-      ...(Array.isArray(lossStreaks) ? lossStreaks.map((s) => s.team) : []),
-      ...(Array.isArray(playoffSeriesData)
-        ? playoffSeriesData.flatMap((s) => [s.team_code_a, s.team_code_b])
-        : []),
-      ...(championTeam ? [championTeam] : []),
-    ])
-  );
-
-  // ── Build traits lines
-  const traitsLines =
-    relevantTeams
-      .map((code) => {
-        const managerId = teamManagerMap[code];
-        const traits = traitsMap[managerId];
-        const coachName = (teams.find((t) => t.abr === code) ?? {}).coach ?? 'Unknown';
-        if (!traits) return null;
-        const teamName = teamNameMap[code]?.full || code;
-        return `${teamName} (${code}) — coached by ${coachName}, who is a ${traits.media}, ${traits.style} strategist with a ${traits.philosophy} philosophy and a ${traits.temperament} temperament.`;
-      })
-      .filter(Boolean)
-      .join('\n') || 'No traits available';
-
-  // ── Angle
-  const angles = [
-    'hot_streak', 'win_streak', 'cold_streak', 'loss_streak',
-    'big_win', 'playoff_push', 'milestone', 'comeback', 'rivalry',
-  ];
-  const angleHint = isOffseason
-    ? 'DYNASTY'
-    : angles[new Date().getDate() % angles.length];
-
-  // ── Prompt
-  const prompt = `You are the sharp-tongued editor of ${leagueLabel} MAGAZINE for season ${season}.
-Today's story angle: "${isPlayoffActive ? 'PLAYOFF ACTION' : angleHint}".
-${playoffBlock}
-${offseasonBlock}
-${isOffseason && championTeam
-  ? `\n- OFFSEASON MODE: featured_team is locked to "${championTeam}". Do NOT feature any other team. This is a championship retrospective.\n`
-  : ''}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  TEAM TRAITS
-${traitsLines}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TEAM NAME REFERENCE
-Use the city name OR the nickname in all written text — never the raw code.
-${nameRef}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LIVE LEAGUE DATA
-Hot teams (last 10): ${hotLines || 'none'}
-Cold teams (last 10): ${coldLines || 'none'}
-Active win streaks: ${winLines || 'none'}
-Active loss streaks: ${lossLines || 'none'}
-${scorerLines ? `Recent game top scorers: ${scorerLines}` : ''}
-${gameLines
-  ? `Recent results (use EXACTLY — never invent scores or matchups): ${gameLines}`
-  : 'No games in last 24 hours.'}
-${gameStats
-  ? `\nDetailed game stats (USE THESE ONLY — never invent stats not listed here):\n${gameStats}`
-  : ''}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-WRITING RULES
-- Use city OR nickname in all written text — never raw codes. Mix it up naturally.
-- When a coach is listed, you MAY quote them by name. Use coach name in quote_attr when it makes sense.
-- If a scorer has 🎩 HAT TRICK or 🔥 4-GOAL GAME, that IS the story — lead the cover with it.
-- If a scorer has ⭐ BIG NIGHT, mention them prominently in a blurb.
-- Pull quote: if a hat trick or 4-goal game happened, quote that player or their coach.
-- Be dramatic and hyperbolic — this is a sports magazine.
-- NEVER invent statistics. Only mention saves, shots, hits, faceoffs, or power play numbers if they appear in the game stats block above.
-- ENSURE the manager traits are used in the quote or bottom line
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Respond ONLY with valid JSON, zero other text:
-{
-"featured_team": "ONE team code from the reference list above — use exact code",
-"story_type": "one of: hot_streak|win_streak|cold_streak|loss_streak|big_win|elimination|playoff_push|milestone|comeback|rivalry|idle",
-"cover_line": "3-6 ALL CAPS words. Punchy magazine cover.",
-"cover_sub": "12-18 words. Punchy supporting line.",
-"blurb_1": { "tag": "2-3 ALL CAPS words", "headline": "6-9 words", "detail": "8-12 words" },
-"blurb_2": { "tag": "2-3 ALL CAPS WORDS", "headline": "6-9 words", "detail": "8-12 words" },
-"blurb_3": { "tag": "2-3 ALL CAPS WORDS", "headline": "6-9 words", "detail": "8-12 words" },
-"pull_quote": "12-20 words. Dramatic fake quote.",
-"quote_attr": "— [Coach or player name], Role, ${leagueLabel}",
-"bottom_line": "7-11 words. Use the manager traits for tone.",
-"edition": "Vol. ${Math.floor(Math.random() * 30) + 1} · Issue ${Math.floor(Math.random() * 80) + 1}"
-}`;
-
-  // ── Call the AI
-  const result = await supabase.functions.invoke('gazette-generate', {
-    body: { messages: [{ role: 'user', content: prompt }] },
-  });
-
-  if (result.error) throw new Error(result.error.message);
-
-  const raw = result.data?.text || result.data?.message?.content?.[0]?.text || '';
-  const match = raw.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
-  if (!match) throw new Error('No JSON found in response');
-  const data = JSON.parse(match[0]);
-
-  // ── Write back to DB cache
-  try {
-    await supabase.from('gazette_cache').upsert({
-      league: cacheKey,
-      date: today,
-      data,
-    });
-    console.log('[Gazette] ✅ Written to DB cache:', cacheKey);
-  } catch (e) {
-    console.warn('[Gazette] Failed to write to DB cache:', e);
-  }
-
-  return data;
 }
 
 /* ─────────────────────────────────────────────────────────────
@@ -925,55 +658,38 @@ function LeagueGazette({
   
    
 
-  const load = useCallback(
-    async (force = false) => {
+    const load = useCallback(async () => {
       setLoading(true);
       setError(null);
       try {
-        const { data: managers } = await supabase
-          .from('managers')
-          .select('id, coach_name, manager_traits');
-  
         const data = await fetchGazetteEdition({
           leagueLabel,
-          recentForm,
-          winStreaks,
-          lossStreaks,
           currentSeason,
-          teamNameMap,
-          topScorers,
-          recentGames,
           isPlayoffActive,
-          playoffSeriesData,
-          gameStats,
-          managers: managers || [],
-          teams,
-          championTeam,
         });
-        console.log('[Gazette] edition set, team:', data?.featured_team, 'teamNameMap keys:', Object.keys(teamNameMap));
-        setEdition(data);
+        if (!data) {
+          console.log('[Gazette] No cached edition — not displaying');
+          setEdition(null);
+        } else {
+          setEdition(data);
+        }
       } catch (e) {
         console.error('[Gazette]', e);
         setError(true);
       } finally {
         setLoading(false);
-        setRefreshing(false);
       }
-    },
-    [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
-      teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats, teams, championTeam]
-  );
+    }, [leagueLabel, currentSeason?.lg, currentSeason?.status, isPlayoffActive]);
 
   const loadedKeyRef = useRef(null);
 
   useEffect(() => {
-    if (!dataLoading && recentForm.hot.length > 0 && Object.keys(teamNameMap).length > 0) {
-      const key = `${leagueLabel}-${isPlayoffActive}`;
-      if (loadedKeyRef.current === key) return;
-      loadedKeyRef.current = key;
-      load();
-    }
-  }, [dataLoading, leagueLabel, isPlayoffActive, teamNameMap]);
+    if (!currentSeason?.lg) return;
+    const key = `${leagueLabel}-${currentSeason.lg}-${isPlayoffActive}`;
+    if (loadedKeyRef.current === key) return;
+    loadedKeyRef.current = key;
+    load();
+  }, [leagueLabel, currentSeason?.lg, isPlayoffActive, load]);
 
   const handleRefresh = () => {
     setRefreshing(true);
@@ -1000,8 +716,7 @@ function LeagueGazette({
   // Full name for the hero footer — key into map by teamCode, not team
   const featFullName = teamNameMap[teamCode]?.full || teamCode;
 
-  console.log('[Gazette render] team:', team, 'teamCode:', teamCode, 'teamNameMap TBP:', teamNameMap['TBP']);
-
+  
   return (
     <div
       className="si-wrap"
@@ -1689,6 +1404,7 @@ export default function Home() {
   const [beltDuration, setBeltDuration] = useState(30);
 
   const [championTeam, setChampionTeam] = useState(null);
+  const stableSeasonTeams = useMemo(() => seasonTeams, [currentSeason?.lg]);
 
   useEffect(() => {
     if (!beltRef.current || !newsItems.length) return;
@@ -2331,7 +2047,7 @@ export default function Home() {
             isPlayoffActive={isPlayoffActive}
             playoffSeriesData={playoffSeriesData}
             gameStats={gameStats}
-            teams={seasonTeams}
+            teams={stableSeasonTeams}
             championTeam={championTeam}
           />
         </div>

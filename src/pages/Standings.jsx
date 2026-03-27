@@ -704,7 +704,8 @@ export default function Standings() {
       const anyNearEnd = teams.some(
         (t) => totalGamesPerTeam - (t.gp || 0) < 10
       );
-      if (anyNearEnd) result.add(Number(p));
+      const anyHasPlayed = teams.some((t) => (t.gp || 0) > 0);
+      if (anyNearEnd && anyHasPlayed) result.add(Number(p));
     });
     return result;
   }, [sortedStandings, totalGamesPerTeam]);
@@ -759,9 +760,16 @@ export default function Standings() {
         setTiebreakerInfo(null);
         return;
       }
+      // Don't show if teams haven't played yet
+      const anyHasPlayed = tiedTeams.some((t) => (t.gp || 0) > 0);
+      if (!anyHasPlayed) {
+        setTiebreakerInfo(null);
+        return;
+      }
       const anyNearEnd = tiedTeams.some(
         (t) => totalGamesPerTeam - (t.gp || 0) < 10
       );
+
       if (!anyNearEnd) {
         setTiebreakerInfo(null);
         return;

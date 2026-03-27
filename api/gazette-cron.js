@@ -5,7 +5,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  const url = 'https://gwaiwtgwdqadxmimiskf.supabase.co/functions/v1/gazette-daily-cron';
+  const url = 'https://gwaiwtgwdqadxmimiskf.supabase.co/functions/v1/gazette-daily-cron-v2';
 
   try {
     const response = await fetch(url, {

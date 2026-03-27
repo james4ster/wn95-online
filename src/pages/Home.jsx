@@ -274,7 +274,7 @@ function Spotlight({
   topSeasonScorers,
   isPlayoffActive,
 }) {
-  const [idx, setIdx] = useState(0);
+  const [idx, setIdx] = useState(2);
  /* const timerRef = useRef(null);
   const startTimer = useCallback(() => {
     clearInterval(timerRef.current);

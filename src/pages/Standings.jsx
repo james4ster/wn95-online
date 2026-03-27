@@ -572,7 +572,7 @@ export default function Standings() {
             'id, home, away, score_home, score_away, ot, coach_home, coach_away'
           )
           .eq('lg', selectedSeason)
-          .eq('mode', 'Season')
+          .ilike('mode', 'season')
           .not('score_home', 'is', null)
           .order('id', { ascending: true }),
         supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
@@ -580,7 +580,7 @@ export default function Standings() {
           .from('games')
           .select('home')
           .eq('lg', selectedSeason)
-          .eq('mode', 'Season'),
+          .ilike('mode', 'season')
       ]);
       if (error) console.error('Error fetching games:', error);
       setRawGames(gamesData || []);

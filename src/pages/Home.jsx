@@ -2013,7 +2013,7 @@ export default function Home() {
             topSeasonScorers={topSeasonScorers}
             isPlayoffActive={isPlayoffActive}
           />
-          <section className="panel">
+         {/* <section className="panel">
             <PanelHeader icon="🔄" title="TRANSACTIONS" />
 
             <div className="tx-body">
@@ -2031,7 +2031,7 @@ export default function Home() {
                 ))
               )}
             </div>
-          </section>
+                </section> { */ }
         </div>
 
         {/* ── CENTER COLUMN — GAZETTE ── */}

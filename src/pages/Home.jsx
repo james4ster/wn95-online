@@ -275,21 +275,21 @@ function Spotlight({
   isPlayoffActive,
 }) {
   const [idx, setIdx] = useState(0);
-  const timerRef = useRef(null);
+ /* const timerRef = useRef(null);
   const startTimer = useCallback(() => {
     clearInterval(timerRef.current);
     timerRef.current = setInterval(
       () => setIdx((i) => (i + 1) % SL_PANELS.length),
       8000
     );
-  }, []);
+  }, []); 
   useEffect(() => {
     startTimer();
     return () => clearInterval(timerRef.current);
-  }, [startTimer]);
+  }, [startTimer]); */
+  
   const goTo = (i) => {
     setIdx(i);
-    startTimer();
   };
   const p = SL_PANELS[idx];
 
@@ -452,9 +452,7 @@ function Spotlight({
         <span className="sl-sub">{p.sub}</span>
       </div>
       <div className="sl-body">{rows()}</div>
-      <div className="sl-prog-wrap">
-        <div className="sl-prog" key={`${idx}-${loading}`} />
-      </div>
+      
     </section>
   );
 }

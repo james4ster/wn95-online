@@ -473,10 +473,14 @@ export default function GameOverviewModal({ game, onClose }) {
     let priorQuery = supabase
       .from('game_raw_scoring')
       .select('goal_player_name')
-      .lt(col, id);                    // all games earlier than this one
+      .eq('season', game.lg)           // ← use game.lg directly, always
+      .lt(col, id)
+      .not('goal_player_name', 'is', null);
 
-    if (hasSeason) {
-      priorQuery = priorQuery.eq('season', season);  // same season only
+    if (isPlayoff) {
+      priorQuery = priorQuery.not('playoff_game_id', 'is', null);
+    } else {
+      priorQuery = priorQuery.is('playoff_game_id', null);  // season only
     }
 
     Promise.all([

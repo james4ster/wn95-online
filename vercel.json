@@ -2,6 +2,9 @@
   "functions": {
     "api/gazette-cron.js": {
       "maxDuration": 60
+    },
+    "api/ticker-news-cron.js": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -12,10 +15,9 @@
     {
       "path": "/api/ticker-news-cron",
       "schedule": "0 16 * * *"
-    },
-    {
-      "path": "/api/avatars-cron",
-      "schedule": "0 3 * * *"
     }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

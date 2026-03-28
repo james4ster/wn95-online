@@ -522,7 +522,8 @@ export default function Standings() {
   const tableContainerRef = useRef(null);
   const stickyScrollRef = useRef(null);
   const [seasonTeams, setSeasonTeams] = useState([]);
-  const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(52);
+  const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(null);
+  const [rsGamesVs, setRsGamesVs] = useState(null); // Get # of games vs opponents for season
 
   useEffect(() => {
     if (!selectedLeague) {
@@ -533,7 +534,7 @@ export default function Standings() {
     (async () => {
       const { data, error } = await supabase
         .from('seasons')
-        .select('lg, year, end_date, playoff_teams')
+        .select('lg, year, end_date, playoff_teams, rs_games_vs')
         .order('year', { ascending: false });
       if (error) {
         console.error('Error fetching seasons:', error);
@@ -552,6 +553,7 @@ export default function Standings() {
     }
     const season = seasons.find((s) => s.lg === selectedSeason);
     setPlayoffTeams(season?.playoff_teams ?? null);
+    setRsGamesVs(season?.rs_games_vs ?? null);
   }, [selectedSeason, seasons]);
 
   useEffect(() => {
@@ -564,7 +566,7 @@ export default function Standings() {
       const [
         { data: gamesData, error },
         { data: teamsData },
-        { data: scheduleData },
+     //   { data: scheduleData },
       ] = await Promise.all([
         supabase
           .from('games')
@@ -585,16 +587,16 @@ export default function Standings() {
       if (error) console.error('Error fetching games:', error);
       setRawGames(gamesData || []);
       setSeasonTeams(teamsData || []);
-      const homeCounts = {};
-      (scheduleData || []).forEach((g) => {
-        homeCounts[g.home] = (homeCounts[g.home] || 0) + 1;
-      });
-      const counts = Object.values(homeCounts);
-      const gamesPerTeam = counts.length > 0 ? Math.max(...counts) * 2 : 52;
-      setTotalGamesPerTeam(gamesPerTeam);
-      setLoading(false);
-    })();
-  }, [selectedLeague, selectedSeason]);
+      const numTeams = (teamsData || []).length;
+      const seasonMeta = seasons.find((s) => s.lg === selectedSeason);
+      const rsVs = seasonMeta?.rs_games_vs ?? null;
+      const gamesPerTeam = rsVs != null && numTeams > 0
+              ? (numTeams - 1) * rsVs
+              : null;
+            setTotalGamesPerTeam(gamesPerTeam);
+            setLoading(false);
+          })();
+        }, [selectedLeague, selectedSeason]);
 
   useEffect(() => {
     if (!selectedSeason) {
@@ -637,25 +639,20 @@ export default function Standings() {
     const standings = computeStandings(rawGames);
     const playedTeams = new Set(standings.map((s) => s.team));
     const zeroed = seasonTeams
-      .filter(({ abr }) => !playedTeams.has(abr))
-      .map(({ abr, coach }) => ({
-        team: abr,
-        coach: coach || '',
-        gp: 0,
-        w: 0,
-        l: 0,
-        t: 0,
-        otl: 0,
-        otw: 0,
-        pts: 0,
-        gf: 0,
-        ga: 0,
-        gd: 0,
-        shutouts: 0,
-        pts_pct: 0,
-      }));
-    return [...standings, ...zeroed];
-  }, [rawGames, seasonTeams]);
+    
+        .filter(({ abr }) => !playedTeams.has(abr))
+        .map(({ abr, coach }) => ({
+          team: abr, coach: coach || '',
+          gp: 0, w: 0, l: 0, t: 0, otl: 0, otw: 0, pts: 0,
+          gf: 0, ga: 0, gd: 0, shutouts: 0, pts_pct: 0,
+        }));
+      return [...standings, ...zeroed].map((s) => {
+        const gr = totalGamesPerTeam != null
+        ? Math.max(0, totalGamesPerTeam - (s.gp || 0))
+        : null;
+      return { ...s, gr, maxPts: gr != null ? (s.pts || 0) + gr * 2 : null };
+      });
+    }, [rawGames, seasonTeams, totalGamesPerTeam]);
 
   const defaultSorted = useMemo(
     () =>
@@ -701,13 +698,11 @@ export default function Standings() {
     const result = new Set();
     Object.entries(ptsCounts).forEach(([p, teams]) => {
       if (teams.length < 2) return;
-      const anyNearEnd = teams.some(
-        (t) => totalGamesPerTeam - (t.gp || 0) < 10
-      );
+      const anyNearEnd = teams.some((t) => (t.gr ?? 0) <= 10);
       const anyHasPlayed = teams.some((t) => (t.gp || 0) > 0);
-      if (anyNearEnd && anyHasPlayed) result.add(Number(p));
-    });
-    return result;
+            if (anyNearEnd && anyHasPlayed) result.add(Number(p));
+          });
+          return result;
   }, [sortedStandings, totalGamesPerTeam]);
 
   useEffect(() => {
@@ -761,19 +756,12 @@ export default function Standings() {
         return;
       }
       // Don't show if teams haven't played yet
-      const anyHasPlayed = tiedTeams.some((t) => (t.gp || 0) > 0);
-      if (!anyHasPlayed) {
-        setTiebreakerInfo(null);
-        return;
-      }
-      const anyNearEnd = tiedTeams.some(
-        (t) => totalGamesPerTeam - (t.gp || 0) < 10
-      );
+      const anyNearEnd = tiedTeams.some((t) => (t.gr ?? 0) <= 10);
+        if (!anyNearEnd) {
+          setTiebreakerInfo(null);
+          return;
+        }
 
-      if (!anyNearEnd) {
-        setTiebreakerInfo(null);
-        return;
-      }
       const el = e.currentTarget;
       const r = el.getBoundingClientRect();
       setTiebreakerInfo({
@@ -902,6 +890,8 @@ export default function Standings() {
     { label: 'OTW', key: 'otw', width: '5px' },
     { label: 'SO', key: 'shutouts', width: '5px' },
     { label: 'STRK', key: 'streakVal', width: '5px' },
+    { label: 'GR', key: 'gr', width: '5px' },
+    { label: 'MAX PTS', key: 'maxPts', width: '5px' },
   ];
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
 
@@ -1267,6 +1257,12 @@ export default function Standings() {
                                 }`}
                               >
                                 {s.streak}
+                              </td>
+                              <td className={`stat-cell ${activeSortKey === 'gr' ? 'sorted-cell' : ''}`}>
+                                    {s.gr ?? '—'}
+                              </td>
+                                  <td className={`stat-cell ${activeSortKey === 'maxPts' ? 'sorted-cell' : ''}`}>
+                                    {s.maxPts ?? '—'}
                               </td>
                             </tr>
                             {playoffTeams && idx === playoffTeams - 1 && (

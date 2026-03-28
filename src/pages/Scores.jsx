@@ -35,7 +35,7 @@ function StreakBadge({ streak }) {
 }
 
 // ─── Collapsed game row ───────────────────────────────────────────────────────
-function GameCard({ game, selectedTeam, index, onOpenModal, streak }) {
+function GameCard({ game, selectedTeam, index, onOpenModal, streak, isAll }) {
   const isHome = selectedTeam === game.home;
   const myScore = isHome ? game.score_home : game.score_away;
   const opScore = isHome ? game.score_away : game.score_home;
@@ -59,19 +59,21 @@ function GameCard({ game, selectedTeam, index, onOpenModal, streak }) {
       className={`gc gc-${result}`}
       style={{ '--stripe': RC.s, '--glow': RC.g, animationDelay: `${index * 0.04}s` }}
     >
-      <div className="gc-row">
-        {/* Result badge */}
-        <div className="gc-badge" style={{ color: RC.c, borderColor: `${RC.c}60`, background: `${RC.c}14` }}>
-          {game.isPlayoff ? (
-            <>
-              <div>{BADGE[result]}</div>
-              <div style={{ fontSize: '.42rem', opacity: 0.85, marginTop: 3, letterSpacing: 1 }}>
-                R{game.round}·G{game.game_number}
-              </div>
-            </>
-          ) : BADGE[result]}
-        </div>
-
+      <div className="gc-row" style={isAll ? { gridTemplateColumns: '1fr 180px 1fr 120px' } : {}}>
+          {/* Result badge */}
+          {!isAll && (
+            <div className="gc-badge" style={{ color: RC.c, borderColor: `${RC.c}60`, background: `${RC.c}14` }}>
+              {game.isPlayoff ? (
+                <>
+                  <div>{BADGE[result]}</div>
+                  <div style={{ fontSize: '.42rem', opacity: 0.85, marginTop: 3, letterSpacing: 1 }}>
+                    R{game.round}·G{game.game_number}
+                  </div>
+                </>
+              ) : BADGE[result]}
+            </div>
+          )}
+      
         {/* Away team + streak if selected */}
         <div className="gc-side gc-away">
           {game.away === selectedTeam && <StreakBadge streak={streak} />}
@@ -149,7 +151,7 @@ export default function Scores() {
       const { data } = await supabase.from('teams').select('abr,team').eq('lg', season).order('team', { ascending: true });
       const list = (data || []).map(r => ({ abr: r.abr, name: r.team }));
       setTeams(list);
-      setTeam(t => (list.find(x => x.abr === t) ? t : list[0]?.abr ?? ''));
+      setTeam(t => (list.find(x => x.abr === t) ? t : '__all__'));
     })();
   }, [season]);
 
@@ -158,16 +160,22 @@ export default function Scores() {
     setLoading(true);
     (async () => {
       let data, error;
+      const isAll = team === '__all__';
+  
       if (mode === 'Playoffs') {
-        const res = await supabase
+        const q = supabase
           .from('playoff_games')
           .select('id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score')
           .eq('lg', season)
-          .or(`team_code_a.eq.${team},team_code_b.eq.${team}`)
           .not('team_a_score', 'is', null)
-          .order('round', { ascending: true })
-          .order('series_number', { ascending: true })
-          .order('game_number', { ascending: true });
+          .order('round', { ascending: !isAll })
+          .order('series_number', { ascending: !isAll })
+          .order('game_number', { ascending: !isAll });
+  
+        if (!isAll) q.or(`team_code_a.eq.${team},team_code_b.eq.${team}`);
+        if (isAll)  q.limit(30);
+  
+        const res = await q;
         error = res.error;
         data = (res.data || []).map(g => ({
           id: g.id, lg: g.lg, mode: 'Playoffs',
@@ -177,17 +185,22 @@ export default function Scores() {
           game_number: g.game_number, isPlayoff: true,
         }));
       } else {
-        const res = await supabase
+        const q = supabase
           .from('games')
           .select('id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot')
           .eq('lg', season)
-          .or(`mode.eq.Season,mode.eq.season`)
-          .or(`home.eq.${team},away.eq.${team}`)
+          .or('mode.eq.Season,mode.eq.season')
           .not('score_home', 'is', null)
-          .order('game_number', { ascending: true, nullsFirst: false });
+          .order('id', { ascending: !isAll, nullsFirst: false });
+  
+        if (!isAll) q.or(`home.eq.${team},away.eq.${team}`);
+        if (isAll)  q.limit(30);
+  
+        const res = await q;
         error = res.error;
         data = res.data;
       }
+  
       if (error) console.error(error);
       setGames(data ?? []);
       setLoading(false);
@@ -439,14 +452,15 @@ export default function Scores() {
         <div className="sp-fg">
           <span className="sp-flbl">TEAM</span>
           <select className="sp-sel" value={team} onChange={e => setTeam(e.target.value)}>
-            {teams.map(t => <option key={t.abr} value={t.abr}>{t.name} ({t.abr})</option>)}
-          </select>
+  <option value="__all__">ALL TEAMS</option>
+  {teams.map(t => <option key={t.abr} value={t.abr}>{t.name} ({t.abr})</option>)}
+</select>
         </div>
       </div>
 
       {/* ── RECORD STRIP ── */}
-      {!loading && games.length > 0 && (
-        <div className="sp-record">
+        {!loading && games.length > 0 && team !== '__all__' && (
+          <div className="sp-record">
           <div className="sp-rec w"><span className="sp-rec-num">{rec.w}</span><span className="sp-rec-lbl">WINS</span></div>
           <div className="sp-rec l"><span className="sp-rec-num">{rec.l}</span><span className="sp-rec-lbl">LOSSES</span></div>
           {rec.otl > 0 && <div className="sp-rec otl"><span className="sp-rec-num">{rec.otl}</span><span className="sp-rec-lbl">OTL</span></div>}
@@ -468,7 +482,8 @@ export default function Scores() {
               selectedTeam={team}
               index={i}
               onOpenModal={setModalGame}
-              streak={streaks[i]}
+              streak={team === '__all__' ? null : streaks[i]}
+              isAll={team === '__all__'}
             />
           ))}
         </div>

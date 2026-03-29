@@ -305,16 +305,17 @@ export default function FullScreenStandingsModal({
           text-shadow: 0 0 8px #FF8C00;
         }
         .fsm-close-btn {
-          font-family: 'Press Start 2P', monospace; font-size: .45rem;
-          color: rgba(255,255,255,.4); background: rgba(255,255,255,.04);
-          border: 1px solid rgba(255,255,255,.12); border-radius: 5px;
-          padding: .35rem .7rem; cursor: pointer; letter-spacing: 2px;
-          transition: all .2s;
-        }
-        .fsm-close-btn:hover {
-          color: #FF4444; border-color: rgba(255,68,68,.5);
-          box-shadow: 0 0 8px rgba(255,68,68,.2);
-        }
+            font-family: 'Press Start 2P', monospace; font-size: .45rem;
+            color: #FF4444;
+            background: rgba(255,68,68,.08);
+            border: 1px solid rgba(255,68,68,.3); border-radius: 5px;
+            padding: .35rem .7rem; cursor: pointer; letter-spacing: 2px;
+            transition: all .2s;
+          }
+          .fsm-close-btn:hover {
+            color: #FF4444; border-color: rgba(255,68,68,.5);
+            box-shadow: 0 0 8px rgba(255,68,68,.2);
+          }
 
         /* ── Body — this is THE scroll container; sticky thead works here ── */
         .fsm-body {

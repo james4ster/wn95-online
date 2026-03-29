@@ -272,24 +272,24 @@ export default function FullScreenStandingsModal({
       <style>{`
         /* ── Overlay ── */
         .fsm-overlay {
-          position: fixed; inset: 0; z-index: 8000;
-          background: rgba(0,0,0,.92);
-          backdrop-filter: blur(6px);
-          display: flex; align-items: center; justify-content: center;
-          padding: 8px;
-        }
+            position: fixed; inset: 0; z-index: 8000;
+            background: rgba(0,0,0,.92);
+            backdrop-filter: blur(6px);
+            display: flex; align-items: flex-start; justify-content: center;
+            padding: 0;
+          }
 
         /* ── Panel ── */
         .fsm-panel {
-          width: 100%; max-width: 1600px;
-          height: calc(100vh - 16px);
-          background: linear-gradient(160deg, #06040f 0%, #0d0b1e 100%);
-          border: 2px solid rgba(255,215,0,.35);
-          border-radius: 10px;
-          box-shadow: 0 0 60px rgba(255,140,0,.15), 0 0 0 1px rgba(255,140,0,.08);
-          display: flex; flex-direction: column;
-          overflow: hidden;
-        }
+            width: 100%; max-width: 1600px;
+            height: 100dvh;
+            background: linear-gradient(160deg, #06040f 0%, #0d0b1e 100%);
+            border: 2px solid rgba(255,215,0,.35);
+            border-radius: 0;
+            box-shadow: 0 0 60px rgba(255,140,0,.15), 0 0 0 1px rgba(255,140,0,.08);
+            display: flex; flex-direction: column;
+            overflow: hidden;
+          }
 
         /* ── Top bar — slim ── */
         .fsm-topbar {

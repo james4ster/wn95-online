@@ -9,6 +9,7 @@ import { supabase } from '../utils/supabaseClient';
 import { useLeague } from '../components/LeagueContext';
 import PlayoffBracket from '../components/PlayoffBracket';
 import { createPortal } from 'react-dom';
+import FullScreenStandingsModal from '../components/FullScreenStandingsModal';
 
 function computeH2H(teamA, teamB, games) {
   let ptsA = 0,
@@ -524,6 +525,8 @@ export default function Standings() {
   const [seasonTeams, setSeasonTeams] = useState([]);
   const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(null);
   const [rsGamesVs, setRsGamesVs] = useState(null); // Get # of games vs opponents for season
+  const [compactView, setCompactView] = useState(false); // Compact view option
+  const [fullScreenOpen, setFullScreenOpen] = useState(false); // Full Screen view option
 
   useEffect(() => {
     if (!selectedLeague) {
@@ -635,6 +638,7 @@ export default function Standings() {
     })();
   }, [selectedSeason]);
 
+  
   const computedStandings = useMemo(() => {
     const standings = computeStandings(rawGames);
     const playedTeams = new Set(standings.map((s) => s.team));
@@ -704,6 +708,14 @@ export default function Standings() {
           });
           return result;
   }, [sortedStandings, totalGamesPerTeam]);
+
+  // Auto-open fullscreen on mobile
+  useEffect(() => {
+    if (computedStandings.length > 0 && window.innerWidth <= 932) {
+      setFullScreenOpen(true);
+    }
+  }, [computedStandings.length]);
+
 
   useEffect(() => {
     const container = tableContainerRef.current;
@@ -891,7 +903,7 @@ export default function Standings() {
     { label: 'SO', key: 'shutouts', width: '5px' },
     { label: 'STRK', key: 'streakVal', width: '5px' },
     { label: 'GR', key: 'gr', width: '5px' },
-    { label: 'MAX PTS', key: 'maxPts', width: '5px' },
+    { label: <><span className="col-full">MAX PTS</span><span className="col-short">MAX</span></>, key: 'maxPts', width: '5px' },
   ];
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
 
@@ -926,12 +938,10 @@ export default function Standings() {
       </div>
 
       {computedStandings.length > 0 && (
-        <div className="view-tabs-container">
-          <div className="view-tabs">
+        <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', marginBottom: '2rem', marginTop: '1rem' }}>
+        <div className="view-tabs">
             <button
-              className={`tab-button ${
-                activeView === 'overall' ? 'active' : ''
-              }`}
+              className={`tab-button ${activeView === 'overall' ? 'active' : ''}`}
               onClick={() => setActiveView('overall')}
             >
               <span className="tab-icon">⚡</span>
@@ -939,9 +949,7 @@ export default function Standings() {
             </button>
             {availableViews.conference && (
               <button
-                className={`tab-button ${
-                  activeView === 'conference' ? 'active' : ''
-                }`}
+                className={`tab-button ${activeView === 'conference' ? 'active' : ''}`}
                 onClick={() => setActiveView('conference')}
               >
                 <span className="tab-icon">🏆</span>
@@ -950,9 +958,7 @@ export default function Standings() {
             )}
             {availableViews.division && (
               <button
-                className={`tab-button ${
-                  activeView === 'division' ? 'active' : ''
-                }`}
+                className={`tab-button ${activeView === 'division' ? 'active' : ''}`}
                 onClick={() => setActiveView('division')}
               >
                 <span className="tab-icon">🎯</span>
@@ -961,9 +967,7 @@ export default function Standings() {
             )}
             {availableViews.playoffs && (
               <button
-                className={`tab-button playoffs-tab ${
-                  activeView === 'playoffs' ? 'active' : ''
-                }`}
+                className={`tab-button playoffs-tab ${activeView === 'playoffs' ? 'active' : ''}`}
                 onClick={() => setActiveView('playoffs')}
               >
                 <span className="tab-icon">🏅</span>
@@ -971,7 +975,13 @@ export default function Standings() {
               </button>
             )}
           </div>
-        </div>
+  <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '8px' }}>
+    <button className={`compact-toggle ${compactView ? 'active' : ''}`}
+      onClick={() => setCompactView(v => !v)} title="Compact View">⊞</button>
+    <button className="compact-toggle"
+      onClick={() => setFullScreenOpen(true)} title="Full Screen View">⛶</button>
+  </div>
+</div>
       )}
 
       {loading ? (
@@ -1016,7 +1026,7 @@ export default function Standings() {
               document.body
             )}
 
-          <div className="table-container" ref={tableContainerRef}>
+          <div className={`table-container ${compactView ? 'compact' : ''}`} ref={tableContainerRef}>
             {groupedStandings.map((group, groupIdx) => (
               <div key={groupIdx} className="standings-group">
                 {group.title && (
@@ -1304,6 +1314,21 @@ export default function Standings() {
         </>
       )}
 
+{fullScreenOpen && (
+  <FullScreenStandingsModal
+    onClose={() => setFullScreenOpen(false)}
+    groupedStandings={groupedStandings}
+    columns={columns}
+    sortConfig={sortConfig}
+    playoffTeams={playoffTeams}
+    clinched={clinched}
+    eliminated={eliminated}
+    tiedPtsSet={tiedPtsSet}
+    rawGames={rawGames}
+    totalGamesPerTeam={totalGamesPerTeam}
+  />
+)}
+
       <style>{`
         html { overflow-x: auto; }
         body { overflow-x: auto; }
@@ -1332,7 +1357,16 @@ export default function Standings() {
         .control-group { display:flex; flex-direction:column; gap:.5rem; }
         .control-group label { font-family:'Press Start 2P',monospace; font-size:.7rem; color:#FFD700; letter-spacing:2px; }
         .view-tabs-container { display:flex; justify-content:center; margin-bottom:2rem; margin-top:1rem; }
-        .view-tabs { display:inline-flex; gap:1rem; background:linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%); padding:.75rem; border-radius:12px; border:3px solid #333; box-shadow:0 0 20px rgba(0,0,0,.5),inset 0 0 20px rgba(0,0,0,.3); }
+        .view-tabs {
+          display: inline-flex;
+          gap: 1rem;
+          background: linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%);
+          padding: .75rem;
+          border-radius: 12px;
+          border: 3px solid #333;
+          box-shadow: 0 0 20px rgba(0,0,0,.5),inset 0 0 20px rgba(0,0,0,.3);
+          justify-content: center;  /* add this */
+        }
         .tab-button { display:flex; align-items:center; gap:.5rem; padding:.75rem 1.5rem; background:linear-gradient(180deg,#1a1a2e 0%,#0f0f1a 100%); border:2px solid #87CEEB; border-radius:8px; color:#87CEEB; font-family:'Press Start 2P',monospace; font-size:.65rem; cursor:pointer; transition:all .3s ease; box-shadow:0 0 10px rgba(135,206,235,.3),inset 0 0 10px rgba(135,206,235,.1); letter-spacing:1px; position:relative; overflow:hidden; }
         .tab-button::before { content:''; position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg,transparent,rgba(135,206,235,.3),transparent); transition:left .5s ease; }
         .tab-button:hover::before { left:100%; }
@@ -1481,11 +1515,45 @@ export default function Standings() {
         .arcade-table td.streak-cell.streak-l { color:#ff0000; }
         .arcade-table td.streak-cell.streak-t { color:#888; }
        
+        /* ── COMPACT VIEW ─────────────────────────────────── */
+        .compact .row-banner-overlay { display: none; }
+        .compact .arcade-table td { padding: .1rem .35rem; font-size: .95rem; }
+        .compact .arcade-table th { padding: .45rem .35rem; font-size: .48rem; }
+        .compact .logo-container { width: 26px; height: 26px; padding: 2px; }
+        .compact .rank-badge { min-width: 24px; padding: .2rem .4rem; font-size: .65rem; }
+        .compact .coach-cell { font-size: .85rem; }
+        .compact .pts-cell { font-size: 1rem; }
+        .compact .streak-cell { font-size: 1.1rem; }
+        
+        .compact-toggle {
+          background: rgba(135,206,235,.08);
+          border: 2px solid rgba(135,206,235,.3);
+          border-radius: 8px;
+          color: rgba(135,206,235,.6);
+          font-size: 1.2rem;
+          width: 38px; height: 38px;
+          cursor: pointer;
+          transition: all .2s;
+          display: flex; align-items: center; justify-content: center;
+          /* removed: position, right, top, transform */
+        }
+        .compact-toggle:hover {
+          border-color: #FFD700; color: #FFD700;
+          box-shadow: 0 0 10px rgba(255,215,0,.3);
+        }
+        .compact-toggle.active {
+          background: rgba(255,140,0,.15);
+          border-color: #FF8C00; color: #FF8C00;
+          box-shadow: 0 0 12px rgba(255,140,0,.4);
+        }
+
+        
+
         /* GD FORMATTING */
 
         .arcade-table td.positive-gd { color:#00c853; }
         .arcade-table td.negative-gd { color:#ff0000; }
-        .positive-gd {
+        
        
         .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }
         .arcade-table td:not(.sorted-cell) { background:transparent; }
@@ -1496,20 +1564,88 @@ export default function Standings() {
         @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
         .no-data { display:flex; justify-content:center; align-items:center; min-height:400px; }
         .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FFD700; letter-spacing:3px; }
-        @media(max-width:768px){
+        
+        
+
+        /* MOBILE */
+        @media (max-width: 768px) {
           .row-banner-overlay { display: none; }
-          .led-text{font-size:1.2rem;letter-spacing:3px}
-          .view-tabs{flex-direction:column;gap:.5rem;padding:.5rem}
-          .tab-button{padding:.6rem 1rem;font-size:.55rem;justify-content:center}
+          .view-tabs { flex-direction: column; gap: .5rem; padding: .5rem; }
+          .tab-button { padding: .6rem 1rem; font-size: .55rem; justify-content: center; }
           .arcade-table {
             width: max-content;
             min-width: 100%;
             display: table;
           }
           .scoreboard-frame {
-            display: inline-block;   
+            display: inline-block;
             min-width: 100%;
           }
+        }
+        
+        @media (max-width: 600px) {
+          .standings-page { padding: .5rem !important; }
+          .scoreboard-header-container {
+            width: 100%;
+            padding: 0;
+            box-sizing: border-box;
+            overflow: hidden;
+          }
+          .scoreboard-header {
+            width: 100%;
+            box-sizing: border-box;
+            padding: .5rem !important;
+            border-width: 3px !important;
+            overflow: hidden;
+          }
+          .led-text {
+            font-size: .7rem !important;
+            letter-spacing: 1px !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+        }
+        
+        /* Landscape full width */
+
+        .col-short { display: none; }
+
+        @media (max-width: 932px) and (orientation: landscape) {
+          .standings-page { padding: .5rem !important; }
+          .col-full { display: none; }
+          .col-short { display: inline; }
+        
+          /* Hide coach column */
+          .arcade-table th:nth-child(3),
+          .arcade-table td:nth-child(3) {
+            display: none !important;
+          }
+        
+          .team-code { display: none !important; }
+        
+          /* Let table size itself — no fixed layout */
+          .arcade-table {
+            width: 100% !important;
+            min-width: unset !important;
+            display: table !important;
+            table-layout: auto !important;
+          }
+          .scoreboard-frame {
+            width: 100% !important;
+            min-width: unset !important;
+            display: block !important;
+          }
+          .table-container {
+            overflow-x: auto !important;
+          }
+        
+          /* Tighten padding so columns fit */
+          .arcade-table th { padding: .35rem .15rem !important; font-size: .38rem !important; }
+          .arcade-table td { padding: .2rem .15rem !important; font-size: .9rem !important; }
+          .rank-badge { min-width: 18px !important; padding: .1rem .2rem !important; font-size: .38rem !important; }
+          .logo-container { width: 24px !important; height: 24px !important; }
+        }
         }
       `}</style>
     </div>

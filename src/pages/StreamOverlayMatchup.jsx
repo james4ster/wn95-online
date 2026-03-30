@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const CURRENT_MODE = 'season';
-const PLAYOFF_TEAMS = 8;
+const PLAYOFF_TEAMS = 16;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 function computeStandings(games, teams) {
@@ -213,64 +213,47 @@ export default function StreamOverlayMatchup() {
         </div>
       )}
 
-      {/* ── Main Overlay ── */}
+      {/* ── Main Overlay — two separate fixed panels ── */}
       {hasMatchup && !loading && (
-        <div className="ov-root">
-          <div className="ov-scanlines" />
-
-          {/* Header */}
-          <div className="ov-header">
-            <div className="ov-header-left">
-              <span className="ov-bolt">⚡</span>
-              <span className="ov-logo-text">WN95HL</span>
-            </div>
-            <div className="ov-season-badge">{matchupData.season}</div>
-          </div>
-
-          {/* Two-column body */}
-          <div className="ov-body">
-
-            {/* LEFT: Standings */}
-            <div className="col-standings">
-              <div className="col-section-header">
-                <span className="col-section-text">STANDINGS</span>
+        <>
+          {/* PANEL LEFT: Standings */}
+          <div className="ov-panel ov-panel-left">
+            <div className="ov-scanlines" />
+            <div className="ov-header">
+              <div className="ov-header-left">
+                <span className="ov-bolt">⚡</span>
+                <span className="ov-logo-text">WN95HL</span>
               </div>
-              <StandingsPanel
-                rows={matchupData.standings}
-                highlightA={matchupData.teamA.code}
-                highlightB={matchupData.teamB.code}
-              />
+              <div className="ov-season-badge">{matchupData.season}</div>
             </div>
-
-            {/* RIGHT: H2H + Team panels */}
-            <div className="col-matchup">
-
-              {/* H2H Hero */}
-              <H2HHero h2h={matchupData.h2h} teamA={matchupData.teamA} teamB={matchupData.teamB} />
-
-              {/* Team A Panel */}
-              <TeamPanel team={matchupData.teamA} accentColor="#87CEEB" />
-
-              {/* VS separator */}
-              <div className="team-sep">
-                <div className="team-sep-line" />
-                <span className="team-sep-text">VS</span>
-                <div className="team-sep-line" />
-              </div>
-
-              {/* Team B Panel */}
-              <TeamPanel team={matchupData.teamB} accentColor="#FF8C00" />
+            <div className="panel-section-header">
+              <span className="panel-section-text">STANDINGS</span>
             </div>
-
+            <StandingsPanel
+              rows={matchupData.standings}
+              highlightA={matchupData.teamA.code}
+              highlightB={matchupData.teamB.code}
+            />
+            <div className="ov-footer">
+              <span className="ov-footer-text">WN95HL.COM</span>
+              <span className="ov-footer-sep">·</span>
+              <span className="ov-footer-text">LIVE STATS</span>
+            </div>
           </div>
 
-          {/* Footer */}
-          <div className="ov-footer">
-            <span className="ov-footer-text">WN95HL.COM</span>
-            <span className="ov-footer-sep">·</span>
-            <span className="ov-footer-text">LIVE STATS</span>
+          {/* PANEL RIGHT: H2H + Teams */}
+          <div className="ov-panel ov-panel-right">
+            <div className="ov-scanlines" />
+            <H2HHero h2h={matchupData.h2h} teamA={matchupData.teamA} teamB={matchupData.teamB} />
+            <TeamPanel team={matchupData.teamA} />
+            <div className="team-sep">
+              <div className="team-sep-line" />
+              <span className="team-sep-text">VS</span>
+              <div className="team-sep-line" />
+            </div>
+            <TeamPanel team={matchupData.teamB} />
           </div>
-        </div>
+        </>
       )}
 
       <style>{`
@@ -279,8 +262,7 @@ export default function StreamOverlayMatchup() {
 
         .ov-page {
           width: 100vw; min-height: 100vh;
-          display: flex; justify-content: flex-start; align-items: flex-start;
-          background: transparent; padding: 12px;
+          background: transparent;
           font-family: 'VT323', monospace;
           position: relative;
         }
@@ -330,7 +312,21 @@ export default function StreamOverlayMatchup() {
         .setup-apply:hover:not(:disabled) { opacity: .85; }
         .setup-apply:disabled { opacity: .3; cursor: not-allowed; }
 
-        /* ── Root card ── */
+        /* ── Shared panel style ── */
+        .ov-panel {
+          position: fixed; top: 12px;
+          background: linear-gradient(170deg, rgba(4,2,14,.97) 0%, rgba(8,6,22,.97) 100%);
+          border: 1px solid rgba(255,215,0,.4); border-radius: 10px;
+          overflow: hidden;
+          box-shadow:
+            0 0 0 1px rgba(255,140,0,.1),
+            0 0 40px rgba(255,140,0,.15),
+            inset 0 0 60px rgba(0,0,0,.5);
+        }
+        .ov-panel-left  { left: 12px;  width: 200px; }
+        .ov-panel-right { right: 12px; width: 280px; }
+
+        /* Empty/loading still use ov-root */
         .ov-root {
           position: relative;
           background: linear-gradient(170deg, rgba(4,2,14,.97) 0%, rgba(8,6,22,.97) 100%);
@@ -380,35 +376,16 @@ export default function StreamOverlayMatchup() {
           border-radius: 4px; padding: .2rem .45rem; letter-spacing: 1px;
         }
 
-        /* ── Two-column body ── */
-        .ov-body {
-          display: flex; align-items: flex-start;
-        }
-
-        /* ── LEFT: Standings column ── */
-        .col-standings {
-          flex: 0 0 auto;
-          width: 190px;
-          border-right: 1px solid rgba(255,215,0,.18);
-          display: flex; flex-direction: column;
-          align-self: stretch;
-        }
-        .col-section-header {
+        /* ── Panel section header ── */
+        .panel-section-header {
           padding: .35rem .5rem .28rem;
           background: linear-gradient(90deg, rgba(255,140,0,.18) 0%, transparent 100%);
           border-bottom: 1px solid rgba(255,140,0,.2);
         }
-        .col-section-text {
+        .panel-section-text {
           font-family: 'Press Start 2P', monospace; font-size: .42rem;
           color: #FF8C00; letter-spacing: 2px;
           text-shadow: 0 0 6px rgba(255,140,0,.4);
-        }
-
-        /* ── RIGHT: Matchup column ── */
-        .col-matchup {
-          flex: 1 1 0;
-          min-width: 0;
-          display: flex; flex-direction: column;
         }
 
         /* ── H2H Hero ── */

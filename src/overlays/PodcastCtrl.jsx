@@ -22,39 +22,32 @@ export default function PodcastCtrl() {
   const [liveScene, setLiveScene] = useState('logo')
 
   useEffect(() => {
+    console.log('PodcastCtrl mounted, fetching initial state...')
     supabase
       .from('podcast_overlay_state')
       .select('*')
       .eq('id', 1)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        console.log('Initial fetch data:', data)
+        console.log('Initial fetch error:', error)
         if (data) {
           setState({ ...data })
           setLiveScene(data.scene)
         }
       })
-
-    const channel = supabase
-      .channel('ctrl_sync')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'podcast_overlay_state',
-        filter: 'id=eq.1',
-      }, ({ new: s }) => setLiveScene(s.scene))
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
   }, [])
-
+  
   async function push(patch) {
     const next = { ...state, ...patch }
-    setState(next)
+    console.log('push called, next state:', next)
     setSaving(true)
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('podcast_overlay_state')
       .update({ ...next, updated_at: new Date().toISOString() })
       .eq('id', 1)
+      .select()
+    console.log('update result:', data, 'error:', error)
     setSaving(false)
     if (!error) setLastSaved(new Date())
   }

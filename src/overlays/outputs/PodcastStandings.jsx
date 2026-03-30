@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { supabase } from '../utils/supabaseClient'
+import { supabase } from '../../utils/supabaseClient'
 
 const SEASON = 'W17'
 const LEAGUE = 'W'

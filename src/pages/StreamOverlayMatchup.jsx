@@ -193,7 +193,6 @@ export default function StreamOverlayMatchup() {
 
   return (
     <div className="ov-page">
-      <div className="ov-viewport-border" />
 
       {/* ── Setup Panel ── */}
       {showPanel && (
@@ -647,43 +646,7 @@ export default function StreamOverlayMatchup() {
           animation: bpulse 1s ease-in-out infinite;
         }
       
-        /* ── Sexy viewport border — fades along top center for scene title ── */
-        .ov-viewport-border {
-          position: fixed; inset: 0; z-index: 9999; pointer-events: none;
-          border-radius: 0;
-        }
-        .ov-viewport-border::before {
-          content: '';
-          position: absolute; inset: 0;
-          border: 2px solid transparent;
-          background:
-            linear-gradient(rgba(4,2,14,1), rgba(4,2,14,1)) padding-box,
-            linear-gradient(
-              to bottom,
-              transparent 0%,
-              transparent 18%,
-              rgba(255,140,0,.15) 30%,
-              rgba(255,215,0,.55) 50%,
-              rgba(255,140,0,.15) 70%,
-              transparent 85%,
-              transparent 100%
-            ) border-box;
-          pointer-events: none;
-        }
-        /* Corner accents */
-        .ov-viewport-border::after {
-          content: '';
-          position: absolute; inset: 0; pointer-events: none;
-          background:
-            /* top-left corner */
-            linear-gradient(135deg, rgba(255,215,0,.7) 0%, transparent 12px) top left / 48px 48px no-repeat,
-            /* top-right corner */
-            linear-gradient(225deg, rgba(255,215,0,.7) 0%, transparent 12px) top right / 48px 48px no-repeat,
-            /* bottom-left corner */
-            linear-gradient(45deg,  rgba(255,215,0,.7) 0%, transparent 12px) bottom left  / 48px 48px no-repeat,
-            /* bottom-right corner */
-            linear-gradient(315deg, rgba(255,215,0,.7) 0%, transparent 12px) bottom right / 48px 48px no-repeat;
-        }
+        
       `}</style>
     </div>
   );

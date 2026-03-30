@@ -40,7 +40,7 @@ export default function PodcastCtrl() {
   
   async function push(patch) {
     const next = { ...state, ...patch }
-    console.log('push called, next state:', next)
+    setState(next)
     setSaving(true)
     const { data, error } = await supabase
       .from('podcast_overlay_state')
@@ -49,7 +49,10 @@ export default function PodcastCtrl() {
       .select()
     console.log('update result:', data, 'error:', error)
     setSaving(false)
-    if (!error) setLastSaved(new Date())
+    if (!error) {
+      setLastSaved(new Date())
+      setLiveScene(next.scene)  
+    }
   }
 
   const s = {

@@ -57,7 +57,7 @@ function ContentPanel({ scene, data }) {
   // Replace the placeholder divs with real imports once wired up.
   const panels = {
     standings:  <PodcastStandings />,
-    bracket:    <PlaceholderPanel label="Playoff Bracket" icon="🏆" />,
+    bracket:     <PodcastBracket />,
     h2h:        <PlaceholderPanel label="Head-to-Head" icon="⚔️" data={data} />,
     playerstats:<PlaceholderPanel label="Player Stats" icon="📊" />,
   }

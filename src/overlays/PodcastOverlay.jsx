@@ -1,8 +1,9 @@
+/* Adding Podcast Bracket */
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../utils/supabaseClient'
 
 import PodcastStandings from './outputs/PodcastStandings'
- import PodcastBracket from './PodcastBracket'      
+import PodcastBracket from './outputs/PodcastBracket'      
 // import PodcastH2H from './PodcastH2H'                ← coming next
 // import PodcastPlayerStats from './PodcastPlayerStats' ← coming next
 

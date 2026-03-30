@@ -242,7 +242,9 @@ export default function PodcastOverlay() {
   }, [])
 
   // ── Fetch ticker data when mode is 'scores' ──────────────────
-  useEffect(() => {
+  
+  
+  /*useEffect(() => {
     if (state.ticker_mode === 'scores') {
       supabase
         .from('games')
@@ -259,7 +261,13 @@ export default function PodcastOverlay() {
     } else if (state.ticker_mode === 'custom' && state.ticker_text) {
       setTickerItems(state.ticker_text.split('|').map(s => s.trim()).filter(Boolean))
     }
-  }, [state.ticker_mode, state.ticker_text])
+  }, [state.ticker_mode, state.ticker_text]) */
+
+  // Temporary — replace the ticker useEffect with this
+
+  useEffect(() => {
+  setTickerItems(['WN95 Online · Season 17 · Now Live'])
+}, [])
 
   function applyState(newState) {
     setTransitioning(true)

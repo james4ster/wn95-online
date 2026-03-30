@@ -218,27 +218,18 @@ export default function PodcastOverlay() {
   const [transitioning, setTransitioning] = useState(false)
 
   // ── Supabase realtime subscription ──────────────────────────
-  useEffect(() => {
-    // Fetch initial state
-    supabase
-      .from('podcast_overlay_state')
-      .select('*')
-      .eq('id', 1)
-      .single()
-      .then(({ data }) => { if (data) applyState(data) })
-
-    // Subscribe to changes
-    const channel = supabase
-      .channel('podcast_overlay')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'podcast_overlay_state',
-        filter: 'id=eq.1',
-      }, ({ new: newState }) => applyState(newState))
-      .subscribe()
-
-    return () => supabase.removeChannel(channel)
+  uuseEffect(() => {
+    const fetchState = () =>
+      supabase
+        .from('podcast_overlay_state')
+        .select('*')
+        .eq('id', 1)
+        .single()
+        .then(({ data }) => { if (data) applyState(data) })
+  
+    fetchState()
+    const interval = setInterval(fetchState, 2000)
+    return () => clearInterval(interval)
   }, [])
 
   // ── Fetch ticker data when mode is 'scores' ──────────────────

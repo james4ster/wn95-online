@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../utils/supabaseClient'
 
-// ─── placeholder imports – swap for your real components ───
-// import Standings from './Standings'
-// import PlayoffBracket from './PlayoffBracket'
-// import H2H from './H2H'
-// import PlayerStats from './PlayerStats'
+import PodcastStandings from '../outputs/PodcastStandings'
+// import PodcastBracket from './PodcastBracket'         ← coming next
+// import PodcastH2H from './PodcastH2H'                ← coming next
+// import PodcastPlayerStats from './PodcastPlayerStats' ← coming next
 
 const YOUTUBE_URL = 'https://www.youtube.com/@BellNBellNHL95Podcast'
 const TWITCH_URL  = 'https://www.twitch.tv/shawntbay'
@@ -56,7 +55,7 @@ function ContentPanel({ scene, data }) {
   // These render your actual app components.
   // Replace the placeholder divs with real imports once wired up.
   const panels = {
-    standings:  <PlaceholderPanel label="Standings" icon="🏒" />,
+    standings:  <PodcastStandings />,
     bracket:    <PlaceholderPanel label="Playoff Bracket" icon="🏆" />,
     h2h:        <PlaceholderPanel label="Head-to-Head" icon="⚔️" data={data} />,
     playerstats:<PlaceholderPanel label="Player Stats" icon="📊" />,
@@ -219,23 +218,30 @@ export default function PodcastOverlay() {
 
   // ── Supabase realtime subscription ──────────────────────────
   useEffect(() => {
-    const fetchState = () =>
-      supabase
-        .from('podcast_overlay_state')
-        .select('*')
-        .eq('id', 1)
-        .single()
-        .then(({ data }) => { if (data) applyState(data) })
-  
-    fetchState()
-    const interval = setInterval(fetchState, 2000)
-    return () => clearInterval(interval)
+    // Fetch initial state
+    supabase
+      .from('podcast_overlay_state')
+      .select('*')
+      .eq('id', 1)
+      .single()
+      .then(({ data }) => { if (data) applyState(data) })
+
+    // Subscribe to changes
+    const channel = supabase
+      .channel('podcast_overlay')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'podcast_overlay_state',
+        filter: 'id=eq.1',
+      }, ({ new: newState }) => applyState(newState))
+      .subscribe()
+
+    return () => supabase.removeChannel(channel)
   }, [])
 
   // ── Fetch ticker data when mode is 'scores' ──────────────────
-  
-  
-  /*useEffect(() => {
+  useEffect(() => {
     if (state.ticker_mode === 'scores') {
       supabase
         .from('games')
@@ -252,13 +258,7 @@ export default function PodcastOverlay() {
     } else if (state.ticker_mode === 'custom' && state.ticker_text) {
       setTickerItems(state.ticker_text.split('|').map(s => s.trim()).filter(Boolean))
     }
-  }, [state.ticker_mode, state.ticker_text]) */
-
-  // Temporary — replace the ticker useEffect with this
-
-  useEffect(() => {
-  setTickerItems(['WN95 Online · Season 17 · Now Live'])
-}, [])
+  }, [state.ticker_mode, state.ticker_text])
 
   function applyState(newState) {
     setTransitioning(true)

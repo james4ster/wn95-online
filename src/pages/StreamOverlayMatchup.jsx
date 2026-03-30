@@ -1,3 +1,5 @@
+/* This is a Prod ready version that keeps current react theme - prior to trying totally different layout */
+
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 

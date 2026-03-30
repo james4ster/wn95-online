@@ -444,11 +444,11 @@ export default function PodcastBracket({ sortedStandings }) {
         { data: teams },
       ] = await Promise.all([
         supabase.from('games').select('id, home, away, score_home, score_away, ot, mode').not('score_home', 'is', null),
-        supabase.from('games').select('id, home, away, score_home, score_away, ot, mode').ilike('mode', 'playoff%').not('score_home', 'is', null),
+        supabase.from('games').select('id, home, away, score_home, score_away, ot, mode').or('mode.eq.Season,mode.eq.season').not('score_home', 'is', null),
         // Season games for standings (if not passed in as props)
         sortedStandings ? { data: null } : supabase.from('games')
           .select('id, home, away, score_home, score_away, ot')
-          .eq('lg', lg).ilike('mode', 'season').not('score_home', 'is', null).order('id', { ascending: true }),
+          .eq('lg', lg).or('mode.eq.Playoff,mode.eq.playoff,mode.eq.Playoffs,mode.eq.playoffs').not('score_home', 'is', null).order('id', { ascending: true }),
         sortedStandings ? { data: null } : supabase.from('teams').select('abr, coach').eq('lg', lg),
       ])
 

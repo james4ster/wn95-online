@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../utils/supabaseClient'
 
-import PodcastStandings from '../outputs/PodcastStandings'
+import PodcastStandings from './outputs/PodcastStandings'
 // import PodcastBracket from './PodcastBracket'         ← coming next
 // import PodcastH2H from './PodcastH2H'                ← coming next
 // import PodcastPlayerStats from './PodcastPlayerStats' ← coming next

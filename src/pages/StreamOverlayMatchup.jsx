@@ -1,3 +1,4 @@
+/*====== This is the icey-blue theme version =======*/
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 

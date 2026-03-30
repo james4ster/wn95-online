@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const CURRENT_MODE = 'season';
-const PLAYOFF_TEAMS = 8;
+const PLAYOFF_TEAMS = 16;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 const norm = s => (s || '').trim().toLowerCase();
@@ -193,6 +193,7 @@ export default function StreamOverlayMatchup() {
 
   return (
     <div className="ov-page">
+      <div className="ov-viewport-border" />
 
       {/* ── Setup Panel ── */}
       {showPanel && (
@@ -377,7 +378,7 @@ export default function StreamOverlayMatchup() {
             0 0 30px rgba(255,140,0,.12),
             inset 0 0 60px rgba(0,0,0,.5);
         }
-        .ov-panel-left  { left: 12px; width: 168px; display: flex; flex-direction: column; }
+        .ov-panel-left  { left: 12px; width: 150px; display: flex; flex-direction: column; }
         .ov-panel-right { right: 12px; width: 220px; }
 
         /* Empty/loading */
@@ -453,17 +454,10 @@ export default function StreamOverlayMatchup() {
           display: flex; flex-direction: column; align-items: center; gap: .18rem; flex: 1;
         }
         .h2h-logo {
-          width: 38px; height: 38px; object-fit: contain;
-          filter: drop-shadow(0 0 5px rgba(255,215,0,.2));
+          width: 48px; height: 48px; object-fit: contain;
+          filter: drop-shadow(0 0 6px rgba(255,215,0,.3));
         }
-        .h2h-team-code {
-          font-family: 'Press Start 2P', monospace; font-size: .44rem;
-          color: #FFFFFF; letter-spacing: 1px;
-        }
-        .h2h-team-rank {
-          font-family: 'Press Start 2P', monospace; font-size: .26rem;
-          color: rgba(255,140,0,.85);
-        }
+
         .h2h-center {
           display: flex; flex-direction: column; align-items: center;
           gap: .06rem; padding: 0 .3rem;
@@ -566,13 +560,12 @@ export default function StreamOverlayMatchup() {
         /* ── Standings ── */
         .standings-table { width: 100%; border-collapse: collapse; }
         .std-th {
-          font-family: 'Press Start 2P', monospace; font-size: .24rem;
-          color: rgba(255,255,255,.36); padding: .13rem .25rem;
+          font-family: 'Press Start 2P', monospace; font-size: .28rem;
+          color: rgba(255,255,255,.36); padding: .14rem .18rem;
           text-align: center;
           background: rgba(0,0,0,.2);
           border-bottom: 1px solid rgba(255,215,0,.08);
         }
-        .std-th.al { text-align: left; }
         .std-tbody tr { border-bottom: 1px solid rgba(255,255,255,.02); }
 
         /* ── BRIGHT highlight rows — yellow border all sides ── */
@@ -594,32 +587,27 @@ export default function StreamOverlayMatchup() {
         }
 
         .std-td {
-          font-family: 'VT323', monospace; font-size: .95rem;
-          color: #A8B8C0; padding: .03rem .25rem;
-          text-align: center; line-height: 1.12;
+          font-family: 'VT323', monospace; font-size: 1.1rem;
+          color: #A8B8C0; padding: .04rem .18rem;
+          text-align: center; line-height: 1.15;
         }
-        .std-td.al { text-align: left; }
         .std-rank {
           font-family: 'Press Start 2P', monospace !important;
-          font-size: .2rem !important; color: rgba(255,140,0,.5) !important;
+          font-size: .24rem !important; color: rgba(255,140,0,.55) !important;
         }
-        .std-team-cell { display: flex; align-items: center; gap: 3px; }
-        .std-logo { width: 11px; height: 11px; object-fit: contain; flex-shrink: 0; }
-        .std-code {
-          font-family: 'Press Start 2P', monospace; font-size: .24rem;
-          color: rgba(255,255,255,.58);
+        /* Logo-only team cell */
+        .std-logo {
+          width: 16px; height: 16px; object-fit: contain;
+          display: block; margin: 0 auto;
+          vertical-align: middle;
         }
-        .std-code.highlight-a {
-          color: #87CEEB;
-          text-shadow: 0 0 8px rgba(135,206,235,.9), 0 0 2px #fff;
-          font-size: .26rem;
+        .std-logo.logo-highlight-a {
+          filter: drop-shadow(0 0 4px #87CEEB) drop-shadow(0 0 2px rgba(135,206,235,.8));
         }
-        .std-code.highlight-b {
-          color: #FF8C00;
-          text-shadow: 0 0 8px rgba(255,140,0,.9), 0 0 2px #fff;
-          font-size: .26rem;
+        .std-logo.logo-highlight-b {
+          filter: drop-shadow(0 0 4px #FF8C00) drop-shadow(0 0 2px rgba(255,140,0,.8));
         }
-        .std-pts  { color: #FFD700 !important; font-size: 1rem !important; }
+        .std-pts  { color: #FFD700 !important; font-size: 1.12rem !important; }
         .std-cutoff td {
           padding: 0 !important; height: 2px !important;
           background: linear-gradient(90deg, transparent, rgba(255,215,0,.4), transparent) !important;
@@ -658,6 +646,44 @@ export default function StreamOverlayMatchup() {
           color: #FFD700; text-align: center; padding: 1.8rem;
           animation: bpulse 1s ease-in-out infinite;
         }
+      
+        /* ── Sexy viewport border — fades along top center for scene title ── */
+        .ov-viewport-border {
+          position: fixed; inset: 0; z-index: 9999; pointer-events: none;
+          border-radius: 0;
+        }
+        .ov-viewport-border::before {
+          content: '';
+          position: absolute; inset: 0;
+          border: 2px solid transparent;
+          background:
+            linear-gradient(rgba(4,2,14,1), rgba(4,2,14,1)) padding-box,
+            linear-gradient(
+              to bottom,
+              transparent 0%,
+              transparent 18%,
+              rgba(255,140,0,.15) 30%,
+              rgba(255,215,0,.55) 50%,
+              rgba(255,140,0,.15) 70%,
+              transparent 85%,
+              transparent 100%
+            ) border-box;
+          pointer-events: none;
+        }
+        /* Corner accents */
+        .ov-viewport-border::after {
+          content: '';
+          position: absolute; inset: 0; pointer-events: none;
+          background:
+            /* top-left corner */
+            linear-gradient(135deg, rgba(255,215,0,.7) 0%, transparent 12px) top left / 48px 48px no-repeat,
+            /* top-right corner */
+            linear-gradient(225deg, rgba(255,215,0,.7) 0%, transparent 12px) top right / 48px 48px no-repeat,
+            /* bottom-left corner */
+            linear-gradient(45deg,  rgba(255,215,0,.7) 0%, transparent 12px) bottom left  / 48px 48px no-repeat,
+            /* bottom-right corner */
+            linear-gradient(315deg, rgba(255,215,0,.7) 0%, transparent 12px) bottom right / 48px 48px no-repeat;
+        }
       `}</style>
     </div>
   );
@@ -671,8 +697,6 @@ function H2HHero({ h2h, teamA, teamB }) {
         <div className="h2h-team-block">
           <img src={`/assets/teamLogos/${teamA.code}.png`} alt={teamA.code} className="h2h-logo"
             onError={e => e.target.style.display='none'} />
-          <span className="h2h-team-code">{teamA.code}</span>
-          {teamA.rank && <span className="h2h-team-rank">#{teamA.rank} IN LEAGUE</span>}
         </div>
         <div className="h2h-center">
           <span className="h2h-label-small">ALL-TIME H2H</span>
@@ -687,8 +711,6 @@ function H2HHero({ h2h, teamA, teamB }) {
         <div className="h2h-team-block">
           <img src={`/assets/teamLogos/${teamB.code}.png`} alt={teamB.code} className="h2h-logo"
             onError={e => e.target.style.display='none'} />
-          <span className="h2h-team-code">{teamB.code}</span>
-          {teamB.rank && <span className="h2h-team-rank">#{teamB.rank} IN LEAGUE</span>}
         </div>
       </div>
       {h2h.gp > 0 && (
@@ -796,7 +818,7 @@ function StandingsPanel({ rows, highlightA, highlightB }) {
       <thead>
         <tr>
           <th className="std-th" style={{ width: 14 }}>#</th>
-          <th className="std-th al">TEAM</th>
+          <th className="std-th" style={{ width: 28 }}></th>
           <th className="std-th">W</th>
           <th className="std-th">L</th>
           <th className="std-th">PTS</th>
@@ -814,12 +836,10 @@ function StandingsPanel({ rows, highlightA, highlightB }) {
             <React.Fragment key={s.team}>
               <tr className={rowClass.trim()}>
                 <td className="std-td std-rank">{i + 1}</td>
-                <td className="std-td al">
-                  <div className="std-team-cell">
-                    <img src={`/assets/teamLogos/${s.team}.png`} alt={s.team} className="std-logo"
-                      onError={e => e.target.style.display='none'} />
-                    <span className={`std-code${isA?' highlight-a':isB?' highlight-b':''}`}>{s.team}</span>
-                  </div>
+                <td className="std-td">
+                  <img src={`/assets/teamLogos/${s.team}.png`} alt={s.team}
+                    className={`std-logo${isA?' logo-highlight-a':isB?' logo-highlight-b':''}`}
+                    onError={e => e.target.style.display='none'} />
                 </td>
                 <td className="std-td">{s.w}</td>
                 <td className="std-td">{s.l}</td>

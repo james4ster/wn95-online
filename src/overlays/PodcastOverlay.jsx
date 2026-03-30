@@ -218,7 +218,7 @@ export default function PodcastOverlay() {
   const [transitioning, setTransitioning] = useState(false)
 
   // ── Supabase realtime subscription ──────────────────────────
-  uuseEffect(() => {
+  useEffect(() => {
     const fetchState = () =>
       supabase
         .from('podcast_overlay_state')

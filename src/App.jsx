@@ -16,18 +16,21 @@ import ScoresBar from './components/ScoresBar';
 import Media from './pages/Media';
 import Transactions from './pages/Transactions';
 import StreamOverlay from './pages/StreamOverlay';
+import StreamOverlayMatchup from './pages/StreamOverlayMatchup';
 
 function AppShell() {
   const location = useLocation();
-  const isOverlay = location.pathname === '/overlay';
+  const isOverlay = location.pathname === '/overlay' || location.pathname === '/overlay-matchup';
 
   if (isOverlay) {
     return (
       <Routes>
         <Route path="/overlay" element={<StreamOverlay />} />
+        <Route path="/overlay-matchup" element={<StreamOverlayMatchup />} />
       </Routes>
     );
   }
+  
 
   return (
     <div className="app">

@@ -64,8 +64,6 @@ function computeH2H(allGames, teamA, teamB) {
 export default function StreamOverlayMatchup() {
   const [allTeams, setAllTeams]       = useState([]);
   const [currentLg, setCurrentLg]     = useState(null);
-  const [teamA, setTeamA]             = useState('');
-  const [teamB, setTeamB]             = useState('');
   const [pendingA, setPendingA]       = useState('');
   const [pendingB, setPendingB]       = useState('');
   const [matchupData, setMatchupData] = useState(null);
@@ -78,20 +76,22 @@ export default function StreamOverlayMatchup() {
       const { data: seasons } = await supabase
         .from('seasons')
         .select('lg')
-        .order('year', { ascending: false })
+        .ilike('lg', 'W%')
+        .order('lg', { ascending: false })
         .limit(1);
+
       const lg = seasons?.[0]?.lg;
       if (!lg) return;
       setCurrentLg(lg);
 
       const { data: teams } = await supabase
         .from('teams')
-        .select('abr, name')
+        .select('abr, team')
         .eq('lg', lg)
         .order('abr');
+
       setAllTeams(teams || []);
 
-      // Pre-select first two
       if (teams?.length >= 2) {
         setPendingA(teams[0].abr);
         setPendingB(teams[1].abr);
@@ -119,27 +119,23 @@ export default function StreamOverlayMatchup() {
       { data: rawScoring },
       { data: teams },
     ] = await Promise.all([
-      // Current season games for standings
       supabase.from('games')
         .select('id, home, away, score_home, score_away, ot')
         .eq('lg', lg).ilike('mode', CURRENT_MODE)
         .not('score_home', 'is', null),
-      // ALL-TIME games for H2H (no lg filter)
       supabase.from('games')
         .select('home, away, score_home, score_away, ot')
         .ilike('mode', CURRENT_MODE)
         .not('score_home', 'is', null)
         .or(`and(home.eq.${a},away.eq.${b}),and(home.eq.${b},away.eq.${a})`),
-      // Current season scoring
       supabase.from('game_raw_scoring')
         .select('goal_player_name, assist_primary_name, assist_secondary_name, g_team')
         .eq('season', lg).eq('mode', CURRENT_MODE),
-      // Teams list
-      supabase.from('teams').select('abr, name').eq('lg', lg),
+      supabase.from('teams').select('abr, team').eq('lg', lg),
     ]);
 
     const standings = computeStandings(currentGames, teams);
-    const rank = (code) => {
+    const rank = code => {
       const idx = standings.findIndex(s => s.team === code);
       return idx === -1 ? null : idx + 1;
     };
@@ -165,8 +161,6 @@ export default function StreamOverlayMatchup() {
 
   const handleApply = () => {
     if (pendingA && pendingB && pendingA !== pendingB) {
-      setTeamA(pendingA);
-      setTeamB(pendingB);
       setShowPanel(false);
       loadMatchup(pendingA, pendingB, currentLg);
     }
@@ -191,7 +185,7 @@ export default function StreamOverlayMatchup() {
             >
               <option value="">-- SELECT --</option>
               {allTeams.map(t => (
-                <option key={t.abr} value={t.abr}>{t.abr}{t.name ? ` — ${t.name}` : ''}</option>
+                <option key={t.abr} value={t.abr}>{t.abr}{t.team ? ` — ${t.team}` : ''}</option>
               ))}
             </select>
           </div>
@@ -204,7 +198,7 @@ export default function StreamOverlayMatchup() {
             >
               <option value="">-- SELECT --</option>
               {allTeams.map(t => (
-                <option key={t.abr} value={t.abr}>{t.abr}{t.name ? ` — ${t.name}` : ''}</option>
+                <option key={t.abr} value={t.abr}>{t.abr}{t.team ? ` — ${t.team}` : ''}</option>
               ))}
             </select>
           </div>
@@ -221,7 +215,7 @@ export default function StreamOverlayMatchup() {
         </div>
       )}
 
-      {/* ── Overlay ── */}
+      {/* ── Empty state ── */}
       {!hasMatchup && !loading && (
         <div className="ov-root ov-empty">
           <div className="ov-scanlines" />
@@ -236,6 +230,7 @@ export default function StreamOverlayMatchup() {
         </div>
       )}
 
+      {/* ── Loading ── */}
       {loading && (
         <div className="ov-root ov-empty">
           <div className="ov-scanlines" />
@@ -243,11 +238,11 @@ export default function StreamOverlayMatchup() {
         </div>
       )}
 
+      {/* ── Matchup card ── */}
       {hasMatchup && !loading && (
         <div className="ov-root">
           <div className="ov-scanlines" />
 
-          {/* Header */}
           <div className="ov-header">
             <div className="ov-header-left">
               <span className="ov-bolt">⚡</span>
@@ -261,19 +256,11 @@ export default function StreamOverlayMatchup() {
             <div className="ov-season-badge">{matchupData.season}</div>
           </div>
 
-          {/* H2H Strip */}
           <H2HStrip h2h={matchupData.h2h} teamA={matchupData.teamA.code} teamB={matchupData.teamB.code} />
-
-          {/* Team A */}
-          <TeamPanel team={matchupData.teamA} side="A" />
-
-          {/* Divider */}
+          <TeamPanel team={matchupData.teamA} />
           <div className="ov-divider" />
+          <TeamPanel team={matchupData.teamB} />
 
-          {/* Team B */}
-          <TeamPanel team={matchupData.teamB} side="B" />
-
-          {/* Footer */}
           <div className="ov-footer">
             <span className="ov-footer-text">WN95HL.COM</span>
             <span className="ov-footer-sep">·</span>
@@ -294,7 +281,6 @@ export default function StreamOverlayMatchup() {
           position: relative;
         }
 
-        /* ── Setup Panel ── */
         .setup-panel {
           position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
           z-index: 999;
@@ -343,7 +329,6 @@ export default function StreamOverlayMatchup() {
         .setup-apply:hover:not(:disabled) { opacity: .85; }
         .setup-apply:disabled { opacity: .3; cursor: not-allowed; }
 
-        /* ── Root card ── */
         .ov-root {
           width: 320px; position: relative;
           background: linear-gradient(170deg, rgba(4,2,14,.96) 0%, rgba(8,6,22,.96) 100%);
@@ -353,13 +338,11 @@ export default function StreamOverlayMatchup() {
         }
         .ov-empty { width: 240px; }
 
-        /* CRT scanlines */
         .ov-scanlines {
           position: absolute; inset: 0; z-index: 200; pointer-events: none;
           background: repeating-linear-gradient(0deg, transparent 0px, transparent 3px, rgba(0,0,0,.04) 3px, rgba(0,0,0,.04) 4px);
         }
 
-        /* ── Header ── */
         .ov-header {
           display: flex; align-items: center; justify-content: space-between;
           padding: .4rem .6rem;
@@ -381,9 +364,7 @@ export default function StreamOverlayMatchup() {
           color: #FFD700; letter-spacing: 1.5px;
           text-shadow: 0 0 8px rgba(255,215,0,.4);
         }
-        .ov-matchup-badge {
-          display: flex; align-items: center; gap: 4px;
-        }
+        .ov-matchup-badge { display: flex; align-items: center; gap: 4px; }
         .badge-team {
           font-family: 'Press Start 2P', monospace; font-size: .3rem;
           color: #87CEEB; letter-spacing: .5px;
@@ -400,7 +381,6 @@ export default function StreamOverlayMatchup() {
           border-radius: 3px; padding: .12rem .3rem; letter-spacing: 1px;
         }
 
-        /* ── H2H Strip ── */
         .h2h-strip {
           display: flex; align-items: center; justify-content: center; gap: 0;
           padding: .25rem .6rem;
@@ -426,7 +406,6 @@ export default function StreamOverlayMatchup() {
           color: rgba(255,255,255,.2); margin-left: .4rem;
         }
 
-        /* ── Team Section Label ── */
         .team-section-label {
           display: flex; align-items: center; gap: 6px;
           padding: .28rem .5rem .2rem;
@@ -446,7 +425,6 @@ export default function StreamOverlayMatchup() {
           color: rgba(255,140,0,.5);
         }
 
-        /* ── Record Row ── */
         .record-row {
           display: flex; align-items: center; justify-content: space-between;
           padding: .18rem .5rem;
@@ -466,7 +444,6 @@ export default function StreamOverlayMatchup() {
           color: rgba(255,255,255,.25); letter-spacing: .3px;
         }
 
-        /* ── Roster Table ── */
         .ov-table { width: 100%; border-collapse: collapse; }
         .ov-th {
           font-family: 'Press Start 2P', monospace; font-size: .22rem;
@@ -489,18 +466,15 @@ export default function StreamOverlayMatchup() {
         .ov-td.a   { color: rgba(255,255,255,.4); }
         .no-data {
           font-family: 'Press Start 2P', monospace; font-size: .26rem;
-          color: rgba(255,255,255,.15); text-align: center;
-          padding: .5rem;
+          color: rgba(255,255,255,.15); text-align: center; padding: .5rem;
         }
 
-        /* ── Divider ── */
         .ov-divider {
           height: 1px;
           background: linear-gradient(90deg, transparent, rgba(255,215,0,.3), transparent);
           margin: .1rem 0;
         }
 
-        /* ── Footer ── */
         .ov-footer {
           display: flex; align-items: center; justify-content: center; gap: 6px;
           padding: .22rem .6rem;
@@ -513,7 +487,6 @@ export default function StreamOverlayMatchup() {
         }
         .ov-footer-sep { color: rgba(255,215,0,.2); font-size: .6rem; line-height: 1; }
 
-        /* ── Empty / Loading ── */
         .empty-msg { padding: 1.2rem .6rem; text-align: center; }
         .empty-title {
           font-family: 'Press Start 2P', monospace; font-size: .38rem;
@@ -564,7 +537,6 @@ function TeamPanel({ team }) {
 
   return (
     <>
-      {/* Team label row */}
       <div className="team-section-label">
         <img
           src={`/assets/teamLogos/${code}.png`}
@@ -576,7 +548,6 @@ function TeamPanel({ team }) {
         {rank && <span className="team-rank">#{rank}</span>}
       </div>
 
-      {/* Record row */}
       <div className="record-row">
         {[
           { key: 'GP',  val: record.gp,  cls: '' },
@@ -593,7 +564,6 @@ function TeamPanel({ team }) {
         ))}
       </div>
 
-      {/* Roster stats */}
       {roster.length === 0 ? (
         <div className="no-data">NO STATS YET</div>
       ) : (

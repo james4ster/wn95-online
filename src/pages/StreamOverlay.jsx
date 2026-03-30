@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 // ── Config ─────────────────────────────────────────────────────────────────
-const PLAYOFF_TEAMS = 8; // adjust to your league's playoff cutoff
+const PLAYOFF_TEAMS = 16; // adjust to your league's playoff cutoff
 
 // ── Compute standings from raw games ──────────────────────────────────────
 function computeStandings(games, teams) {

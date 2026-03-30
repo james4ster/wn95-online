@@ -2,9 +2,11 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const CURRENT_MODE = 'season';
-const PLAYOFF_TEAMS = 16;
+const PLAYOFF_TEAMS = 8;
 
 // ── Helpers ────────────────────────────────────────────────────────────────
+const norm = s => (s || '').trim().toLowerCase();
+
 function computeStandings(games, teams) {
   const map = {};
   const ensure = code => {
@@ -48,19 +50,24 @@ function computeRosterStats(rawScoring, teamCode) {
   return Object.values(map).sort((a,b) => b.pts - a.pts || b.g - a.g || a.player.localeCompare(b.player));
 }
 
-function computeH2H(allGames, teamA, teamB) {
-  const matchups = (allGames || []).filter(g =>
-    (g.home === teamA && g.away === teamB) || (g.home === teamB && g.away === teamA)
-  );
+// Manager-based H2H — matches on coach_home/coach_away so renamed teams still count
+function computeH2H(allGames, mgrANorm, mgrBNorm) {
+  const matchups = (allGames || []).filter(g => {
+    const h = norm(g.coach_home || '');
+    const a = norm(g.coach_away || '');
+    return (h === mgrANorm && a === mgrBNorm) || (h === mgrBNorm && a === mgrANorm);
+  });
+
   let aW = 0, bW = 0, ties = 0, aGF = 0, aGA = 0, aSO = 0, bSO = 0;
   matchups.forEach(g => {
-    const sh = g.score_home ?? 0, sa = g.score_away ?? 0;
-    const hIsA = g.home === teamA;
+    const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
+    const hIsA = norm(g.coach_home || '') === mgrANorm;
     const gfA = hIsA ? sh : sa;
     const gaA = hIsA ? sa : sh;
     aGF += gfA; aGA += gaA;
-    if (sh === sa) { ties++; }
-    else if (gfA > gaA) {
+    if (sh === sa) {
+      ties++;
+    } else if (gfA > gaA) {
       aW++;
       if (gaA === 0) aSO++;
     } else {
@@ -98,7 +105,7 @@ export default function StreamOverlayMatchup() {
       if (!lg) return;
       setCurrentLg(lg);
       const { data: teams } = await supabase
-        .from('teams').select('abr, team').eq('lg', lg).order('abr');
+        .from('teams').select('abr,team,coach').eq('lg', lg).order('abr');
       setAllTeams(teams || []);
       if (teams?.length >= 2) { setPendingA(teams[0].abr); setPendingB(teams[1].abr); }
     }
@@ -114,40 +121,53 @@ export default function StreamOverlayMatchup() {
   const loadMatchup = useCallback(async (a, b, lg) => {
     if (!a || !b || !lg || a === b) return;
     setLoading(true); setMatchupData(null);
+
     const [
       { data: currentGames },
-      { data: allGames },
-      { data: rawScoring },
       { data: teams },
+      { data: rawScoring },
     ] = await Promise.all([
-      supabase.from('games').select('id,home,away,score_home,score_away,ot')
+      supabase.from('games')
+        .select('id,home,away,score_home,score_away,ot,coach_home,coach_away')
         .eq('lg', lg).ilike('mode', CURRENT_MODE).not('score_home','is',null),
-      supabase.from('games').select('home,away,score_home,score_away,ot')
-        .ilike('mode', CURRENT_MODE).not('score_home','is',null)
-        .or(`and(home.eq.${a},away.eq.${b}),and(home.eq.${b},away.eq.${a})`),
+      supabase.from('teams').select('abr,team,coach').eq('lg', lg),
       supabase.from('game_raw_scoring')
         .select('goal_player_name,assist_primary_name,assist_secondary_name,g_team')
         .eq('season', lg).eq('mode', CURRENT_MODE),
-      supabase.from('teams').select('abr,team').eq('lg', lg),
     ]);
 
     const standings = computeStandings(currentGames, teams);
     const rank = code => { const i = standings.findIndex(s => s.team === code); return i === -1 ? null : i + 1; };
 
+    // Resolve current coaches for the two selected teams
+    const teamAInfo = (teams || []).find(t => t.abr === a);
+    const teamBInfo = (teams || []).find(t => t.abr === b);
+    const coachANorm = norm(teamAInfo?.coach || '');
+    const coachBNorm = norm(teamBInfo?.coach || '');
+
+    // Fetch all-time games across all seasons for manager H2H
+    const { data: historicalGames } = await supabase
+      .from('games')
+      .select('score_home,score_away,ot,coach_home,coach_away')
+      .ilike('mode', CURRENT_MODE)
+      .not('score_home','is',null);
+
     setMatchupData({
       teamA: {
         code: a,
-        record: standings.find(s => s.team === a) || { gp:0,w:0,l:0,otl:0,t:0,pts:0,gf:0,ga:0,so:0 },
+        coach: teamAInfo?.coach || a,
+        coachNorm: coachANorm,
         rank: rank(a),
         roster: computeRosterStats(rawScoring, a),
       },
       teamB: {
         code: b,
-        record: standings.find(s => s.team === b) || { gp:0,w:0,l:0,otl:0,t:0,pts:0,gf:0,ga:0,so:0 },
+        coach: teamBInfo?.coach || b,
+        coachNorm: coachBNorm,
         rank: rank(b),
         roster: computeRosterStats(rawScoring, b),
       },
-      h2h: computeH2H(allGames, a, b),
+      h2h: computeH2H(historicalGames || [], coachANorm || norm(a), coachBNorm || norm(b)),
       standings,
       season: lg,
     });
@@ -235,23 +255,23 @@ export default function StreamOverlayMatchup() {
               highlightB={matchupData.teamB.code}
             />
             <div className="ov-footer">
-              <span className="ov-footer-text">WN95HL.COM</span>
-              <span className="ov-footer-sep">·</span>
-              <span className="ov-footer-text">LIVE STATS</span>
+              <span className="ov-footer-text">WN95HL.COM · LIVE STATS</span>
             </div>
           </div>
 
-          {/* PANEL RIGHT: H2H + Teams */}
+          {/* PANEL RIGHT: H2H + Teams side by side */}
           <div className="ov-panel ov-panel-right">
             <div className="ov-scanlines" />
             <H2HHero h2h={matchupData.h2h} teamA={matchupData.teamA} teamB={matchupData.teamB} />
-            <TeamPanel team={matchupData.teamA} />
-            <div className="team-sep">
-              <div className="team-sep-line" />
-              <span className="team-sep-text">VS</span>
-              <div className="team-sep-line" />
+            <div className="team-panels-row">
+              <TeamPanel team={matchupData.teamA} />
+              <div className="team-panels-divider">
+                <div className="team-panels-divider-line" />
+                <span className="team-panels-vs">VS</span>
+                <div className="team-panels-divider-line" />
+              </div>
+              <TeamPanel team={matchupData.teamB} />
             </div>
-            <TeamPanel team={matchupData.teamB} />
           </div>
         </>
       )}
@@ -312,7 +332,7 @@ export default function StreamOverlayMatchup() {
         .setup-apply:hover:not(:disabled) { opacity: .85; }
         .setup-apply:disabled { opacity: .3; cursor: not-allowed; }
 
-        /* ── Shared panel style ── */
+        /* ── Shared panel card ── */
         .ov-panel {
           position: fixed; top: 12px;
           background: linear-gradient(170deg, rgba(4,2,14,.97) 0%, rgba(8,6,22,.97) 100%);
@@ -320,24 +340,21 @@ export default function StreamOverlayMatchup() {
           overflow: hidden;
           box-shadow:
             0 0 0 1px rgba(255,140,0,.1),
-            0 0 40px rgba(255,140,0,.15),
+            0 0 30px rgba(255,140,0,.12),
             inset 0 0 60px rgba(0,0,0,.5);
         }
-        .ov-panel-left  { left: 12px;  width: 200px; }
-        .ov-panel-right { right: 12px; width: 280px; }
+        .ov-panel-left  { left: 12px; width: 168px; display: flex; flex-direction: column; }
+        .ov-panel-right { right: 12px; width: 330px; }
 
-        /* Empty/loading still use ov-root */
+        /* Empty/loading */
         .ov-root {
           position: relative;
           background: linear-gradient(170deg, rgba(4,2,14,.97) 0%, rgba(8,6,22,.97) 100%);
           border: 1px solid rgba(255,215,0,.4); border-radius: 10px;
           overflow: hidden;
-          box-shadow:
-            0 0 0 1px rgba(255,140,0,.1),
-            0 0 40px rgba(255,140,0,.15),
-            inset 0 0 60px rgba(0,0,0,.5);
+          box-shadow: 0 0 0 1px rgba(255,140,0,.1), 0 0 30px rgba(255,140,0,.12);
         }
-        .ov-empty { width: 280px; }
+        .ov-empty { width: 260px; position: fixed; top: 12px; right: 12px; }
 
         .ov-scanlines {
           position: absolute; inset: 0; z-index: 200; pointer-events: none;
@@ -349,13 +366,13 @@ export default function StreamOverlayMatchup() {
         /* ── Header ── */
         .ov-header {
           display: flex; align-items: center; justify-content: space-between;
-          padding: .5rem .75rem;
+          padding: .4rem .55rem;
           background: linear-gradient(90deg, rgba(255,140,0,.2) 0%, rgba(255,215,0,.05) 100%);
           border-bottom: 1px solid rgba(255,215,0,.25);
         }
-        .ov-header-left { display: flex; align-items: center; gap: 8px; }
+        .ov-header-left { display: flex; align-items: center; gap: 5px; }
         .ov-bolt {
-          font-size: 1rem;
+          font-size: .85rem;
           filter: drop-shadow(0 0 5px #FF8C00);
           animation: bpulse 2s ease-in-out infinite;
         }
@@ -364,228 +381,240 @@ export default function StreamOverlayMatchup() {
           50%      { filter: drop-shadow(0 0 10px #FFD700); }
         }
         .ov-logo-text {
-          font-family: 'Press Start 2P', monospace; font-size: .55rem;
+          font-family: 'Press Start 2P', monospace; font-size: .44rem;
           color: #FFD700; letter-spacing: 2px;
           text-shadow: 0 0 10px rgba(255,215,0,.5);
         }
         .ov-season-badge {
-          font-family: 'Press Start 2P', monospace; font-size: .42rem;
+          font-family: 'Press Start 2P', monospace; font-size: .3rem;
           color: rgba(135,206,235,.85);
           background: rgba(135,206,235,.1);
           border: 1px solid rgba(135,206,235,.3);
-          border-radius: 4px; padding: .2rem .45rem; letter-spacing: 1px;
+          border-radius: 3px; padding: .12rem .3rem; letter-spacing: 1px;
         }
 
-        /* ── Panel section header ── */
+        /* ── Section header ── */
         .panel-section-header {
-          padding: .35rem .5rem .28rem;
+          padding: .26rem .5rem .2rem;
           background: linear-gradient(90deg, rgba(255,140,0,.18) 0%, transparent 100%);
           border-bottom: 1px solid rgba(255,140,0,.2);
         }
         .panel-section-text {
-          font-family: 'Press Start 2P', monospace; font-size: .42rem;
+          font-family: 'Press Start 2P', monospace; font-size: .36rem;
           color: #FF8C00; letter-spacing: 2px;
           text-shadow: 0 0 6px rgba(255,140,0,.4);
         }
 
         /* ── H2H Hero ── */
         .h2h-hero {
-          padding: .7rem .65rem .55rem;
+          padding: .55rem .55rem .45rem;
           background: rgba(0,0,0,.3);
           border-bottom: 2px solid rgba(255,215,0,.15);
         }
         .h2h-hero-teams {
           display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: .5rem;
+          margin-bottom: .4rem;
         }
         .h2h-team-block {
-          display: flex; flex-direction: column; align-items: center; gap: .25rem;
-          flex: 1;
+          display: flex; flex-direction: column; align-items: center; gap: .18rem; flex: 1;
         }
         .h2h-logo {
-          width: 44px; height: 44px; object-fit: contain;
-          filter: drop-shadow(0 0 6px rgba(255,215,0,.25));
+          width: 38px; height: 38px; object-fit: contain;
+          filter: drop-shadow(0 0 5px rgba(255,215,0,.2));
         }
         .h2h-team-code {
-          font-family: 'Press Start 2P', monospace; font-size: .52rem;
+          font-family: 'Press Start 2P', monospace; font-size: .44rem;
           color: #FFFFFF; letter-spacing: 1px;
         }
         .h2h-team-rank {
-          font-family: 'Press Start 2P', monospace; font-size: .32rem;
-          color: rgba(255,140,0,.8);
+          font-family: 'Press Start 2P', monospace; font-size: .26rem;
+          color: rgba(255,140,0,.85);
         }
         .h2h-center {
           display: flex; flex-direction: column; align-items: center;
-          gap: .1rem; padding: 0 .4rem;
+          gap: .06rem; padding: 0 .3rem;
         }
-        .h2h-record-row {
-          display: flex; align-items: center; gap: .25rem;
-        }
+        .h2h-record-row { display: flex; align-items: center; gap: .18rem; }
         .h2h-wins-num {
-          font-family: 'VT323', monospace; font-size: 2.8rem;
+          font-family: 'VT323', monospace; font-size: 2.4rem;
           color: #FFD700; line-height: 1;
           text-shadow: 0 0 12px rgba(255,215,0,.5);
         }
         .h2h-dash {
-          font-family: 'VT323', monospace; font-size: 1.8rem;
+          font-family: 'VT323', monospace; font-size: 1.5rem;
           color: rgba(255,255,255,.2); line-height: 1;
         }
         .h2h-label-small {
-          font-family: 'Press Start 2P', monospace; font-size: .3rem;
+          font-family: 'Press Start 2P', monospace; font-size: .24rem;
           color: rgba(255,140,0,.7); letter-spacing: 2px;
         }
         .h2h-gp-label {
-          font-family: 'Press Start 2P', monospace; font-size: .28rem;
+          font-family: 'Press Start 2P', monospace; font-size: .22rem;
           color: rgba(255,255,255,.25); letter-spacing: 1px;
         }
-        /* H2H stat grid */
         .h2h-stats-grid {
           display: grid; grid-template-columns: 1fr auto 1fr;
-          gap: .15rem .35rem; align-items: center;
+          gap: .1rem .28rem; align-items: center;
         }
         .h2h-stat-val {
-          font-family: 'VT323', monospace; font-size: 1.25rem;
+          font-family: 'VT323', monospace; font-size: 1.1rem;
           color: #C8D8E8; line-height: 1;
         }
         .h2h-stat-val.left  { text-align: right; }
         .h2h-stat-val.right { text-align: left; }
         .h2h-stat-key {
-          font-family: 'Press Start 2P', monospace; font-size: .26rem;
-          color: rgba(255,255,255,.3); text-align: center; letter-spacing: .5px;
+          font-family: 'Press Start 2P', monospace; font-size: .2rem;
+          color: rgba(255,255,255,.28); text-align: center;
+        }
+
+        /* ── Team panels — side by side, equal height ── */
+        .team-panels-row {
+          display: flex; align-items: stretch;
+        }
+        .team-panels-divider {
+          display: flex; flex-direction: column; align-items: center;
+          justify-content: center; gap: .25rem;
+          padding: .35rem .12rem;
+          background: rgba(0,0,0,.18);
+          border-left: 1px solid rgba(255,255,255,.04);
+          border-right: 1px solid rgba(255,255,255,.04);
+        }
+        .team-panels-divider-line {
+          flex: 1; width: 1px; min-height: 16px;
+          background: rgba(255,215,0,.2);
+        }
+        .team-panels-vs {
+          font-family: 'Press Start 2P', monospace; font-size: .28rem;
+          color: rgba(255,215,0,.4); letter-spacing: 2px;
+          writing-mode: vertical-lr;
         }
 
         /* ── Team Panel ── */
-        .team-panel { padding: .35rem 0 .2rem; }
+        .team-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; }
         .team-panel-header {
-          display: flex; align-items: center; gap: 8px;
-          padding: .25rem .65rem .3rem;
+          display: flex; align-items: center; gap: 5px;
+          padding: .22rem .45rem;
           border-bottom: 1px solid rgba(255,255,255,.06);
+          background: rgba(0,0,0,.15);
         }
         .team-panel-logo {
-          width: 26px; height: 26px; object-fit: contain;
-          filter: drop-shadow(0 0 4px rgba(255,215,0,.2));
+          width: 20px; height: 20px; object-fit: contain;
+          filter: drop-shadow(0 0 3px rgba(255,215,0,.2));
         }
         .team-panel-code {
-          font-family: 'Press Start 2P', monospace; font-size: .58rem;
+          font-family: 'Press Start 2P', monospace; font-size: .44rem;
           color: #FFFFFF; letter-spacing: 1px; flex: 1;
         }
         .team-panel-rank {
-          font-family: 'Press Start 2P', monospace; font-size: .4rem;
+          font-family: 'Press Start 2P', monospace; font-size: .34rem;
           color: rgba(255,140,0,.95);
           background: rgba(255,140,0,.15);
-          border: 1px solid rgba(255,140,0,.35);
-          border-radius: 4px; padding: .14rem .32rem;
+          border: 1px solid rgba(255,140,0,.4);
+          border-radius: 3px; padding: .08rem .22rem;
         }
 
         /* Roster table */
         .roster-table { width: 100%; border-collapse: collapse; }
         .roster-th {
-          font-family: 'Press Start 2P', monospace; font-size: .3rem;
-          color: rgba(255,255,255,.4); padding: .16rem .45rem;
-          text-align: center; letter-spacing: .5px;
-          background: rgba(0,0,0,.25);
-          border-bottom: 1px solid rgba(255,215,0,.1);
+          font-family: 'Press Start 2P', monospace; font-size: .24rem;
+          color: rgba(255,255,255,.36); padding: .12rem .3rem;
+          text-align: center;
+          background: rgba(0,0,0,.22);
+          border-bottom: 1px solid rgba(255,215,0,.08);
         }
         .roster-th.al { text-align: left; }
-        .roster-tbody tr { border-bottom: 1px solid rgba(255,255,255,.03); }
-        .roster-tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
+        .roster-tbody tr { border-bottom: 1px solid rgba(255,255,255,.022); }
+        .roster-tbody tr:nth-child(even) { background: rgba(255,255,255,.016); }
         .roster-td {
-          font-family: 'VT323', monospace; font-size: 1.2rem;
-          color: #C0C8D0; padding: .04rem .45rem;
-          text-align: center; line-height: 1.2;
+          font-family: 'VT323', monospace; font-size: .95rem;
+          color: #C0C8D0; padding: .02rem .3rem;
+          text-align: center; line-height: 1.12;
         }
-        .roster-td.al  { text-align: left; color: #E0E8F0; }
-        .roster-td.pts { color: #FFD700; font-size: 1.25rem; }
+        .roster-td.al  { text-align: left; color: #DDE5EE; }
+        .roster-td.pts { color: #FFD700; font-size: 1rem; }
         .roster-td.g   { color: #87CEEB; }
-        .roster-td.a   { color: rgba(200,210,220,.55); }
+        .roster-td.a   { color: rgba(200,210,220,.5); }
         .no-data {
-          font-family: 'Press Start 2P', monospace; font-size: .32rem;
-          color: rgba(255,255,255,.15); text-align: center; padding: .6rem;
-        }
-
-        /* ── VS separator ── */
-        .team-sep {
-          display: flex; align-items: center; gap: .5rem;
-          padding: .25rem .65rem;
-          background: rgba(0,0,0,.15);
-        }
-        .team-sep-line { flex: 1; height: 1px; background: rgba(255,215,0,.2); }
-        .team-sep-text {
-          font-family: 'Press Start 2P', monospace; font-size: .35rem;
-          color: rgba(255,215,0,.4); letter-spacing: 3px;
+          font-family: 'Press Start 2P', monospace; font-size: .26rem;
+          color: rgba(255,255,255,.14); text-align: center; padding: .5rem;
         }
 
         /* ── Standings ── */
         .standings-table { width: 100%; border-collapse: collapse; }
         .std-th {
-          font-family: 'Press Start 2P', monospace; font-size: .28rem;
-          color: rgba(255,255,255,.4); padding: .18rem .3rem;
-          text-align: center; letter-spacing: .3px;
+          font-family: 'Press Start 2P', monospace; font-size: .24rem;
+          color: rgba(255,255,255,.36); padding: .13rem .25rem;
+          text-align: center;
           background: rgba(0,0,0,.2);
           border-bottom: 1px solid rgba(255,215,0,.08);
         }
         .std-th.al { text-align: left; }
-        .std-tbody tr { border-bottom: 1px solid rgba(255,255,255,.025); }
+        .std-tbody tr { border-bottom: 1px solid rgba(255,255,255,.02); }
 
-        /* ── Prominent highlight rows ── */
+        /* ── BRIGHT highlight rows — yellow border all sides ── */
         .std-row-highlight-a {
-          background: rgba(135,206,235,.18) !important;
-          box-shadow: inset 3px 0 0 #87CEEB;
+          background: rgba(135,206,235,.25) !important;
+          box-shadow:
+            inset 0 1px 0 #FFD700,
+            inset 0 -1px 0 #FFD700,
+            inset 3px 0 0 #87CEEB,
+            inset -3px 0 0 #87CEEB;
         }
         .std-row-highlight-b {
-          background: rgba(255,140,0,.18) !important;
-          box-shadow: inset 3px 0 0 #FF8C00;
+          background: rgba(255,140,0,.25) !important;
+          box-shadow:
+            inset 0 1px 0 #FFD700,
+            inset 0 -1px 0 #FFD700,
+            inset 3px 0 0 #FF8C00,
+            inset -3px 0 0 #FF8C00;
         }
 
         .std-td {
-          font-family: 'VT323', monospace; font-size: 1.05rem;
-          color: #B8C0C8; padding: .04rem .3rem;
-          text-align: center; line-height: 1.2;
+          font-family: 'VT323', monospace; font-size: .95rem;
+          color: #A8B8C0; padding: .03rem .25rem;
+          text-align: center; line-height: 1.12;
         }
         .std-td.al { text-align: left; }
         .std-rank {
           font-family: 'Press Start 2P', monospace !important;
-          font-size: .26rem !important; color: rgba(255,140,0,.55) !important;
+          font-size: .2rem !important; color: rgba(255,140,0,.5) !important;
         }
-        .std-team-cell { display: flex; align-items: center; gap: 4px; }
-        .std-logo {
-          width: 13px; height: 13px; object-fit: contain; flex-shrink: 0;
-        }
+        .std-team-cell { display: flex; align-items: center; gap: 3px; }
+        .std-logo { width: 11px; height: 11px; object-fit: contain; flex-shrink: 0; }
         .std-code {
-          font-family: 'Press Start 2P', monospace; font-size: .28rem;
-          color: rgba(255,255,255,.65);
+          font-family: 'Press Start 2P', monospace; font-size: .24rem;
+          color: rgba(255,255,255,.58);
         }
-        /* Highlighted team codes — brighter and colored */
         .std-code.highlight-a {
           color: #87CEEB;
-          text-shadow: 0 0 6px rgba(135,206,235,.6);
+          text-shadow: 0 0 8px rgba(135,206,235,.9), 0 0 2px #fff;
+          font-size: .26rem;
         }
         .std-code.highlight-b {
           color: #FF8C00;
-          text-shadow: 0 0 6px rgba(255,140,0,.6);
+          text-shadow: 0 0 8px rgba(255,140,0,.9), 0 0 2px #fff;
+          font-size: .26rem;
         }
-        .std-pts  { color: #FFD700 !important; font-size: 1.1rem !important; }
-        .std-pos  { color: #00e676 !important; }
-        .std-neg  { color: #ff5252 !important; }
+        .std-pts  { color: #FFD700 !important; font-size: 1rem !important; }
         .std-cutoff td {
           padding: 0 !important; height: 2px !important;
-          background: linear-gradient(90deg, transparent, rgba(255,215,0,.35), transparent) !important;
+          background: linear-gradient(90deg, transparent, rgba(255,215,0,.4), transparent) !important;
           border: none !important;
         }
-        .std-playoff .std-td { color: #D8E0E8 !important; }
+        .std-playoff .std-td { color: #CCD8E0 !important; }
 
         /* ── Footer ── */
         .ov-footer {
-          display: flex; align-items: center; justify-content: center; gap: 8px;
-          padding: .25rem .75rem;
+          display: flex; align-items: center; justify-content: center;
+          padding: .2rem .5rem;
           background: rgba(0,0,0,.25);
           border-top: 1px solid rgba(255,215,0,.08);
+          margin-top: auto;
         }
         .ov-footer-text {
           font-family: 'Press Start 2P', monospace;
-          font-size: .28rem; color: rgba(255,255,255,.16); letter-spacing: 1px;
+          font-size: .2rem; color: rgba(255,255,255,.14); letter-spacing: 1px;
         }
-        .ov-footer-sep { color: rgba(255,215,0,.2); font-size: .7rem; line-height: 1; }
 
         /* ── Empty / Loading ── */
         .empty-msg { padding: 1.8rem .75rem; text-align: center; }
@@ -598,8 +627,7 @@ export default function StreamOverlayMatchup() {
           color: rgba(255,255,255,.25);
         }
         .key {
-          font-family: 'Press Start 2P', monospace; font-size: .7rem;
-          color: #FF8C00;
+          font-family: 'Press Start 2P', monospace; font-size: .7rem; color: #FF8C00;
         }
         .loading-pulse {
           font-family: 'Press Start 2P', monospace; font-size: .45rem;
@@ -615,7 +643,6 @@ export default function StreamOverlayMatchup() {
 function H2HHero({ h2h, teamA, teamB }) {
   return (
     <div className="h2h-hero">
-      {/* Logos + big win numbers */}
       <div className="h2h-hero-teams">
         <div className="h2h-team-block">
           <img src={`/assets/teamLogos/${teamA.code}.png`} alt={teamA.code} className="h2h-logo"
@@ -623,7 +650,6 @@ function H2HHero({ h2h, teamA, teamB }) {
           <span className="h2h-team-code">{teamA.code}</span>
           {teamA.rank && <span className="h2h-team-rank">#{teamA.rank} IN LEAGUE</span>}
         </div>
-
         <div className="h2h-center">
           <span className="h2h-label-small">ALL-TIME H2H</span>
           <div className="h2h-record-row">
@@ -634,7 +660,6 @@ function H2HHero({ h2h, teamA, teamB }) {
           {h2h.ties > 0 && <span className="h2h-gp-label">T: {h2h.ties}</span>}
           <span className="h2h-gp-label">{h2h.gp} GP PLAYED</span>
         </div>
-
         <div className="h2h-team-block">
           <img src={`/assets/teamLogos/${teamB.code}.png`} alt={teamB.code} className="h2h-logo"
             onError={e => e.target.style.display='none'} />
@@ -642,18 +667,14 @@ function H2HHero({ h2h, teamA, teamB }) {
           {teamB.rank && <span className="h2h-team-rank">#{teamB.rank} IN LEAGUE</span>}
         </div>
       </div>
-
-      {/* H2H stat grid: GF/g, GA/g, SO */}
       {h2h.gp > 0 && (
         <div className="h2h-stats-grid">
           <span className="h2h-stat-val left">{h2h.aGFpg}</span>
           <span className="h2h-stat-key">GF/GP</span>
           <span className="h2h-stat-val right">{h2h.bGFpg}</span>
-
           <span className="h2h-stat-val left">{h2h.aGApg}</span>
           <span className="h2h-stat-key">GA/GP</span>
           <span className="h2h-stat-val right">{h2h.bGApg}</span>
-
           <span className="h2h-stat-val left">{h2h.aSO}</span>
           <span className="h2h-stat-key">SO</span>
           <span className="h2h-stat-val right">{h2h.bSO}</span>
@@ -666,18 +687,14 @@ function H2HHero({ h2h, teamA, teamB }) {
 // ── Team Panel ────────────────────────────────────────────────────────────────
 function TeamPanel({ team }) {
   const { code, rank, roster } = team;
-
   return (
     <div className="team-panel">
-      {/* Header: logo + code + rank */}
       <div className="team-panel-header">
         <img src={`/assets/teamLogos/${code}.png`} alt={code} className="team-panel-logo"
           onError={e => e.target.style.display='none'} />
         <span className="team-panel-code">{code}</span>
         {rank && <span className="team-panel-rank">#{rank}</span>}
       </div>
-
-      {/* Roster */}
       {roster.length === 0 ? (
         <div className="no-data">NO STATS YET</div>
       ) : (
@@ -712,7 +729,7 @@ function StandingsPanel({ rows, highlightA, highlightB }) {
     <table className="standings-table">
       <thead>
         <tr>
-          <th className="std-th" style={{ width: 18 }}>#</th>
+          <th className="std-th" style={{ width: 14 }}>#</th>
           <th className="std-th al">TEAM</th>
           <th className="std-th">W</th>
           <th className="std-th">L</th>

@@ -279,7 +279,7 @@ export default function StreamOverlayMatchup() {
 
         .ov-page {
           width: 100vw; min-height: 100vh;
-          display: flex; justify-content: flex-end; align-items: flex-start;
+          display: flex; justify-content: flex-start; align-items: flex-start;
           background: transparent; padding: 12px;
           font-family: 'VT323', monospace;
           position: relative;

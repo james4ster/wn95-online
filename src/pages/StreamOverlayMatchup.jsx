@@ -1,5 +1,3 @@
-/* This is a Prod ready version that keeps current react theme - prior to trying totally different layout */
-
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
@@ -59,7 +57,6 @@ function computeRosterStats(rawScoring, teamCode) {
   return Object.values(map).sort((a,b) => b.pts - a.pts || b.g - a.g || a.player.localeCompare(b.player));
 }
 
-// Manager-based H2H — matches on coach_home/coach_away so renamed teams still count
 function computeH2H(allGames, mgrANorm, mgrBNorm) {
   const matchups = (allGames || []).filter(g => {
     const h = norm(g.coach_home || '');
@@ -148,13 +145,11 @@ export default function StreamOverlayMatchup() {
     const standings = computeStandings(currentGames, teams);
     const rank = code => { const i = standings.findIndex(s => s.team === code); return i === -1 ? null : i + 1; };
 
-    // Resolve current coaches for the two selected teams
     const teamAInfo = (teams || []).find(t => t.abr === a);
     const teamBInfo = (teams || []).find(t => t.abr === b);
     const coachANorm = norm(teamAInfo?.coach || '');
     const coachBNorm = norm(teamBInfo?.coach || '');
 
-    // Fetch all-time W-league season games across all seasons for manager H2H
     const { data: historicalGames } = await supabase
       .from('games')
       .select('score_home,score_away,ot,coach_home,coach_away')
@@ -199,7 +194,7 @@ export default function StreamOverlayMatchup() {
       {/* ── Setup Panel ── */}
       {showPanel && (
         <div className="setup-panel">
-          <div className="setup-title">⚡ MATCHUP SETUP</div>
+          <div className="setup-title">MATCHUP SETUP</div>
           <div className="setup-note">Press ~ to close</div>
           <div className="setup-row">
             <label className="setup-label">TEAM A</label>
@@ -207,7 +202,7 @@ export default function StreamOverlayMatchup() {
               value={pendingA}
               onChange={setPendingA}
               options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
-              placeholder="-- SELECT --"
+              placeholder="— SELECT —"
             />
           </div>
           <div className="setup-row">
@@ -216,440 +211,513 @@ export default function StreamOverlayMatchup() {
               value={pendingB}
               onChange={setPendingB}
               options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
-              placeholder="-- SELECT --"
+              placeholder="— SELECT —"
             />
           </div>
           {pendingA && pendingB && pendingA === pendingB && <div className="setup-error">Teams must be different</div>}
-          <button className="setup-apply" onClick={handleApply} disabled={!pendingA || !pendingB || pendingA === pendingB}>APPLY</button>
+          <button className="setup-apply" onClick={handleApply} disabled={!pendingA || !pendingB || pendingA === pendingB}>
+            LOAD MATCHUP
+          </button>
         </div>
       )}
 
-      {/* ── Empty ── */}
+      {/* ── Empty state ── */}
       {!hasMatchup && !loading && (
-        <div className="ov-root ov-empty">
-          <div className="ov-scanlines" />
-          <div className="ov-header">
-            <span className="ov-bolt">⚡</span>
-            <span className="ov-logo-text">WN95HL</span>
+        <div className="ov-idle">
+          <div className="idle-brand">
+            <span className="idle-dot" />
+            WN95HL
           </div>
-          <div className="empty-msg">
-            <div className="empty-title">MATCHUP OVERLAY</div>
-            <div className="empty-sub">Press <span className="key">~</span> to select teams</div>
-          </div>
+          <div className="idle-hint">Press <kbd>~</kbd> to select teams</div>
         </div>
       )}
 
       {/* ── Loading ── */}
       {loading && (
-        <div className="ov-root ov-empty">
-          <div className="ov-scanlines" />
-          <div className="loading-pulse">LOADING...</div>
+        <div className="ov-idle">
+          <div className="idle-brand loading-pulse">LOADING</div>
         </div>
       )}
 
-      {/* ── Main Overlay — two separate fixed panels ── */}
+      {/* ── Main Overlay ── */}
       {hasMatchup && !loading && (
         <>
-          {/* PANEL LEFT: Standings */}
+          {/* LEFT — Standings */}
           <div className="ov-panel ov-panel-left">
-            <div className="ov-scanlines" />
-            <div className="ov-header">
-              <div className="ov-header-left">
-                <span className="ov-bolt">⚡</span>
-                <span className="ov-logo-text">WN95HL</span>
-              </div>
-              <div className="ov-season-badge">{matchupData.season}</div>
+            <div className="panel-head">
+              <span className="panel-brand">WN95HL</span>
+              <span className="panel-season">{matchupData.season}</span>
             </div>
-            <div className="panel-section-header">
-              <span className="panel-section-text">STANDINGS</span>
-            </div>
+            <div className="panel-rule-label">STANDINGS</div>
             <StandingsPanel
               rows={matchupData.standings}
               highlightA={matchupData.teamA.code}
               highlightB={matchupData.teamB.code}
             />
-            <div className="ov-footer">
-              <span className="ov-footer-text">WN95HL.COM · LIVE STATS</span>
-            </div>
           </div>
 
-          {/* PANEL RIGHT: H2H + Teams stacked */}
+          {/* RIGHT — H2H + Teams */}
           <div className="ov-panel ov-panel-right">
-            <div className="ov-scanlines" />
-            <H2HHero h2h={matchupData.h2h} teamA={matchupData.teamA} teamB={matchupData.teamB} />
-            <TeamPanel team={matchupData.teamA} />
-            <div className="team-sep">
-              <div className="team-sep-line" />
-              <span className="team-sep-text">VS</span>
-              <div className="team-sep-line" />
+            <div className="panel-head">
+              <span className="panel-brand">WN95HL</span>
+              <span className="panel-season">{matchupData.season}</span>
             </div>
-            <TeamPanel team={matchupData.teamB} />
+            <H2HHero h2h={matchupData.h2h} teamA={matchupData.teamA} teamB={matchupData.teamB} />
+            <TeamPanel team={matchupData.teamA} side="a" />
+            <div className="team-divider">
+              <div className="divider-line" />
+              <span className="divider-vs">VS</span>
+              <div className="divider-line" />
+            </div>
+            <TeamPanel team={matchupData.teamB} side="b" />
           </div>
         </>
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
+
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+        /* ───────────────────────────────────────────────
+           TOKENS
+        ─────────────────────────────────────────────── */
+        :root {
+          --bg-panel:     #0d1117;
+          --bg-raised:    #131920;
+          --bg-stripe:    rgba(255,255,255,0.025);
+          --border:       rgba(255,255,255,0.08);
+          --border-mid:   rgba(255,255,255,0.14);
+
+          --ice:          #7dd3fc;
+          --ice-dim:      rgba(125,211,252,0.12);
+          --ice-border:   rgba(125,211,252,0.3);
+
+          --amber:        #fbbf24;
+          --amber-dim:    rgba(251,191,36,0.1);
+          --amber-border: rgba(251,191,36,0.28);
+
+          --text-primary:   #f1f5f9;
+          --text-secondary: #94a3b8;
+          --text-dim:       #475569;
+
+          --cutoff:       rgba(125,211,252,0.35);
+
+          --font-display: 'Barlow Condensed', sans-serif;
+          --font-body:    'Barlow', sans-serif;
+        }
+
+        /* ───────────────────────────────────────────────
+           PAGE
+        ─────────────────────────────────────────────── */
         .ov-page {
           width: 100vw; min-height: 100vh;
           background: transparent;
-          font-family: 'VT323', monospace;
+          font-family: var(--font-body);
           position: relative;
         }
 
-        /* ── Setup Panel ── */
+        /* ───────────────────────────────────────────────
+           SETUP PANEL
+        ─────────────────────────────────────────────── */
         .setup-panel {
-          position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+          position: fixed; top: 50%; left: 50%;
+          transform: translate(-50%, -50%);
           z-index: 999;
-          background: linear-gradient(160deg, rgba(4,2,20,.98), rgba(10,6,30,.98));
-          border: 1px solid rgba(255,215,0,.5); border-radius: 10px;
-          padding: 1.4rem 1.6rem; width: 340px;
-          box-shadow: 0 0 40px rgba(255,140,0,.25), 0 0 80px rgba(0,0,0,.8);
+          background: var(--bg-panel);
+          border: 1px solid var(--border-mid);
+          border-top: 2px solid var(--ice);
+          border-radius: 6px;
+          padding: 24px;
+          width: 320px;
+          box-shadow: 0 24px 48px rgba(0,0,0,0.7);
         }
         .setup-title {
-          font-family: 'Press Start 2P', monospace; font-size: .55rem;
-          color: #FFD700; letter-spacing: 2px;
-          text-shadow: 0 0 10px rgba(255,215,0,.5); margin-bottom: .25rem;
+          font-family: var(--font-display);
+          font-size: 14px; font-weight: 800;
+          letter-spacing: 3px; color: var(--text-primary);
+          margin-bottom: 2px;
         }
         .setup-note {
-          font-family: 'Press Start 2P', monospace; font-size: .3rem;
-          color: rgba(255,255,255,.2); margin-bottom: 1.2rem; letter-spacing: 1px;
+          font-size: 11px; color: var(--text-dim);
+          margin-bottom: 20px;
         }
-        .setup-row { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+        .setup-row {
+          display: flex; flex-direction: column; gap: 6px;
+          margin-bottom: 14px;
+        }
         .setup-label {
-          font-family: 'Press Start 2P', monospace; font-size: .34rem;
-          color: #FF8C00; letter-spacing: 1px;
+          font-family: var(--font-display);
+          font-size: 10px; font-weight: 700;
+          letter-spacing: 2px; color: var(--text-secondary);
         }
-        /* ── Custom dropdown (replaces native select for Streamlabs compat) ── */
-        .csel { position: relative; width: 100%; user-select: none; }
-        .csel-trigger {
-          font-family: 'VT323', monospace; font-size: 1.3rem;
-          background: rgba(0,0,0,.6); color: #E0E0E0;
-          border: 1px solid rgba(255,215,0,.3); border-radius: 4px;
-          padding: .3rem .6rem; width: 100%; cursor: pointer;
-          display: flex; align-items: center; justify-content: space-between; gap: .4rem;
-        }
-        .csel-trigger:hover { border-color: rgba(255,215,0,.6); }
-        .csel-trigger.open  { border-color: rgba(255,215,0,.8); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
-        .csel-arrow { font-size: .9rem; color: rgba(255,215,0,.6); flex-shrink: 0; line-height: 1; }
-        .csel-placeholder { color: rgba(255,255,255,.3); }
-        .csel-list {
-          position: absolute; top: 100%; left: 0; right: 0; z-index: 1000;
-          background: rgba(8,4,24,.98);
-          border: 1px solid rgba(255,215,0,.5); border-top: none;
-          border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
-          max-height: 220px; overflow-y: auto;
-          box-shadow: 0 8px 24px rgba(0,0,0,.8);
-        }
-        .csel-list::-webkit-scrollbar { width: 4px; }
-        .csel-list::-webkit-scrollbar-track { background: rgba(0,0,0,.3); }
-        .csel-list::-webkit-scrollbar-thumb { background: rgba(255,215,0,.3); border-radius: 2px; }
-        .csel-option {
-          font-family: 'VT323', monospace; font-size: 1.2rem;
-          color: #D0D8E0; padding: .25rem .6rem; cursor: pointer;
-          border-bottom: 1px solid rgba(255,255,255,.04);
-        }
-        .csel-option:hover   { background: rgba(255,215,0,.12); color: #FFD700; }
-        .csel-option.selected { background: rgba(255,140,0,.18); color: #FF8C00; }
         .setup-error {
-          font-family: 'Press Start 2P', monospace; font-size: .3rem;
-          color: #ff4444; margin-bottom: .6rem;
+          font-size: 11px; color: #f87171;
+          margin-bottom: 10px;
         }
         .setup-apply {
-          font-family: 'Press Start 2P', monospace; font-size: .42rem;
-          letter-spacing: 2px; color: #000;
-          background: linear-gradient(135deg, #FFD700, #FF8C00);
+          font-family: var(--font-display);
+          font-size: 13px; font-weight: 800;
+          letter-spacing: 2px; color: var(--bg-panel);
+          background: var(--ice);
           border: none; border-radius: 4px;
-          padding: .6rem 1rem; width: 100%;
+          padding: 10px; width: 100%;
           cursor: pointer; transition: opacity .15s;
         }
         .setup-apply:hover:not(:disabled) { opacity: .85; }
         .setup-apply:disabled { opacity: .3; cursor: not-allowed; }
 
-        /* ── Shared panel card ── */
+        /* Custom select */
+        .csel { position: relative; width: 100%; user-select: none; }
+        .csel-trigger {
+          font-family: var(--font-display);
+          font-size: 16px; font-weight: 600;
+          background: var(--bg-raised); color: var(--text-primary);
+          border: 1px solid var(--border-mid);
+          border-radius: 4px;
+          padding: 8px 10px;
+          width: 100%; cursor: pointer;
+          display: flex; align-items: center; justify-content: space-between;
+        }
+        .csel-trigger.open { border-color: var(--ice); }
+        .csel-arrow { font-size: 10px; color: var(--text-dim); }
+        .csel-placeholder { color: var(--text-dim); }
+        .csel-list {
+          position: absolute; top: 100%; left: 0; right: 0; z-index: 1000;
+          background: var(--bg-panel);
+          border: 1px solid var(--ice-border); border-top: none;
+          border-radius: 0 0 4px 4px;
+          max-height: 200px; overflow-y: auto;
+        }
+        .csel-option {
+          font-family: var(--font-display); font-size: 15px; font-weight: 600;
+          color: var(--text-secondary); padding: 7px 10px;
+          cursor: pointer;
+          border-bottom: 1px solid var(--border);
+        }
+        .csel-option:hover { background: var(--ice-dim); color: var(--ice); }
+        .csel-option.selected { background: var(--ice-dim); color: var(--ice); }
+
+        /* ───────────────────────────────────────────────
+           IDLE / LOADING
+        ─────────────────────────────────────────────── */
+        .ov-idle {
+          position: fixed; top: 12px; right: 12px;
+          background: var(--bg-panel);
+          border: 1px solid var(--border);
+          border-top: 2px solid var(--ice);
+          border-radius: 6px;
+          padding: 14px 18px;
+          display: flex; flex-direction: column; gap: 6px;
+        }
+        .idle-brand {
+          display: flex; align-items: center; gap: 8px;
+          font-family: var(--font-display);
+          font-size: 13px; font-weight: 900;
+          letter-spacing: 3px; color: var(--text-primary);
+        }
+        .idle-dot {
+          width: 6px; height: 6px; border-radius: 50%;
+          background: var(--ice);
+          box-shadow: 0 0 8px var(--ice);
+          animation: pulse 2s ease-in-out infinite;
+        }
+        @keyframes pulse {
+          0%,100% { opacity: 1; } 50% { opacity: .3; }
+        }
+        .idle-hint {
+          font-size: 12px; color: var(--text-dim);
+        }
+        .idle-hint kbd {
+          font-family: var(--font-display); font-size: 12px;
+          color: var(--ice);
+          background: var(--ice-dim);
+          border: 1px solid var(--ice-border);
+          border-radius: 3px; padding: 0 4px;
+        }
+        .loading-pulse { animation: pulse 0.8s ease-in-out infinite; }
+
+        /* ───────────────────────────────────────────────
+           SHARED PANEL
+        ─────────────────────────────────────────────── */
         .ov-panel {
           position: fixed; top: 12px;
-          background: linear-gradient(170deg, rgba(4,2,14,.97) 0%, rgba(8,6,22,.97) 100%);
-          border: 1px solid rgba(255,215,0,.4); border-radius: 10px;
+          background: var(--bg-panel);
+          border: 1px solid var(--border);
+          border-top: 2px solid var(--ice);
+          border-radius: 6px;
           overflow: hidden;
-          box-shadow:
-            0 0 0 1px rgba(255,140,0,.1),
-            0 0 30px rgba(255,140,0,.12),
-            inset 0 0 60px rgba(0,0,0,.5);
-        }
-        .ov-panel-left { left: 12px; width: 130px; display: flex; flex-direction: column; }
-        .ov-panel-right { right: 12px; width: 220px; }
-
-        /* Empty/loading */
-        .ov-root {
-          position: relative;
-          background: linear-gradient(170deg, rgba(4,2,14,.97) 0%, rgba(8,6,22,.97) 100%);
-          border: 1px solid rgba(255,215,0,.4); border-radius: 10px;
-          overflow: hidden;
-          box-shadow: 0 0 0 1px rgba(255,140,0,.1), 0 0 30px rgba(255,140,0,.12);
-        }
-        .ov-empty { width: 260px; position: fixed; top: 12px; right: 12px; }
-
-        .ov-scanlines {
-          position: absolute; inset: 0; z-index: 200; pointer-events: none;
-          background: repeating-linear-gradient(0deg,
-            transparent 0px, transparent 3px,
-            rgba(0,0,0,.05) 3px, rgba(0,0,0,.05) 4px);
         }
 
-        /* ── Header ── */
-        .ov-header {
+        .ov-panel-left  { left: 12px;  width: 148px; }
+        .ov-panel-right { right: 12px; width: 226px; }
+
+        /* Panel header */
+        .panel-head {
           display: flex; align-items: center; justify-content: space-between;
-          padding: .4rem .55rem;
-          background: linear-gradient(90deg, rgba(255,140,0,.2) 0%, rgba(255,215,0,.05) 100%);
-          border-bottom: 1px solid rgba(255,215,0,.25);
+          padding: 8px 10px;
+          background: var(--bg-raised);
+          border-bottom: 1px solid var(--border);
         }
-        .ov-header-left { display: flex; align-items: center; gap: 5px; }
-        .ov-bolt {
-          font-size: .85rem;
-          filter: drop-shadow(0 0 5px #FF8C00);
-          animation: bpulse 2s ease-in-out infinite;
+        .panel-brand {
+          font-family: var(--font-display);
+          font-size: 13px; font-weight: 900;
+          letter-spacing: 3px; color: var(--text-primary);
         }
-        @keyframes bpulse {
-          0%,100% { filter: drop-shadow(0 0 3px #FF8C00); }
-          50%      { filter: drop-shadow(0 0 10px #FFD700); }
-        }
-        .ov-logo-text {
-          font-family: 'Press Start 2P', monospace; font-size: .44rem;
-          color: #FFD700; letter-spacing: 2px;
-          text-shadow: 0 0 10px rgba(255,215,0,.5);
-        }
-        .ov-season-badge {
-          font-family: 'Press Start 2P', monospace; font-size: .3rem;
-          color: rgba(135,206,235,.85);
-          background: rgba(135,206,235,.1);
-          border: 1px solid rgba(135,206,235,.3);
-          border-radius: 3px; padding: .12rem .3rem; letter-spacing: 1px;
+        .panel-season {
+          font-family: var(--font-display);
+          font-size: 10px; font-weight: 700;
+          letter-spacing: 1.5px; color: var(--ice);
+          background: var(--ice-dim);
+          border: 1px solid var(--ice-border);
+          border-radius: 3px; padding: 2px 6px;
         }
 
-        /* ── Section header ── */
-        .panel-section-header {
-          padding: .26rem .5rem .2rem;
-          background: linear-gradient(90deg, rgba(255,140,0,.18) 0%, transparent 100%);
-          border-bottom: 1px solid rgba(255,140,0,.2);
-        }
-        .panel-section-text {
-          font-family: 'Press Start 2P', monospace; font-size: .36rem;
-          color: #FF8C00; letter-spacing: 2px;
-          text-shadow: 0 0 6px rgba(255,140,0,.4);
+        /* Section rule label */
+        .panel-rule-label {
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 800;
+          letter-spacing: 3px; color: var(--ice);
+          padding: 5px 10px 4px;
+          background: var(--ice-dim);
+          border-bottom: 1px solid var(--ice-border);
         }
 
-        /* ── H2H Hero ── */
+        /* ───────────────────────────────────────────────
+           STANDINGS TABLE
+        ─────────────────────────────────────────────── */
+        .standings-table {
+          width: 100%; border-collapse: collapse;
+        }
+        .standings-table thead th {
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 800;
+          letter-spacing: 2px;
+          color: var(--text-primary);
+          padding: 5px 4px;
+          text-align: center;
+          background: var(--bg-raised);
+          border-bottom: 1px solid var(--border-mid);
+        }
+        .standings-table thead th.al { text-align: left; padding-left: 8px; }
+        .standings-table tbody tr {
+          border-bottom: 1px solid rgba(255,255,255,0.03);
+        }
+        .standings-table tbody tr:nth-child(even) {
+          background: var(--bg-stripe);
+        }
+
+        .std-td {
+          font-family: var(--font-display);
+          font-size: 15px; font-weight: 600;
+          color: var(--text-secondary);
+          padding: 3px 4px;
+          text-align: center; line-height: 1;
+        }
+        .std-rank {
+          font-size: 9px !important; font-weight: 700 !important;
+          color: var(--text-dim) !important;
+          width: 18px;
+        }
+        .std-logo-cell { width: 26px; padding: 2px 2px; }
+        .std-logo {
+          width: 18px; height: 18px; object-fit: contain;
+          display: block; margin: 0 auto;
+        }
+        .std-pts {
+          font-weight: 800 !important;
+          color: var(--text-primary) !important;
+        }
+
+        /* Highlight A */
+        .std-row-a {
+          background: var(--ice-dim) !important;
+          border-left: 2px solid var(--ice) !important;
+        }
+        .std-row-a .std-td { color: #bae6fd !important; }
+        .std-row-a .std-pts { color: var(--ice) !important; }
+
+        /* Highlight B */
+        .std-row-b {
+          background: var(--amber-dim) !important;
+          border-left: 2px solid var(--amber) !important;
+        }
+        .std-row-b .std-td { color: #fde68a !important; }
+        .std-row-b .std-pts { color: var(--amber) !important; }
+
+        /* Below playoff cutoff */
+        .std-row-out .std-td {
+          color: var(--text-dim) !important;
+          opacity: 0.7;
+        }
+        .std-row-out .std-pts { color: var(--text-dim) !important; }
+
+        /* Cutoff line */
+        .std-cutoff td {
+          padding: 0 !important; height: 1px !important;
+          background: var(--cutoff) !important;
+          border: none !important;
+        }
+
+        /* ───────────────────────────────────────────────
+           H2H HERO
+        ─────────────────────────────────────────────── */
         .h2h-hero {
-          padding: .55rem .55rem .45rem;
-          background: rgba(0,0,0,.3);
-          border-bottom: 2px solid rgba(255,215,0,.15);
+          padding: 12px 12px 10px;
+          background: var(--bg-raised);
+          border-bottom: 1px solid var(--border);
         }
-        .h2h-hero-teams {
+        .h2h-section-label {
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 800;
+          letter-spacing: 3px; color: var(--ice);
+          margin-bottom: 10px;
+        }
+        .h2h-teams-row {
           display: flex; align-items: center; justify-content: space-between;
-          margin-bottom: .4rem;
+          margin-bottom: 10px;
         }
         .h2h-team-block {
-          display: flex; flex-direction: column; align-items: center; gap: .18rem; flex: 1;
+          display: flex; flex-direction: column; align-items: center; gap: 5px;
+          flex: 1;
         }
         .h2h-logo {
-          width: 48px; height: 48px; object-fit: contain;
-          filter: drop-shadow(0 0 6px rgba(255,215,0,.3));
+          width: 44px; height: 44px; object-fit: contain;
+        }
+        .h2h-team-code {
+          font-family: var(--font-display);
+          font-size: 12px; font-weight: 800;
+          letter-spacing: 1px; color: var(--text-secondary);
         }
 
         .h2h-center {
-          display: flex; flex-direction: column; align-items: center;
-          gap: .06rem; padding: 0 .3rem;
+          display: flex; flex-direction: column; align-items: center; gap: 1px;
+          padding: 0 6px;
         }
-        .h2h-record-row { display: flex; align-items: center; gap: .18rem; }
-        .h2h-wins-num {
-          font-family: 'VT323', monospace; font-size: 2.4rem;
-          color: #FFD700; line-height: 1;
-          text-shadow: 0 0 12px rgba(255,215,0,.5);
+        .h2h-record-row {
+          display: flex; align-items: baseline; gap: 3px;
+        }
+        .h2h-wins {
+          font-family: var(--font-display);
+          font-size: 40px; font-weight: 900;
+          line-height: 1; color: var(--text-primary);
         }
         .h2h-dash {
-          font-family: 'VT323', monospace; font-size: 1.5rem;
-          color: rgba(255,255,255,.2); line-height: 1;
+          font-family: var(--font-display);
+          font-size: 24px; font-weight: 300;
+          color: var(--text-dim); line-height: 1;
         }
-        .h2h-label-small {
-          font-family: 'Press Start 2P', monospace; font-size: .24rem;
-          color: rgba(255,140,0,.7); letter-spacing: 2px;
+        .h2h-ties-label {
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 700;
+          color: var(--text-dim); letter-spacing: 1px;
         }
         .h2h-gp-label {
-          font-family: 'Press Start 2P', monospace; font-size: .22rem;
-          color: rgba(255,255,255,.25); letter-spacing: 1px;
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 700;
+          color: var(--text-dim); letter-spacing: 1px;
         }
+
+        /* H2H stat grid */
         .h2h-stats-grid {
-          display: grid; grid-template-columns: 1fr auto 1fr;
-          gap: .1rem .28rem; align-items: center;
+          display: grid;
+          grid-template-columns: 1fr auto 1fr;
+          align-items: center;
+          gap: 2px 0;
+          padding-top: 8px;
+          border-top: 1px solid var(--border);
+        }
+        .h2h-stat-val {
+          font-family: var(--font-display);
+          font-size: 16px; font-weight: 700;
+          color: var(--text-primary); line-height: 1;
         }
         .h2h-stat-val.left  { text-align: right; }
         .h2h-stat-val.right { text-align: left; }
         .h2h-stat-key {
-            font-family: 'Press Start 2P', monospace; font-size: .24rem;
-            color: rgba(255,255,255,.85); text-align: center;
-          }
-          .h2h-stat-val {
-            font-family: 'VT323', monospace; font-size: 1.25rem;
-            color: #E8F0F8; line-height: 1;
-          }
-
-        /* ── VS separator (horizontal, between stacked team panels) ── */
-        .team-sep {
-          display: flex; align-items: center; gap: .4rem;
-          padding: .18rem .55rem;
-          background: rgba(0,0,0,.15);
-        }
-        .team-sep-line { flex: 1; height: 1px; background: rgba(255,215,0,.2); }
-        .team-sep-text {
-          font-family: 'Press Start 2P', monospace; font-size: .3rem;
-          color: rgba(255,215,0,.4); letter-spacing: 3px;
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 800;
+          letter-spacing: 2px; color: var(--text-secondary);
+          text-align: center; padding: 0 8px;
         }
 
-        /* ── Team Panel ── */
+        /* ───────────────────────────────────────────────
+           TEAM PANELS
+        ─────────────────────────────────────────────── */
+        .team-divider {
+          display: flex; align-items: center; gap: 8px;
+          padding: 4px 12px;
+        }
+        .divider-line { flex: 1; height: 1px; background: var(--border); }
+        .divider-vs {
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 800;
+          letter-spacing: 3px; color: var(--text-dim);
+        }
+
         .team-panel { display: flex; flex-direction: column; }
         .team-panel-header {
-          display: flex; align-items: center; gap: 5px;
-          padding: .22rem .45rem;
-          border-bottom: 1px solid rgba(255,255,255,.06);
-          background: rgba(0,0,0,.15);
+          display: flex; align-items: center; gap: 7px;
+          padding: 6px 10px;
+          background: var(--bg-raised);
+          border-bottom: 1px solid var(--border);
         }
         .team-panel-logo {
-          width: 20px; height: 20px; object-fit: contain;
-          filter: drop-shadow(0 0 3px rgba(255,215,0,.2));
+          width: 20px; height: 20px; object-fit: contain; flex-shrink: 0;
         }
         .team-panel-code {
-          font-family: 'Press Start 2P', monospace; font-size: .44rem;
-          color: #FFFFFF; letter-spacing: 1px; flex: 1;
+          font-family: var(--font-display);
+          font-size: 15px; font-weight: 900;
+          letter-spacing: 1px; color: var(--text-primary);
+          flex: 1;
         }
         .team-panel-rank {
-          font-family: 'Press Start 2P', monospace; font-size: .34rem;
-          color: rgba(255,140,0,.95);
-          background: rgba(255,140,0,.15);
-          border: 1px solid rgba(255,140,0,.4);
-          border-radius: 3px; padding: .08rem .22rem;
+          font-family: var(--font-display);
+          font-size: 10px; font-weight: 800;
+          letter-spacing: 1px; color: var(--text-secondary);
         }
 
         /* Roster table */
         .roster-table { width: 100%; border-collapse: collapse; }
-        .roster-th {
-            font-family: 'Press Start 2P', monospace; font-size: .28rem;
-            color: rgba(255,255,255,.5); padding: .12rem .3rem;
-            text-align: center;
-            background: rgba(0,0,0,.22);
-            border-bottom: 1px solid rgba(255,215,0,.08);
-          }
-        .roster-th.al { text-align: left; }
-        .roster-tbody tr { border-bottom: 1px solid rgba(255,255,255,.022); }
-        .roster-tbody tr:nth-child(even) { background: rgba(255,255,255,.016); }
-        .roster-td {
-            font-family: 'VT323', monospace; font-size: 1.1rem;
-            color: #C0C8D0; padding: .02rem .3rem;
-            text-align: center; line-height: 1.12;
-          }
-         
-        .roster-td.al  { text-align: left; color: #DDE5EE; }
-        .roster-td.pts { color: #FFD700; font-size: 1.15rem; }
-        .roster-td.g   { color: #87CEEB; }
-        .roster-td.a   { color: rgba(200,210,220,.5); }
+        .roster-table thead th {
+          font-family: var(--font-display);
+          font-size: 9px; font-weight: 800;
+          letter-spacing: 2px;
+          color: var(--text-primary);
+          padding: 4px 6px;
+          text-align: center;
+          background: rgba(0,0,0,0.3);
+          border-bottom: 1px solid var(--border-mid);
+        }
+        .roster-table thead th.al { text-align: left; }
+        .roster-table tbody tr {
+          border-bottom: 1px solid rgba(255,255,255,0.025);
+        }
+        .roster-table tbody tr:nth-child(even) { background: var(--bg-stripe); }
+
+        .r-td {
+          font-family: var(--font-display);
+          font-size: 14px; font-weight: 600;
+          color: var(--text-secondary);
+          padding: 3px 6px;
+          text-align: center; line-height: 1;
+        }
+        .r-td.al {
+          text-align: left;
+          color: var(--text-primary); font-weight: 700;
+        }
+        .r-td.g  { color: var(--ice); }
+        .r-td.pts {
+          color: var(--text-primary); font-weight: 800;
+          font-size: 15px;
+        }
+
         .no-data {
-          font-family: 'Press Start 2P', monospace; font-size: .26rem;
-          color: rgba(255,255,255,.14); text-align: center; padding: .5rem;
+          font-family: var(--font-display);
+          font-size: 10px; font-weight: 700;
+          letter-spacing: 2px; color: var(--text-dim);
+          text-align: center; padding: 10px;
         }
-
-        /* ── Standings ── */
-        .standings-table { width: 100%; border-collapse: collapse; }
-        .std-th {
-            font-family: 'Press Start 2P', monospace; font-size: .28rem;
-            color: rgba(255,255,255,.36); padding: .14rem .08rem;
-            text-align: center;
-            background: rgba(0,0,0,.2);
-            border-bottom: 1px solid rgba(255,215,0,.08);
-          }
-        .std-tbody tr { border-bottom: 1px solid rgba(255,255,255,.02); }
-
-        /* ── BRIGHT highlight rows — yellow border all sides ── */
-        .std-row-highlight-a {
-          background: rgba(135,206,235,.25) !important;
-          box-shadow:
-            inset 0 1px 0 #FFD700,
-            inset 0 -1px 0 #FFD700,
-            inset 3px 0 0 #87CEEB,
-            inset -3px 0 0 #87CEEB;
-        }
-        .std-row-highlight-b {
-          background: rgba(255,140,0,.25) !important;
-          box-shadow:
-            inset 0 1px 0 #FFD700,
-            inset 0 -1px 0 #FFD700,
-            inset 3px 0 0 #FF8C00,
-            inset -3px 0 0 #FF8C00;
-        }
-
-        .std-td {
-            font-family: 'VT323', monospace; font-size: 1.25rem;
-            color: #A8B8C0; padding: .04rem .1rem;
-            text-align: center; line-height: 1.15;
-          }
-        .std-rank {
-            font-family: 'Press Start 2P', monospace !important;
-            font-size: .3rem !important; color: rgba(255,140,0,.7) !important;
-          }
-        /* Logo-only team cell */
-        .std-logo {
-          width: 16px; height: 16px; object-fit: contain;
-          display: block; margin: 0 auto;
-          vertical-align: middle;
-        }
-        .std-logo.logo-highlight-a {
-          filter: drop-shadow(0 0 4px #87CEEB) drop-shadow(0 0 2px rgba(135,206,235,.8));
-        }
-        .std-logo.logo-highlight-b {
-          filter: drop-shadow(0 0 4px #FF8C00) drop-shadow(0 0 2px rgba(255,140,0,.8));
-        }
-        .std-pts { color: #FFD700 !important; font-size: 1.28rem !important; }
-        .std-cutoff td {
-          padding: 0 !important; height: 2px !important;
-          background: linear-gradient(90deg, transparent, rgba(255,215,0,.4), transparent) !important;
-          border: none !important;
-        }
-        .std-playoff .std-td { color: #CCD8E0 !important; }
-
-        /* ── Footer ── */
-        .ov-footer {
-          display: flex; align-items: center; justify-content: center;
-          padding: .2rem .5rem;
-          background: rgba(0,0,0,.25);
-          border-top: 1px solid rgba(255,215,0,.08);
-          margin-top: auto;
-        }
-        .ov-footer-text {
-          font-family: 'Press Start 2P', monospace;
-          font-size: .2rem; color: rgba(255,255,255,.14); letter-spacing: 1px;
-        }
-
-        /* ── Empty / Loading ── */
-        .empty-msg { padding: 1.8rem .75rem; text-align: center; }
-        .empty-title {
-          font-family: 'Press Start 2P', monospace; font-size: .5rem;
-          color: rgba(255,215,0,.4); letter-spacing: 2px; margin-bottom: .8rem;
-        }
-        .empty-sub {
-          font-family: 'VT323', monospace; font-size: 1.2rem;
-          color: rgba(255,255,255,.25);
-        }
-        .key {
-          font-family: 'Press Start 2P', monospace; font-size: .7rem; color: #FF8C00;
-        }
-        .loading-pulse {
-          font-family: 'Press Start 2P', monospace; font-size: .45rem;
-          color: #FFD700; text-align: center; padding: 1.8rem;
-          animation: bpulse 1s ease-in-out infinite;
-        }
-      
-        
       `}</style>
     </div>
   );
@@ -659,34 +727,49 @@ export default function StreamOverlayMatchup() {
 function H2HHero({ h2h, teamA, teamB }) {
   return (
     <div className="h2h-hero">
-      <div className="h2h-hero-teams">
+      <div className="h2h-section-label">ALL-TIME H2H</div>
+      <div className="h2h-teams-row">
         <div className="h2h-team-block">
-          <img src={`/assets/teamLogos/${teamA.code}.png`} alt={teamA.code} className="h2h-logo"
-            onError={e => e.target.style.display='none'} />
+          <img
+            src={`/assets/teamLogos/${teamA.code}.png`}
+            alt={teamA.code}
+            className="h2h-logo"
+            onError={e => e.target.style.display = 'none'}
+          />
+          <span className="h2h-team-code">{teamA.code}</span>
         </div>
+
         <div className="h2h-center">
-          <span className="h2h-label-small">ALL-TIME H2H</span>
           <div className="h2h-record-row">
-            <span className="h2h-wins-num">{h2h.aW}</span>
+            <span className="h2h-wins">{h2h.aW}</span>
             <span className="h2h-dash">–</span>
-            <span className="h2h-wins-num">{h2h.bW}</span>
+            <span className="h2h-wins">{h2h.bW}</span>
           </div>
-          {h2h.ties > 0 && <span className="h2h-gp-label">T: {h2h.ties}</span>}
-          <span className="h2h-gp-label">{h2h.gp} GP PLAYED</span>
+          {h2h.ties > 0 && <span className="h2h-ties-label">T: {h2h.ties}</span>}
+          <span className="h2h-gp-label">{h2h.gp} GP</span>
         </div>
+
         <div className="h2h-team-block">
-          <img src={`/assets/teamLogos/${teamB.code}.png`} alt={teamB.code} className="h2h-logo"
-            onError={e => e.target.style.display='none'} />
+          <img
+            src={`/assets/teamLogos/${teamB.code}.png`}
+            alt={teamB.code}
+            className="h2h-logo"
+            onError={e => e.target.style.display = 'none'}
+          />
+          <span className="h2h-team-code">{teamB.code}</span>
         </div>
       </div>
+
       {h2h.gp > 0 && (
         <div className="h2h-stats-grid">
           <span className="h2h-stat-val left">{h2h.aGFpg}</span>
-          <span className="h2h-stat-key">GF/g</span>
+          <span className="h2h-stat-key">GF/G</span>
           <span className="h2h-stat-val right">{h2h.bGFpg}</span>
+
           <span className="h2h-stat-val left">{h2h.aGApg}</span>
-          <span className="h2h-stat-key">GA/g</span>
+          <span className="h2h-stat-key">GA/G</span>
           <span className="h2h-stat-val right">{h2h.bGApg}</span>
+
           <span className="h2h-stat-val left">{h2h.aSO}</span>
           <span className="h2h-stat-key">SO</span>
           <span className="h2h-stat-val right">{h2h.bSO}</span>
@@ -697,35 +780,40 @@ function H2HHero({ h2h, teamA, teamB }) {
 }
 
 // ── Team Panel ────────────────────────────────────────────────────────────────
-function TeamPanel({ team }) {
+function TeamPanel({ team, side }) {
   const { code, rank, roster } = team;
   return (
     <div className="team-panel">
       <div className="team-panel-header">
-        <img src={`/assets/teamLogos/${code}.png`} alt={code} className="team-panel-logo"
-          onError={e => e.target.style.display='none'} />
+        <img
+          src={`/assets/teamLogos/${code}.png`}
+          alt={code}
+          className="team-panel-logo"
+          onError={e => e.target.style.display = 'none'}
+        />
         <span className="team-panel-code">{code}</span>
         {rank && <span className="team-panel-rank">#{rank}</span>}
       </div>
+
       {roster.length === 0 ? (
         <div className="no-data">NO STATS YET</div>
       ) : (
         <table className="roster-table">
           <thead>
             <tr>
-              <th className="roster-th al">PLAYER</th>
-              <th className="roster-th">G</th>
-              <th className="roster-th">A</th>
-              <th className="roster-th">PTS</th>
+              <th className="al">PLAYER</th>
+              <th>G</th>
+              <th>A</th>
+              <th>PTS</th>
             </tr>
           </thead>
-          <tbody className="roster-tbody">
+          <tbody>
             {roster.map((p, i) => (
               <tr key={`${p.player}-${i}`}>
-                <td className="roster-td al">{p.player}</td>
-                <td className="roster-td g">{p.g}</td>
-                <td className="roster-td a">{p.a}</td>
-                <td className="roster-td pts">{p.pts}</td>
+                <td className="r-td al">{p.player}</td>
+                <td className="r-td g">{p.g}</td>
+                <td className="r-td">{p.a}</td>
+                <td className="r-td pts">{p.pts}</td>
               </tr>
             ))}
           </tbody>
@@ -735,12 +823,11 @@ function TeamPanel({ team }) {
   );
 }
 
-// ── Custom Select (div-based, fully CSS-styleable in Streamlabs) ──────────────
+// ── Custom Select ─────────────────────────────────────────────────────────────
 function CustomSelect({ value, onChange, options, placeholder }) {
   const [open, setOpen] = useState(false);
   const ref = React.useRef(null);
 
-  // Close when clicking outside
   useEffect(() => {
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', handler);
@@ -783,29 +870,35 @@ function StandingsPanel({ rows, highlightA, highlightB }) {
     <table className="standings-table">
       <thead>
         <tr>
-        <th className="std-th" style={{ width: 12 }}>#</th>
-        <th className="std-th" style={{ width: 22 }}></th>
-        <th className="std-th">W</th>
-        <th className="std-th">L</th>
-        <th className="std-th">PTS</th>
+          <th className="al" style={{ width: 18 }}>#</th>
+          <th style={{ width: 26 }}></th>
+          <th>W</th>
+          <th>L</th>
+          <th>PTS</th>
         </tr>
       </thead>
-      <tbody className="std-tbody">
+      <tbody>
         {rows.map((s, i) => {
           const isA = s.team === highlightA;
           const isB = s.team === highlightB;
-          const isPlayoff = i < PLAYOFF_TEAMS;
-          let rowClass = isPlayoff ? 'std-playoff' : '';
-          if (isA) rowClass += ' std-row-highlight-a';
-          if (isB) rowClass += ' std-row-highlight-b';
+          const isOut = i >= PLAYOFF_TEAMS;
+
+          let rowClass = '';
+          if (isA) rowClass = 'std-row-a';
+          else if (isB) rowClass = 'std-row-b';
+          else if (isOut) rowClass = 'std-row-out';
+
           return (
             <React.Fragment key={s.team}>
-              <tr className={rowClass.trim()}>
+              <tr className={rowClass}>
                 <td className="std-td std-rank">{i + 1}</td>
-                <td className="std-td">
-                  <img src={`/assets/teamLogos/${s.team}.png`} alt={s.team}
-                    className={`std-logo${isA?' logo-highlight-a':isB?' logo-highlight-b':''}`}
-                    onError={e => e.target.style.display='none'} />
+                <td className="std-logo-cell">
+                  <img
+                    src={`/assets/teamLogos/${s.team}.png`}
+                    alt={s.team}
+                    className="std-logo"
+                    onError={e => e.target.style.display = 'none'}
+                  />
                 </td>
                 <td className="std-td">{s.w}</td>
                 <td className="std-td">{s.l}</td>

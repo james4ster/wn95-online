@@ -1,3 +1,4 @@
+/* Brackets for podcast */
 import { useState, useEffect, useMemo } from 'react'
 import { supabase } from '../../utils/supabaseClient'
 

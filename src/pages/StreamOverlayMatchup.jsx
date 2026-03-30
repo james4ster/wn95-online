@@ -193,17 +193,21 @@ export default function StreamOverlayMatchup() {
           <div className="setup-note">Press ~ to close</div>
           <div className="setup-row">
             <label className="setup-label">TEAM A</label>
-            <select className="setup-select" value={pendingA} onChange={e => setPendingA(e.target.value)}>
-              <option value="">-- SELECT --</option>
-              {allTeams.map(t => <option key={t.abr} value={t.abr}>{t.abr}{t.team ? ` — ${t.team}` : ''}</option>)}
-            </select>
+            <CustomSelect
+              value={pendingA}
+              onChange={setPendingA}
+              options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
+              placeholder="-- SELECT --"
+            />
           </div>
           <div className="setup-row">
             <label className="setup-label">TEAM B</label>
-            <select className="setup-select" value={pendingB} onChange={e => setPendingB(e.target.value)}>
-              <option value="">-- SELECT --</option>
-              {allTeams.map(t => <option key={t.abr} value={t.abr}>{t.abr}{t.team ? ` — ${t.team}` : ''}</option>)}
-            </select>
+            <CustomSelect
+              value={pendingB}
+              onChange={setPendingB}
+              options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
+              placeholder="-- SELECT --"
+            />
           </div>
           {pendingA && pendingB && pendingA === pendingB && <div className="setup-error">Teams must be different</div>}
           <button className="setup-apply" onClick={handleApply} disabled={!pendingA || !pendingB || pendingA === pendingB}>APPLY</button>
@@ -310,13 +314,37 @@ export default function StreamOverlayMatchup() {
           font-family: 'Press Start 2P', monospace; font-size: .34rem;
           color: #FF8C00; letter-spacing: 1px;
         }
-        .setup-select {
+        /* ── Custom dropdown (replaces native select for Streamlabs compat) ── */
+        .csel { position: relative; width: 100%; user-select: none; }
+        .csel-trigger {
           font-family: 'VT323', monospace; font-size: 1.3rem;
           background: rgba(0,0,0,.6); color: #E0E0E0;
           border: 1px solid rgba(255,215,0,.3); border-radius: 4px;
-          padding: .35rem .6rem; width: 100%; outline: none; cursor: pointer;
+          padding: .3rem .6rem; width: 100%; cursor: pointer;
+          display: flex; align-items: center; justify-content: space-between; gap: .4rem;
         }
-        .setup-select:focus { border-color: rgba(255,215,0,.7); }
+        .csel-trigger:hover { border-color: rgba(255,215,0,.6); }
+        .csel-trigger.open  { border-color: rgba(255,215,0,.8); border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+        .csel-arrow { font-size: .9rem; color: rgba(255,215,0,.6); flex-shrink: 0; line-height: 1; }
+        .csel-placeholder { color: rgba(255,255,255,.3); }
+        .csel-list {
+          position: absolute; top: 100%; left: 0; right: 0; z-index: 1000;
+          background: rgba(8,4,24,.98);
+          border: 1px solid rgba(255,215,0,.5); border-top: none;
+          border-bottom-left-radius: 4px; border-bottom-right-radius: 4px;
+          max-height: 220px; overflow-y: auto;
+          box-shadow: 0 8px 24px rgba(0,0,0,.8);
+        }
+        .csel-list::-webkit-scrollbar { width: 4px; }
+        .csel-list::-webkit-scrollbar-track { background: rgba(0,0,0,.3); }
+        .csel-list::-webkit-scrollbar-thumb { background: rgba(255,215,0,.3); border-radius: 2px; }
+        .csel-option {
+          font-family: 'VT323', monospace; font-size: 1.2rem;
+          color: #D0D8E0; padding: .25rem .6rem; cursor: pointer;
+          border-bottom: 1px solid rgba(255,255,255,.04);
+        }
+        .csel-option:hover   { background: rgba(255,215,0,.12); color: #FFD700; }
+        .csel-option.selected { background: rgba(255,140,0,.18); color: #FF8C00; }
         .setup-error {
           font-family: 'Press Start 2P', monospace; font-size: .3rem;
           color: #ff4444; margin-bottom: .6rem;
@@ -718,6 +746,48 @@ function TeamPanel({ team }) {
             ))}
           </tbody>
         </table>
+      )}
+    </div>
+  );
+}
+
+// ── Custom Select (div-based, fully CSS-styleable in Streamlabs) ──────────────
+function CustomSelect({ value, onChange, options, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div className="csel" ref={ref}>
+      <div
+        className={`csel-trigger${open ? ' open' : ''}`}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className={selected ? '' : 'csel-placeholder'}>
+          {selected ? selected.label : placeholder}
+        </span>
+        <span className="csel-arrow">{open ? '▲' : '▼'}</span>
+      </div>
+      {open && (
+        <div className="csel-list">
+          {options.map(o => (
+            <div
+              key={o.value}
+              className={`csel-option${o.value === value ? ' selected' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+            >
+              {o.label}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

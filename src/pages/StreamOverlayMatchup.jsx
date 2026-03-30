@@ -36,11 +36,18 @@ function computeStandings(games, teams) {
   );
 }
 
+const lastName = name => {
+  if (!name) return '';
+  const parts = name.trim().split(/\s+/);
+  return parts.length > 1 ? parts[parts.length - 1] : parts[0];
+};
+
 function computeRosterStats(rawScoring, teamCode) {
   const map = {};
   const ensure = name => {
-    if (!map[name]) map[name] = { player: name, g: 0, a: 0, pts: 0 };
-    return map[name];
+    const key = lastName(name);
+    if (!map[key]) map[key] = { player: key, g: 0, a: 0, pts: 0 };
+    return map[key];
   };
   (rawScoring || []).filter(r => r.g_team === teamCode).forEach(row => {
     if (row.goal_player_name)      { const p = ensure(row.goal_player_name);      p.g++; p.pts++; }
@@ -145,10 +152,11 @@ export default function StreamOverlayMatchup() {
     const coachANorm = norm(teamAInfo?.coach || '');
     const coachBNorm = norm(teamBInfo?.coach || '');
 
-    // Fetch all-time games across all seasons for manager H2H
+    // Fetch all-time W-league season games across all seasons for manager H2H
     const { data: historicalGames } = await supabase
       .from('games')
       .select('score_home,score_away,ot,coach_home,coach_away')
+      .ilike('lg', 'W%')
       .ilike('mode', CURRENT_MODE)
       .not('score_home','is',null);
 
@@ -263,19 +271,17 @@ export default function StreamOverlayMatchup() {
             </div>
           </div>
 
-          {/* PANEL RIGHT: H2H + Teams side by side */}
+          {/* PANEL RIGHT: H2H + Teams stacked */}
           <div className="ov-panel ov-panel-right">
             <div className="ov-scanlines" />
             <H2HHero h2h={matchupData.h2h} teamA={matchupData.teamA} teamB={matchupData.teamB} />
-            <div className="team-panels-row">
-              <TeamPanel team={matchupData.teamA} />
-              <div className="team-panels-divider">
-                <div className="team-panels-divider-line" />
-                <span className="team-panels-vs">VS</span>
-                <div className="team-panels-divider-line" />
-              </div>
-              <TeamPanel team={matchupData.teamB} />
+            <TeamPanel team={matchupData.teamA} />
+            <div className="team-sep">
+              <div className="team-sep-line" />
+              <span className="team-sep-text">VS</span>
+              <div className="team-sep-line" />
             </div>
+            <TeamPanel team={matchupData.teamB} />
           </div>
         </>
       )}
@@ -372,7 +378,7 @@ export default function StreamOverlayMatchup() {
             inset 0 0 60px rgba(0,0,0,.5);
         }
         .ov-panel-left  { left: 12px; width: 168px; display: flex; flex-direction: column; }
-        .ov-panel-right { right: 12px; width: 330px; }
+        .ov-panel-right { right: 12px; width: 220px; }
 
         /* Empty/loading */
         .ov-root {
@@ -495,30 +501,20 @@ export default function StreamOverlayMatchup() {
           color: rgba(255,255,255,.28); text-align: center;
         }
 
-        /* ── Team panels — side by side, equal height ── */
-        .team-panels-row {
-          display: flex; align-items: stretch;
+        /* ── VS separator (horizontal, between stacked team panels) ── */
+        .team-sep {
+          display: flex; align-items: center; gap: .4rem;
+          padding: .18rem .55rem;
+          background: rgba(0,0,0,.15);
         }
-        .team-panels-divider {
-          display: flex; flex-direction: column; align-items: center;
-          justify-content: center; gap: .25rem;
-          padding: .35rem .12rem;
-          background: rgba(0,0,0,.18);
-          border-left: 1px solid rgba(255,255,255,.04);
-          border-right: 1px solid rgba(255,255,255,.04);
-        }
-        .team-panels-divider-line {
-          flex: 1; width: 1px; min-height: 16px;
-          background: rgba(255,215,0,.2);
-        }
-        .team-panels-vs {
-          font-family: 'Press Start 2P', monospace; font-size: .28rem;
-          color: rgba(255,215,0,.4); letter-spacing: 2px;
-          writing-mode: vertical-lr;
+        .team-sep-line { flex: 1; height: 1px; background: rgba(255,215,0,.2); }
+        .team-sep-text {
+          font-family: 'Press Start 2P', monospace; font-size: .3rem;
+          color: rgba(255,215,0,.4); letter-spacing: 3px;
         }
 
         /* ── Team Panel ── */
-        .team-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+        .team-panel { display: flex; flex-direction: column; }
         .team-panel-header {
           display: flex; align-items: center; gap: 5px;
           padding: .22rem .45rem;

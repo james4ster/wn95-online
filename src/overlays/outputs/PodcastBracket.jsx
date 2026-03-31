@@ -157,10 +157,13 @@ function computeH2H(teamA, teamB, games) {
 ═══════════════════════════════════════════════════════════════ */
 function computeGameStatsH2H(teamA, teamB, gameStatRows) {
   const aRows = [], bRows = []
+  console.log('[BnB H2H] ' + teamA + ' vs ' + teamB + ' rows:' + (gameStatRows?.length||0))
+  console.log('[BnB H2H] sample:', (gameStatRows||[]).slice(0,3).map(r => r.home+'v'+r.away+' s:'+r.season))
   ;(gameStatRows||[]).forEach(r => {
     const aIsHome = r.home === teamA && r.away === teamB
     const aIsAway = r.home === teamB && r.away === teamA
     if (!aIsHome && !aIsAway) return
+    console.log('[BnB H2H] matched:', r.home+'v'+r.away)
     // For teamA: collect their stats whether home or away
     if (aIsHome) {
       aRows.push({ shots: r.home_shots, score: r.home_score, fow: r.home_fow, fo_total: r.fo_total,
@@ -798,36 +801,44 @@ export default function PodcastBracket() {
   useEffect(() => {
     const load = async () => {
       setLoading(true)
-      const { data: seasons } = await supabase
-        .from('seasons').select('*').ilike('lg','W%')
-        .order('lg', { ascending: false }).limit(10)
 
-      const current   = seasons?.find(s => s.status === 'season')
-      const completed = seasons?.find(s => s.status === 'complete')
-      const target = completed || current || seasons?.[0]
-      if (!target) { setLoading(false); return }
-      setBracketLg(target.lg)
+      // Step 1: find the most recent lg that actually has playoff data — status is irrelevant
+      const { data: recentPlayoff } = await supabase
+        .from('playoff_games')
+        .select('lg')
+        .ilike('lg', 'W%')
+        .order('lg', { ascending: false })
+        .limit(1)
+        .single()
 
+      const lg = recentPlayoff?.lg
+      if (!lg) { setLoading(false); return }
+      setBracketLg(lg)
+      console.log('[BnB] bracket lg:', lg)
+
+      // Step 2: load everything scoped to that exact lg
       const [{ data: pgames }, { data: hist }, { data: seasonH }, { data: gStats }] = await Promise.all([
-        supabase.from('playoff_games').select('*').eq('lg', target.lg)
+        supabase.from('playoff_games').select('*').eq('lg', lg)
           .order('round').order('series_number').order('game_number'),
-        // All-time regular season
+        // All-time regular season games (all lgs)
         supabase.from('games')
           .select('id,home,away,score_home,score_away,ot,lg')
-          .not('score_home','is',null)
+          .not('score_home', 'is', null)
           .or('mode.eq.Season,mode.eq.season,mode.ilike.season%,mode.ilike.regular%'),
-        // Current season only
+        // This season games only
         supabase.from('games')
           .select('id,home,away,score_home,score_away,ot,lg')
-          .eq('lg', target.lg)
-          .not('score_home','is',null)
+          .eq('lg', lg)
+          .not('score_home', 'is', null)
           .or('mode.eq.Season,mode.eq.season,mode.ilike.season%,mode.ilike.regular%'),
-        // Game stats for current season
+        // Game stats for this exact season
         supabase.from('game_stats_team')
           .select('*')
-          .eq('season', target.lg)
-          .eq('type', 'season'),
+          .eq('season', lg),
       ])
+
+      console.log('[BnB] pgames:', pgames?.length, '| seasonGames:', seasonH?.length, '| gameStats:', gStats?.length)
+      console.log('[BnB] gameStats sample:', gStats?.slice(0,2).map(r => r.home+'v'+r.away+' s:'+r.season))
 
       setPlayoffGames(pgames || [])
       setAllGames(hist || [])

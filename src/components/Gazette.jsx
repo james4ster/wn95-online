@@ -247,41 +247,53 @@ function LeagueGazette({
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(
-    async (force = false) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchGazetteEdition({
-          leagueLabel,
-          recentForm,
-          winStreaks,
-          lossStreaks,
-          currentSeason,
-          teamNameMap,
-          topScorers,
-          recentGames,
-          isPlayoffActive,
-          playoffSeriesData,
-          gameStats,
-          managers: await supabase
-            .from('managers')
-            .select('id, coach_name, manager_traits')
-            .then(({ data }) => data || []),
-          teams: Object.entries(teamNameMap).map(([abr, t]) => ({ abr, ...t })),
-        });
-        setEdition(data);
-      } catch (e) {
-        console.error('[Gazette]', e);
-        setError(true);
-      } finally {
-        setLoading(false);
-        setRefreshing(false);
+  const load = useCallback(async (force = false) => {
+    setLoading(true);
+    setError(null);
+  
+    try {
+      const today = todayStamp();
+      const playoffKey = `${leagueLabel}_playoff`;
+  
+      // Try playoff cache first, then regular
+      let { data: cached } = await supabase
+        .from('gazette_cache')
+        .select('data')
+        .eq('league', playoffKey)
+        .eq('date', today)
+        .single();
+  
+      if (!cached) {
+        ({ data: cached } = await supabase
+          .from('gazette_cache')
+          .select('data')
+          .eq('league', leagueLabel)
+          .eq('date', today)
+          .single());
       }
-    },
-    [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
-     teamNameMap, topScorers, isPlayoffActive, playoffSeriesData, gameStats]
-  );
+  
+      if (cached?.data) {
+        const parsed = typeof cached.data === 'string' 
+          ? JSON.parse(cached.data) 
+          : cached.data;
+        setEdition(parsed);
+        return;
+      }
+  
+      // Fall back to generating client-side if nothing cached yet
+      const data = await fetchGazetteEdition({
+        leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason,
+      });
+      setEdition(data);
+  
+    } catch (e) {
+      console.error('[Gazette]', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [leagueLabel, recentForm, winStreaks, lossStreaks, currentSeason]);
 
   useEffect(() => {
     if (!dataLoading && recentForm.hot.length > 0) load();

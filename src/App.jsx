@@ -15,35 +15,22 @@ import Scores from './pages/Scores';
 import ScoresBar from './components/ScoresBar';
 import Media from './pages/Media';
 import Transactions from './pages/Transactions';
-import StreamOverlayStandings from './overlays/StreamOverlayStandings';
-import StreamOverlayMatchupDefault from './overlays/StreamOverlayMatchupDefault';
-import StreamOverlayMatchupIcey from './overlays/StreamOverlayMatchupIcey';
-import PodcastOverlay from './overlays/PodcastOverlay';
-import PodcastCtrl from './overlays/PodcastCtrl';
-
-const OVERLAY_PATHS = [
-  '/overlay-standings',
-  '/overlay-matchup-default',
-  '/overlay-matchup-icey',
-  '/overlay-podcast',
-  '/overlay-podcast-ctrl',
-];
+import StreamOverlay from './pages/StreamOverlay';
+import StreamOverlayMatchup from './pages/StreamOverlayMatchup';
 
 function AppShell() {
   const location = useLocation();
-  const isOverlay = OVERLAY_PATHS.some(p => location.pathname.startsWith(p));
+  const isOverlay = location.pathname === '/overlay' || location.pathname === '/overlay-matchup';
 
   if (isOverlay) {
     return (
       <Routes>
-        <Route path="/overlay-standings"        element={<StreamOverlayStandings />} />
-        <Route path="/overlay-matchup-default"  element={<StreamOverlayMatchupDefault />} />
-        <Route path="/overlay-matchup-icey"     element={<StreamOverlayMatchupIcey />} />
-        <Route path="/overlay-podcast-ctrl"     element={<PodcastCtrl />} />
-        <Route path="/overlay-podcast"          element={<PodcastOverlay />} />
+        <Route path="/overlay" element={<StreamOverlay />} />
+        <Route path="/overlay-matchup" element={<StreamOverlayMatchup />} />
       </Routes>
     );
   }
+  
 
   return (
     <div className="app">

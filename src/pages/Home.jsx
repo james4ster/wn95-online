@@ -2013,7 +2013,8 @@ export default function Home() {
             topSeasonScorers={topSeasonScorers}
             isPlayoffActive={isPlayoffActive}
           />
-         {/* <section className="panel">
+         {/* ======== UNCOMMENTING THIS WILL DISPLAY TRANSACTIONS PANEL ==================== 
+            <section className="panel">
             <PanelHeader icon="🔄" title="TRANSACTIONS" />
 
             <div className="tx-body">

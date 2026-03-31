@@ -191,6 +191,10 @@ export default function StreamOverlayMatchup() {
 
   return (
     <div className="ov-page">
+      <link rel="preconnect" href="https://fonts.googleapis.com" />
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+      <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet" />
+
 
       {/* ── Setup Panel ── */}
       {showPanel && (
@@ -276,10 +280,7 @@ export default function StreamOverlayMatchup() {
       )}
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600&display=swap');
-
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
+        
         /* ───────────────────────────────────────────────
            TOKENS
         ─────────────────────────────────────────────── */
@@ -436,10 +437,9 @@ export default function StreamOverlayMatchup() {
           background: var(--ice);
           box-shadow: 0 0 8px var(--ice);
           animation: pulse 2s ease-in-out infinite;
+          will-change: opacity; 
         }
-        @keyframes pulse {
-          0%,100% { opacity: 1; } 50% { opacity: .3; }
-        }
+        
         .idle-hint {
           font-size: 18px; color: var(--text-dim);
         }
@@ -450,7 +450,7 @@ export default function StreamOverlayMatchup() {
           border: 1px solid var(--ice-border);
           border-radius: 3px; padding: 0 4px;
         }
-        .loading-pulse { animation: pulse 0.8s ease-in-out infinite; }
+        .loading-pulse { animation: pulse 0.8s ease-in-out infinite; will-change: opacity;  }
 
         /* ───────────────────────────────────────────────
            SHARED PANEL

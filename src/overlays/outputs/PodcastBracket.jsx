@@ -628,7 +628,7 @@ export default function PodcastBracket() {
       <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background: T.bg, fontFamily: T.font }}>
 
         {/* ══ TOP 67%: BRACKET ══ */}
-        <div style={{ flex:'0 0 67%', borderBottom:'2px solid rgba(204,26,26,0.4)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+        <div style={{ flex:'0 0 75%', borderBottom:'2px solid rgba(204,26,26,0.4)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
           <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'6px 16px 4px', borderBottom:'1px solid rgba(204,26,26,0.15)' }}>
             <div style={{ width:3, height:22, background: T.accent, borderRadius:2 }} />
             <div style={{ fontSize:20, fontWeight:900, color:'#fff', letterSpacing:'0.18em' }}>PLAYOFF BRACKET</div>
@@ -642,7 +642,7 @@ export default function PodcastBracket() {
         </div>
 
         {/* ══ BOTTOM 33%: H2H STATS ══ */}
-        <div style={{ flex:'0 0 33%', overflow:'hidden', display:'flex', flexDirection:'column', background:'rgba(0,0,0,0.3)' }}>
+        <div style={{ flex:'0 0 25%', overflow:'hidden', display:'flex', flexDirection:'column', background:'rgba(0,0,0,0.3)' }}>
           <H2HPanel slot={selectedSlot} allGames={allGames} onClear={() => setSelectedSlot(null)} />
         </div>
       </div>

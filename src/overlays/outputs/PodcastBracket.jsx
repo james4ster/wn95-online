@@ -452,91 +452,105 @@ function BracketCanvas({ leftRounds, rightRounds, champSlot, nRounds, onSelectSl
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   H2H PANEL
+   H2H PANEL — compact, large-font stats block
 ═══════════════════════════════════════════════════════════════ */
-function H2HPanel({ slot, allGames }) {
+function StatBlock({ label, valA, valB, aLeads, bLeads }) {
+  return (
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, flex:1 }}>
+      <div style={{ fontFamily: T.font, fontSize:11, fontWeight:900, color:'rgba(204,26,26,0.7)', letterSpacing:'0.2em' }}>{label}</div>
+      <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+        <span style={{ fontFamily: T.font, fontSize:36, fontWeight:900, lineHeight:1, color: aLeads ? '#fff' : 'rgba(255,255,255,0.3)', textShadow: aLeads ? '0 0 14px rgba(255,255,255,0.2)' : 'none' }}>{valA}</span>
+        <span style={{ fontFamily: T.font, fontSize:14, color:'#2a2a2a', fontWeight:700 }}>—</span>
+        <span style={{ fontFamily: T.font, fontSize:36, fontWeight:900, lineHeight:1, color: bLeads ? '#fff' : 'rgba(255,255,255,0.3)', textShadow: bLeads ? '0 0 14px rgba(255,255,255,0.2)' : 'none' }}>{valB}</span>
+      </div>
+    </div>
+  )
+}
+
+function H2HPanel({ slot, allGames, onClear }) {
   const teamA = slot?.topTeam
   const teamB = slot?.botTeam
 
   if (!slot || !teamA || !teamB) {
     return (
-      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10 }}>
-        <div style={{ fontSize:30, opacity:0.05 }}>⚔</div>
-        <div style={{ fontFamily: T.font, fontSize:14, fontWeight:700, color:'#282828', letterSpacing:'0.2em' }}>CLICK A MATCHUP TO LOAD H2H</div>
+      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', gap:16 }}>
+        <div style={{ fontFamily: T.font, fontSize:16, fontWeight:700, color:'#222', letterSpacing:'0.25em' }}>
+          ← CLICK ANY MATCHUP TO SEE H2H STATS
+        </div>
       </div>
     )
   }
 
   const h2h = useMemo(() => computeH2H(teamA, teamB, allGames), [teamA, teamB, allGames])
   const { wA, wB, t, gfA, gfB, soA, soB, gp, last10 } = h2h
-  const aLeads = wA > wB, bLeads = wB > wA
-  const aBar = gp === 0 ? 50 : Math.round((wA / Math.max(wA+wB, 1)) * 100)
+
+  // Last 5
+  const last5 = last10.slice(0, 5)
+  const l5wA  = last5.filter(g => g.winner === teamA).length
+  const l5wB  = last5.filter(g => g.winner === teamB).length
+
+  const aLeadsAll  = wA > wB,  bLeadsAll  = wB > wA
+  const aLeadsL5   = l5wA > l5wB, bLeadsL5 = l5wB > l5wA
+  const aLeadsGF   = gfA > gfB,   bLeadsGF = gfB > gfA
+  const aLeadsGA   = gfB > gfA,   bLeadsGA = gfA > gfB  // lower GA is better, so flip
+  const aLeadsSO   = soA > soB,   bLeadsSO = soB > soA
+  const aBar = gp === 0 ? 50 : Math.round((wA / Math.max(wA+wB,1)) * 100)
 
   return (
     <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-      {/* VS header */}
-      <div style={{ flexShrink:0, padding:'10px 20px 8px', borderBottom:'1px solid rgba(204,26,26,0.2)', background:'linear-gradient(180deg,rgba(204,26,26,0.06) 0%,transparent 100%)' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          {/* Team A */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
-            <img src={`/assets/teamLogos/${teamA}.png`} alt={teamA} style={{ width:38, height:38, objectFit:'contain' }} onError={e => e.target.style.display='none'} />
-            <div>
-              <div style={{ fontFamily: T.font, fontSize:24, fontWeight:900, color:'#fff', letterSpacing:'0.1em', lineHeight:1 }}>{teamA}</div>
-              <div style={{ fontFamily: T.font, fontSize:12, fontWeight:700, color: aLeads ? T.win : '#555', letterSpacing:'0.1em', marginTop:2 }}>{wA}W · {gfA}GF · {soA} SO</div>
-            </div>
+
+      {/* Header row — team logos + names + win bar */}
+      <div style={{ flexShrink:0, display:'flex', alignItems:'center', padding:'8px 20px 6px', gap:16, borderBottom:'1px solid rgba(204,26,26,0.2)', background:'linear-gradient(180deg,rgba(204,26,26,0.07) 0%,transparent 100%)' }}>
+
+        {/* Team A */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
+          <img src={`/assets/teamLogos/${teamA}.png`} alt={teamA} style={{ width:44, height:44, objectFit:'contain', filter:'drop-shadow(0 0 6px rgba(204,26,26,0.4))' }} onError={e => e.target.style.display='none'} />
+          <div style={{ fontFamily: T.font, fontSize:30, fontWeight:900, color:'#fff', letterSpacing:'0.1em', lineHeight:1 }}>{teamA}</div>
+        </div>
+
+        {/* Center — win bar + GP label */}
+        <div style={{ flexShrink:0, display:'flex', flexDirection:'column', alignItems:'center', gap:4, minWidth:200 }}>
+          <div style={{ fontFamily: T.font, fontSize:11, fontWeight:900, color: T.accent, letterSpacing:'0.25em' }}>ALL-TIME · {gp} GP{t > 0 ? ` · ${t}T` : ''}</div>
+          <div style={{ width:'100%', height:6, borderRadius:3, overflow:'hidden', display:'flex' }}>
+            <div style={{ width:`${aBar}%`, background: aLeadsAll ? `linear-gradient(90deg,${T.accent},${T.accentBr})` : '#1c1c1c', transition:'width 0.5s ease' }} />
+            <div style={{ width:`${100-aBar}%`, background: bLeadsAll ? `linear-gradient(90deg,${T.accentBr},${T.accent})` : '#1c1c1c', transition:'width 0.5s ease' }} />
           </div>
-          {/* Center */}
-          <div style={{ flexShrink:0, padding:'0 16px', textAlign:'center' }}>
-            <div style={{ fontFamily: T.font, fontSize:10, fontWeight:900, color: T.accent, letterSpacing:'0.3em', marginBottom:2 }}>ALL-TIME H2H</div>
-            <div style={{ fontFamily: T.font, fontSize:26, fontWeight:900, color: T.accent }}>VS</div>
-            <div style={{ fontFamily: T.font, fontSize:10, color:'#444', letterSpacing:'0.15em', marginTop:2 }}>{gp} GP{t > 0 ? ` · ${t}T` : ''}</div>
-          </div>
-          {/* Team B */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, justifyContent:'flex-end' }}>
-            <div style={{ textAlign:'right' }}>
-              <div style={{ fontFamily: T.font, fontSize:24, fontWeight:900, color:'#fff', letterSpacing:'0.1em', lineHeight:1 }}>{teamB}</div>
-              <div style={{ fontFamily: T.font, fontSize:12, fontWeight:700, color: bLeads ? T.win : '#555', letterSpacing:'0.1em', marginTop:2 }}>{wB}W · {gfB}GF · {soB} SO</div>
-            </div>
-            <img src={`/assets/teamLogos/${teamB}.png`} alt={teamB} style={{ width:38, height:38, objectFit:'contain' }} onError={e => e.target.style.display='none'} />
+          <div style={{ display:'flex', justifyContent:'space-between', width:'100%' }}>
+            <span style={{ fontFamily: T.font, fontSize:11, fontWeight:700, color: aLeadsAll ? T.accent : '#333' }}>{aBar}%</span>
+            <span style={{ fontFamily: T.font, fontSize:11, fontWeight:700, color: bLeadsAll ? T.accent : '#333' }}>{100-aBar}%</span>
           </div>
         </div>
-        {/* Win bar */}
-        <div style={{ marginTop:8, display:'flex', height:5, borderRadius:3, overflow:'hidden' }}>
-          <div style={{ width:`${aBar}%`, background: aLeads ? `linear-gradient(90deg,${T.accent},${T.accentBr})` : '#1e1e1e', transition:'width 0.5s ease' }} />
-          <div style={{ width:`${100-aBar}%`, background: bLeads ? `linear-gradient(90deg,${T.accentBr},${T.accent})` : '#1e1e1e', transition:'width 0.5s ease' }} />
+
+        {/* Team B */}
+        <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, justifyContent:'flex-end' }}>
+          <div style={{ fontFamily: T.font, fontSize:30, fontWeight:900, color:'#fff', letterSpacing:'0.1em', lineHeight:1, textAlign:'right' }}>{teamB}</div>
+          <img src={`/assets/teamLogos/${teamB}.png`} alt={teamB} style={{ width:44, height:44, objectFit:'contain', filter:'drop-shadow(0 0 6px rgba(204,26,26,0.4))' }} onError={e => e.target.style.display='none'} />
         </div>
-        <div style={{ display:'flex', justifyContent:'space-between', marginTop:3 }}>
-          <span style={{ fontFamily: T.font, fontSize:10, color:'#444' }}>{aBar}%</span>
-          <span style={{ fontFamily: T.font, fontSize:10, color:'#444' }}>{100-aBar}%</span>
-        </div>
+
+        {/* Clear button */}
+        {onClear && (
+          <button onClick={onClear} style={{ flexShrink:0, background:'transparent', border:'1px solid #1e1e1e', borderRadius:4, padding:'4px 12px', cursor:'pointer', fontFamily: T.font, fontSize:11, color:'#444', letterSpacing:'0.15em' }}>✕</button>
+        )}
       </div>
 
-      {/* Last 10 */}
-      <div style={{ flex:1, padding:'8px 20px', overflow:'hidden' }}>
-        <div style={{ fontFamily: T.font, fontSize:10, fontWeight:900, color: T.accent, letterSpacing:'0.2em', marginBottom:6 }}>
-          LAST {Math.min(10, last10.length)} MEETINGS (SEASON GAMES)
-        </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-          {last10.length === 0 && <div style={{ fontFamily: T.font, fontSize:13, color:'#333', letterSpacing:'0.15em' }}>NO GAMES PLAYED</div>}
-          {last10.map((g, i) => {
-            const aWon = g.winner === teamA, bWon = g.winner === teamB
-            return (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 10px', background: i%2===0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderRadius:3 }}>
-                <div style={{ fontFamily: T.font, fontSize:10, color:'#333', width:22, flexShrink:0 }}>G{last10.length-i}</div>
-                <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
-                  <span style={{ fontFamily: T.font, fontSize:14, fontWeight: aWon?900:600, color: aWon?'#fff':'#3a3a3a' }}>{teamA}</span>
-                  <span style={{ fontFamily: T.mono, fontSize:22, fontWeight:900, color: aWon ? T.win : g.winner===null ? '#555' : T.loss, minWidth:22, textAlign:'right' }}>{g.sA}</span>
-                </div>
-                <div style={{ fontFamily: T.font, fontSize:13, color:'#2a2a2a', flexShrink:0 }}>—</div>
-                <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontFamily: T.mono, fontSize:22, fontWeight:900, color: bWon ? T.win : g.winner===null ? '#555' : T.loss, minWidth:22 }}>{g.sB}</span>
-                  <span style={{ fontFamily: T.font, fontSize:14, fontWeight: bWon?900:600, color: bWon?'#fff':'#3a3a3a' }}>{teamB}</span>
-                </div>
-                {g.ot ? <div style={{ fontFamily: T.font, fontSize:9, fontWeight:900, color: T.accent, width:20, textAlign:'right', flexShrink:0 }}>OT</div> : <div style={{ width:20 }} />}
-              </div>
-            )
-          })}
-        </div>
+      {/* Stats row — ALL in one horizontal band */}
+      <div style={{ flex:1, display:'flex', alignItems:'center', padding:'0 20px', gap:0 }}>
+
+        {/* Dividers between stats */}
+        {[
+          { label:'ALL-TIME W',   valA: wA,   valB: wB,   aL: aLeadsAll, bL: bLeadsAll },
+          { label:'LAST 5 W',     valA: l5wA, valB: l5wB, aL: aLeadsL5,  bL: bLeadsL5  },
+          { label:'GF',           valA: gfA,  valB: gfB,  aL: aLeadsGF,  bL: bLeadsGF  },
+          { label:'GA',           valA: gfB,  valB: gfA,  aL: aLeadsGA,  bL: bLeadsGA  },
+          { label:'SHUTOUTS',     valA: soA,  valB: soB,  aL: aLeadsSO,  bL: bLeadsSO  },
+        ].map((s, i, arr) => (
+          <React.Fragment key={s.label}>
+            <StatBlock label={s.label} valA={s.valA} valB={s.valB} aLeads={s.aL} bLeads={s.bL} />
+            {i < arr.length - 1 && (
+              <div style={{ width:1, height:50, background:'rgba(204,26,26,0.2)', flexShrink:0, margin:'0 4px' }} />
+            )}
+          </React.Fragment>
+        ))}
       </div>
     </div>
   )
@@ -610,40 +624,26 @@ export default function PodcastBracket() {
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=VT323&display=swap" rel="stylesheet" />
-      <style>{`@keyframes bnbChampShimmer { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)} 100%{transform:translateX(100%) translateY(100%) rotate(45deg)} }`}</style>
 
       <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background: T.bg, fontFamily: T.font }}>
 
-        {/* ══ TOP 52%: BRACKET ══ */}
-        <div style={{ flex:'0 0 52%', borderBottom:'1px solid rgba(204,26,26,0.3)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
-          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'8px 16px 5px', borderBottom:'1px solid rgba(204,26,26,0.12)' }}>
-            <div style={{ width:3, height:20, background: T.accent, borderRadius:2 }} />
-            <div style={{ fontSize:18, fontWeight:900, color:'#fff', letterSpacing:'0.18em' }}>PLAYOFF BRACKET</div>
-            {bracketLg && <div style={{ fontSize:11, color: T.accent, letterSpacing:'0.2em', fontWeight:700 }}>{bracketLg}</div>}
+        {/* ══ TOP 67%: BRACKET ══ */}
+        <div style={{ flex:'0 0 67%', borderBottom:'2px solid rgba(204,26,26,0.4)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'6px 16px 4px', borderBottom:'1px solid rgba(204,26,26,0.15)' }}>
+            <div style={{ width:3, height:22, background: T.accent, borderRadius:2 }} />
+            <div style={{ fontSize:20, fontWeight:900, color:'#fff', letterSpacing:'0.18em' }}>PLAYOFF BRACKET</div>
+            {bracketLg && <div style={{ fontSize:13, color: T.accent, letterSpacing:'0.2em', fontWeight:700 }}>{bracketLg}</div>}
             <div style={{ flex:1, height:1, background:'linear-gradient(90deg,rgba(204,26,26,0.3),transparent)' }} />
-            <div style={{ fontSize:10, color:'#333', letterSpacing:'0.15em' }}>CLICK MATCHUP FOR H2H ↓</div>
+            <div style={{ fontSize:11, color:'#333', letterSpacing:'0.15em', fontWeight:700 }}>CLICK MATCHUP → H2H BELOW</div>
           </div>
           <div style={{ flex:1, overflow:'auto' }}>
             <BracketCanvas leftRounds={leftRounds} rightRounds={rightRounds} champSlot={champSlot} nRounds={nRounds} onSelectSlot={setSelectedSlot} selectedSlot={selectedSlot} />
           </div>
         </div>
 
-        {/* ══ BOTTOM 48%: H2H ══ */}
-        <div style={{ flex:'0 0 48%', overflow:'hidden', display:'flex', flexDirection:'column', background:'rgba(0,0,0,0.25)' }}>
-          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'7px 16px 5px', borderBottom:'1px solid rgba(204,26,26,0.12)' }}>
-            <div style={{ width:3, height:20, background: selectedSlot?.topTeam ? T.accent : '#1e1e1e', borderRadius:2, transition:'background 0.2s' }} />
-            <div style={{ fontSize:16, fontWeight:900, color: selectedSlot?.topTeam ? '#fff' : '#282828', letterSpacing:'0.18em', transition:'color 0.2s' }}>
-              {selectedSlot?.topTeam && selectedSlot?.botTeam
-                ? `${selectedSlot.topTeam} vs ${selectedSlot.botTeam} — ALL-TIME H2H`
-                : 'H2H MATCHUP DETAIL'}
-            </div>
-            {selectedSlot?.topTeam && (
-              <button onClick={() => setSelectedSlot(null)} style={{ marginLeft:'auto', background:'transparent', border:'1px solid #1e1e1e', borderRadius:4, padding:'3px 10px', cursor:'pointer', fontFamily: T.font, fontSize:10, color:'#444', letterSpacing:'0.15em' }}>✕ CLEAR</button>
-            )}
-          </div>
-          <div style={{ flex:1, overflow:'hidden' }}>
-            <H2HPanel slot={selectedSlot} allGames={allGames} />
-          </div>
+        {/* ══ BOTTOM 33%: H2H STATS ══ */}
+        <div style={{ flex:'0 0 33%', overflow:'hidden', display:'flex', flexDirection:'column', background:'rgba(0,0,0,0.3)' }}>
+          <H2HPanel slot={selectedSlot} allGames={allGames} onClear={() => setSelectedSlot(null)} />
         </div>
       </div>
     </>

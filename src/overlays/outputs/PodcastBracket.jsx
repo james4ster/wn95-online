@@ -790,6 +790,7 @@ function H2HPanel({ slot, allGames, seasonGames, gameStats, onClear }) {
    MAIN EXPORT
 ═══════════════════════════════════════════════════════════════ */
 export default function PodcastBracket() {
+  const [availableLgs, setAvailableLgs] = useState([])
   const [playoffGames, setPlayoffGames] = useState([])
   const [allGames,     setAllGames]     = useState([])
   const [seasonGames,  setSeasonGames]  = useState([])
@@ -798,56 +799,93 @@ export default function PodcastBracket() {
   const [loading,      setLoading]      = useState(true)
   const [selectedSlot, setSelectedSlot] = useState(null)
 
+  // Step 1: on mount, fetch all lgs that have playoff data and default to latest
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-
-      // Step 1: find the most recent lg that actually has playoff data — status is irrelevant
-      const { data: recentPlayoff } = await supabase
+    const init = async () => {
+      const { data } = await supabase
         .from('playoff_games')
         .select('lg')
         .ilike('lg', 'W%')
         .order('lg', { ascending: false })
-        .limit(1)
-        .single()
+      if (!data?.length) { setLoading(false); return }
+      // dedupe
+      const lgs = [...new Set(data.map(r => r.lg))]
+      setAvailableLgs(lgs)
+      setBracketLg(lgs[0]) // default to latest
+    }
+    init()
+  }, [])
 
-      const lg = recentPlayoff?.lg
-      if (!lg) { setLoading(false); return }
-      setBracketLg(lg)
-      console.log('[BnB] bracket lg:', lg)
+  // Step 2: whenever bracketLg changes, reload all data for that season
+  useEffect(() => {
+    if (!bracketLg) return
+    const load = async () => {
+      setLoading(true)
+      setSelectedSlot(null)
 
-      // Step 2: load everything scoped to that exact lg
-      const [{ data: pgames }, { data: hist }, { data: seasonH }, { data: gStats }] = await Promise.all([
-        supabase.from('playoff_games').select('*').eq('lg', lg)
+      const [
+        { data: pgames },
+        { data: regSeasonAll },
+        { data: regSeasonCurrent },
+        { data: gStats },
+        { data: playoffStatsAll },
+      ] = await Promise.all([
+        // Bracket data — full playoff_games row for this lg
+        supabase.from('playoff_games').select('*').eq('lg', bracketLg)
           .order('round').order('series_number').order('game_number'),
-        // All-time regular season games (all lgs)
+        // All-time reg season games (all lgs)
         supabase.from('games')
           .select('id,home,away,score_home,score_away,ot,lg')
-          .not('score_home', 'is', null)
-          .or('mode.eq.Season,mode.eq.season,mode.ilike.season%,mode.ilike.regular%'),
-        // This season games only
+          .not('score_home', 'is', null),
+        // This season reg season games
         supabase.from('games')
           .select('id,home,away,score_home,score_away,ot,lg')
-          .eq('lg', lg)
-          .not('score_home', 'is', null)
-          .or('mode.eq.Season,mode.eq.season,mode.ilike.season%,mode.ilike.regular%'),
-        // Game stats for this exact season
+          .eq('lg', bracketLg)
+          .not('score_home', 'is', null),
+        // Game stats for this lg — reg season + playoffs (no type filter)
         supabase.from('game_stats_team')
           .select('*')
-          .eq('season', lg),
+          .eq('season', bracketLg),
+        // All-time playoff scores via game_stats_team — has correct home/away + scores for all lgs
+        supabase.from('game_stats_team')
+          .select('id,season,home,away,home_score,away_score,ot_flag,playoff_game_id')
+          .not('playoff_game_id', 'is', null),
       ])
 
-      console.log('[BnB] pgames:', pgames?.length, '| seasonGames:', seasonH?.length, '| gameStats:', gStats?.length)
-      console.log('[BnB] gameStats sample:', gStats?.slice(0,2).map(r => r.home+'v'+r.away+' s:'+r.season))
+      // Normalize game_stats_team playoff rows to the same shape as games rows for computeH2H
+      // game_stats_team already has correct home/away designation + scores
+      const normalizePOStats = (rows) => (rows||[]).map(g => ({
+        id:         g.playoff_game_id,  // use playoff_game_id as the unique id
+        home:       g.home,
+        away:       g.away,
+        score_home: g.home_score,
+        score_away: g.away_score,
+        ot:         g.ot_flag,
+        lg:         g.season,           // season col = lg
+      }))
+
+      const allPlayoffNorm    = normalizePOStats(playoffStatsAll)
+      const seasonPlayoffNorm = allPlayoffNorm.filter(g => g.lg === bracketLg)
+
+      // Merge reg season + playoff rows for H2H consumption
+      const allGamesMerged    = [...(regSeasonAll||[]),     ...allPlayoffNorm]
+      const seasonGamesMerged = [...(regSeasonCurrent||[]), ...seasonPlayoffNorm]
+
+      console.log('[BnB] lg:', bracketLg,
+        '| pgames:', pgames?.length,
+        '| seasonGames (reg+po):', seasonGamesMerged.length,
+        '| allGames (reg+po):', allGamesMerged.length,
+        '| gameStats:', gStats?.length,
+        '| playoffStats all-time:', allPlayoffNorm.length)
 
       setPlayoffGames(pgames || [])
-      setAllGames(hist || [])
-      setSeasonGames(seasonH || [])
+      setAllGames(allGamesMerged)
+      setSeasonGames(seasonGamesMerged)
       setGameStats(gStats || [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [bracketLg])
 
   const { leftRounds, rightRounds, champSlot, nRounds } = useMemo(() => {
     if (!playoffGames.length) return { leftRounds:[], rightRounds:[], champSlot:null, nRounds:0 }
@@ -884,7 +922,30 @@ export default function PodcastBracket() {
           <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'5px 14px 3px', borderBottom:'1px solid rgba(204,26,26,0.15)' }}>
             <div style={{ width:3, height:20, background: T.accent, borderRadius:2 }} />
             <div style={{ fontSize:18, fontWeight:900, color:'#fff', letterSpacing:'0.18em' }}>PLAYOFF BRACKET</div>
-            {bracketLg && <div style={{ fontSize:12, color: T.accent, letterSpacing:'0.2em', fontWeight:700 }}>{bracketLg}</div>}
+            {/* Season selector */}
+            {availableLgs.length > 0 && (
+              <select
+                value={bracketLg}
+                onChange={e => setBracketLg(e.target.value)}
+                style={{
+                  background: '#0f0f0f',
+                  border: '1px solid rgba(204,26,26,0.4)',
+                  borderRadius: 3,
+                  color: T.accent,
+                  fontFamily: T.font,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: '0.15em',
+                  padding: '3px 8px',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                {availableLgs.map(lg => (
+                  <option key={lg} value={lg} style={{ background: '#0f0f0f', color: T.accent }}>{lg}</option>
+                ))}
+              </select>
+            )}
             <div style={{ flex:1, height:1, background:'linear-gradient(90deg,rgba(204,26,26,0.3),transparent)' }} />
             <div style={{ fontSize:11, color: T.textMid, letterSpacing:'0.15em', fontWeight:700 }}>CLICK MATCHUP → H2H BELOW</div>
           </div>

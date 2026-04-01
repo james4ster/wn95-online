@@ -93,8 +93,8 @@ function computeStandings(games) {
         away.otl++;
         away.pts += 1;
     
-        home._results.push('OTW');
-        away._results.push('OTL');
+        home._results.push('W');   // OTW counts as W for streak
+        away._results.push('L');   // OTL counts as L for streak
       } else {
         home.w++;
         home.pts += 2;
@@ -114,8 +114,8 @@ function computeStandings(games) {
         home.otl++;
         home.pts += 1;
     
-        away._results.push('OTW');
-        home._results.push('OTL');
+        away._results.push('W');  // Send W for streak component
+        home._results.push('L');  // L for streak component
       } else {
         away.w++;
         away.pts += 2;
@@ -1258,11 +1258,8 @@ export default function Standings() {
                                     ? 'sorted-cell'
                                     : ''
                                 } ${
-                                  s.streakType === 'W' || s.streakType === 'OTW'
-                                    ? 'streak-w'
-                                    : s.streakType === 'L' ||
-                                      s.streakType === 'OTL'
-                                    ? 'streak-l'
+                                  s.streakType === 'W' ? 'streak-w'
+                                : s.streakType === 'L' ? 'streak-l'
                                     : 'streak-t'
                                 }`}
                               >

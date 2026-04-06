@@ -93,8 +93,8 @@ function computeStandings(games) {
         away.otl++;
         away.pts += 1;
     
-        home._results.push('W');   // OTW counts as W for streak
-        away._results.push('L');   // OTL counts as L for streak
+        home._results.push('W');
+        away._results.push('L');
       } else {
         home.w++;
         home.pts += 2;
@@ -114,8 +114,8 @@ function computeStandings(games) {
         home.otl++;
         home.pts += 1;
     
-        away._results.push('W');  // Send W for streak component
-        home._results.push('L');  // L for streak component
+        away._results.push('W');
+        home._results.push('L');
       } else {
         away.w++;
         away.pts += 2;
@@ -130,9 +130,6 @@ function computeStandings(games) {
     if (sh === 0) away.shutouts++;
   });
 
-  // ── Compute current streak per team ──────────────────────────────────────
-  // Games are already processed in ascending id order so _streakResults
-  // holds results oldest→newest; we walk backwards to find the current run.
   const streakMap = {};
   Object.entries(teamMap).forEach(([code, t]) => {
     streakMap[code] = t._results || [];
@@ -153,7 +150,6 @@ function computeStandings(games) {
       }
     }
     const streak = streakType ? `${streakType}${streakCount}` : '';
-    // Positive = winning streak, negative = losing streak, for sort purposes
     const streakVal =
       streakType === 'W' || streakType === 'OTW'
         ? streakCount
@@ -206,6 +202,8 @@ function sortWithTiebreakers(teams, games) {
       } else {
         const enriched = withH2H(tier);
         enriched.sort((a, b) => {
+          // Within a pts tier: teams that have played rank above teams that haven't
+          if (b.gp !== a.gp && pts === 0) return b.gp - a.gp;
           if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
           if (b.w !== a.w) return b.w - a.w;
           return b.gd - a.gd;
@@ -520,13 +518,37 @@ export default function Standings() {
   });
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
+
+  // JS-driven breakpoint detection — avoids CSS column count mismatches in HTML tables
+  const [isMobileLandscape, setIsMobileLandscape] = useState(
+    () => window.matchMedia('(max-width: 932px) and (orientation: landscape)').matches
+  );
+  const [isMobilePortrait, setIsMobilePortrait] = useState(
+    () => window.matchMedia('(max-width: 932px) and (orientation: portrait)').matches
+  );
+  
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 932px) and (orientation: landscape)');
+    const mqp = window.matchMedia('(max-width: 932px) and (orientation: portrait)');
+    const update = () => {
+      setIsMobileLandscape(mql.matches);
+      setIsMobilePortrait(mqp.matches);
+    };
+    update();
+    mql.addEventListener('change', update);
+    mqp.addEventListener('change', update);
+    return () => {
+      mql.removeEventListener('change', update);
+      mqp.removeEventListener('change', update);
+    };
+  }, []);
   const tableContainerRef = useRef(null);
   const stickyScrollRef = useRef(null);
   const [seasonTeams, setSeasonTeams] = useState([]);
   const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(null);
-  const [rsGamesVs, setRsGamesVs] = useState(null); // Get # of games vs opponents for season
-  const [compactView, setCompactView] = useState(false); // Compact view option
-  const [fullScreenOpen, setFullScreenOpen] = useState(false); // Full Screen view option
+  const [rsGamesVs, setRsGamesVs] = useState(null);
+  const [compactView, setCompactView] = useState(false);
+  const [fullScreenOpen, setFullScreenOpen] = useState(false);
 
   useEffect(() => {
     if (!selectedLeague) {
@@ -569,7 +591,6 @@ export default function Standings() {
       const [
         { data: gamesData, error },
         { data: teamsData },
-     //   { data: scheduleData },
       ] = await Promise.all([
         supabase
           .from('games')
@@ -643,7 +664,6 @@ export default function Standings() {
     const standings = computeStandings(rawGames);
     const playedTeams = new Set(standings.map((s) => s.team));
     const zeroed = seasonTeams
-    
         .filter(({ abr }) => !playedTeams.has(abr))
         .map(({ abr, coach }) => ({
           team: abr, coach: coach || '',
@@ -652,9 +672,15 @@ export default function Standings() {
         }));
       return [...standings, ...zeroed].map((s) => {
         const gr = totalGamesPerTeam != null
-        ? Math.max(0, totalGamesPerTeam - (s.gp || 0))
-        : null;
-      return { ...s, gr, maxPts: gr != null ? (s.pts || 0) + gr * 2 : null };
+          ? Math.max(0, totalGamesPerTeam - (s.gp || 0))
+          : null;
+        return {
+          ...s,
+          gr,
+          maxPts: gr != null ? (s.pts || 0) + gr * 2 : null,
+          gf_per_g: s.gp > 0 ? s.gf / s.gp : null,
+          ga_per_g: s.gp > 0 ? s.ga / s.gp : null,
+        };
       });
     }, [rawGames, seasonTeams, totalGamesPerTeam]);
 
@@ -767,7 +793,6 @@ export default function Standings() {
         setTiebreakerInfo(null);
         return;
       }
-      // Don't show if teams haven't played yet
       const anyNearEnd = tiedTeams.some((t) => (t.gr ?? 0) <= 10);
         if (!anyNearEnd) {
           setTiebreakerInfo(null);
@@ -885,27 +910,40 @@ export default function Standings() {
   };
 
   const groupedStandings = getGroupedStandings();
+
+  // Column visibility driven by JS (not CSS) so thead and tbody always match
+  const showPerGame = !isMobilePortrait;   // desktop + landscape = show; portrait = hide
+  const showCoach   = !isMobileLandscape;  // desktop + portrait  = show; landscape = hide
+
+  // ── Column definitions ──────────────────────────────────────────────────
   const columns = [
-    { label: 'Rank', key: 'season_rank', width: '5px' },
-    { label: 'Team', key: 'team', width: '5px' },
-    { label: 'Coach', key: 'coach', width: '55px' },
-    { label: 'GP', key: 'gp', width: '5px' },
-    { label: 'W', key: 'w', width: '5px' },
-    { label: 'L', key: 'l', width: '5px' },
-    { label: 'T', key: 't', width: '5px' },
-    { label: 'OTL', key: 'otl', width: '5px' },
-    { label: 'Pts', key: 'pts', width: '5px' },
-    { label: 'Pts%', key: 'pts_pct', width: '10px' },
-    { label: 'GF', key: 'gf', width: '10px' },
-    { label: 'GA', key: 'ga', width: '10px' },
-    { label: 'GD', key: 'gd', width: '10px' },
-    { label: 'OTW', key: 'otw', width: '5px' },
-    { label: 'SO', key: 'shutouts', width: '5px' },
-    { label: 'STRK', key: 'streakVal', width: '5px' },
-    { label: 'GR', key: 'gr', width: '5px' },
+    { label: 'Rank',    key: 'season_rank', width: '5px' },
+    { label: 'Team',    key: 'team',        width: '5px' },
+    ...(showCoach   ? [{ label: 'Coach',   key: 'coach',    width: '55px' }] : []),
+    { label: 'GP',      key: 'gp',          width: '5px' },
+    { label: 'W',       key: 'w',           width: '5px' },
+    { label: 'L',       key: 'l',           width: '5px' },
+    { label: 'T',       key: 't',           width: '5px' },
+    { label: 'OTL',     key: 'otl',         width: '5px' },
+    { label: 'Pts',     key: 'pts',         width: '5px' },
+    { label: 'Pts%',    key: 'pts_pct',     width: '10px' },
+    { label: 'GF',      key: 'gf',          width: '10px' },
+    ...(showPerGame ? [{ label: 'GF/G',  key: 'gf_per_g', width: '10px' }] : []),
+    { label: 'GA',      key: 'ga',          width: '10px' },
+    ...(showPerGame ? [{ label: 'GA/G',  key: 'ga_per_g', width: '10px' }] : []),
+    { label: 'GD',      key: 'gd',          width: '10px' },
+    { label: 'OTW',     key: 'otw',         width: '5px' },
+    { label: 'SO',      key: 'shutouts',    width: '5px' },
+    { label: 'STRK',    key: 'streakVal',   width: '5px' },
+    { label: 'GR',      key: 'gr',          width: '5px' },
     { label: <><span className="col-full">MAX PTS</span><span className="col-short">MAX</span></>, key: 'maxPts', width: '5px' },
   ];
+
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
+
+  // Helper: format per-game values for display
+  const gfPerG = (s) => (s.gf_per_g != null ? s.gf_per_g.toFixed(2) : '—');
+  const gaPerG = (s) => (s.ga_per_g != null ? s.ga_per_g.toFixed(2) : '—');
 
   return (
     <div className="standings-page">
@@ -1056,11 +1094,10 @@ export default function Standings() {
                             key={col.key}
                             onClick={() => handleSort(col.key)}
                             style={{ width: col.width }}
-                            className={`${
-                              activeSortKey === col.key ? 'sorted-column' : ''
-                            } ${
-                              col.key === 'season_rank' ? 'rank-column' : ''
-                            }`}
+                            className={[
+                              activeSortKey === col.key ? 'sorted-column' : '',
+                              col.key === 'season_rank' ? 'rank-column' : '',
+                            ].filter(Boolean).join(' ')}
                           >
                             <div className="th-content">
                               <span>{col.label}</span>
@@ -1154,123 +1191,47 @@ export default function Standings() {
                                   <span className="team-code">{s.team}</span>
                                 </div>
                               </td>
-                              <td className="coach-cell">{s.coach}</td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'gp' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.gp}
+                              {showCoach && <td className="coach-cell">{s.coach}</td>}
+                              <td className={`stat-cell ${activeSortKey === 'gp' ? 'sorted-cell' : ''}`}>{s.gp}</td>
+                              <td className={`stat-cell ${activeSortKey === 'w' ? 'sorted-cell' : ''}`}>{s.w}</td>
+                              <td className={`stat-cell ${activeSortKey === 'l' ? 'sorted-cell' : ''}`}>{s.l}</td>
+                              <td className={`stat-cell ${activeSortKey === 't' ? 'sorted-cell' : ''}`}>{s.t}</td>
+                              <td className={`stat-cell ${activeSortKey === 'otl' ? 'sorted-cell' : ''}`}>{s.otl}</td>
+                              <td className={`stat-cell pts-cell ${activeSortKey === 'pts' ? 'sorted-cell' : ''} ${isTied ? 'tied-pts' : ''}`}>{s.pts}</td>
+                              <td className={`stat-cell ${activeSortKey === 'pts_pct' ? 'sorted-cell' : ''}`}>
+                                {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
                               </td>
+                              <td className={`stat-cell ${activeSortKey === 'gf' ? 'sorted-cell' : ''}`}>{s.gf}</td>
+                              {showPerGame && (
+                                <td className={`stat-cell per-game-cell ${activeSortKey === 'gf_per_g' ? 'sorted-cell' : ''}`}>
+                                  {gfPerG(s)}
+                                </td>
+                              )}
+                              <td className={`stat-cell ${activeSortKey === 'ga' ? 'sorted-cell' : ''}`}>{s.ga}</td>
+                              {showPerGame && (
+                                <td className={`stat-cell ${activeSortKey === 'ga_per_g' ? 'sorted-cell' : ''}`}>
+                                  {gaPerG(s)}
+                                </td>
+                              )}
+
                               <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'w' ? 'sorted-cell' : ''
-                                }`}
+                                className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${activeSortKey === 'gd' ? 'sorted-cell' : ''}`}
                               >
-                                {s.w}
+                                {s.gd > 0 ? '+' : ''}{s.gd}
                               </td>
+                              <td className={`stat-cell ${activeSortKey === 'otw' ? 'sorted-cell' : ''}`}>{s.otw}</td>
+                              <td className={`stat-cell ${activeSortKey === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
                               <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'l' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.l}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 't' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.t}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'otl' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.otl}
-                              </td>
-                              <td
-                                className={`stat-cell pts-cell ${
-                                  activeSortKey === 'pts' ? 'sorted-cell' : ''
-                                } ${isTied ? 'tied-pts' : ''}`}
-                              >
-                                {s.pts}
-                              </td>
-                              <td
-                                className={`stat-cell pts-pct-cell ${
-                                  activeSortKey === 'pts_pct'
-                                    ? 'sorted-cell'
-                                    : ''
-                                }`}
-                              >
-                                {s.gp > 0
-                                  ? (s.pts / (s.gp * 2)).toFixed(3)
-                                  : '.000'}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'gf' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.gf}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'ga' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.ga}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  s.gd > 0
-                                    ? 'positive-gd'
-                                    : s.gd < 0
-                                    ? 'negative-gd'
-                                    : ''
-                                } ${
-                                  activeSortKey === 'gd' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.gd > 0 ? '+' : ''}
-                                {s.gd}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'otw' ? 'sorted-cell' : ''
-                                }`}
-                              >
-                                {s.otw}
-                              </td>
-                              <td
-                                className={`stat-cell ${
-                                  activeSortKey === 'shutouts'
-                                    ? 'sorted-cell'
-                                    : ''
-                                }`}
-                              >
-                                {s.shutouts}
-                              </td>
-                              <td
-                                className={`stat-cell streak-cell ${
-                                  activeSortKey === 'streakVal'
-                                    ? 'sorted-cell'
-                                    : ''
-                                } ${
+                                className={`stat-cell streak-cell ${activeSortKey === 'streakVal' ? 'sorted-cell' : ''} ${
                                   s.streakType === 'W' ? 'streak-w'
-                                : s.streakType === 'L' ? 'streak-l'
-                                    : 'streak-t'
+                                  : s.streakType === 'L' ? 'streak-l'
+                                  : 'streak-t'
                                 }`}
                               >
                                 {s.streak}
                               </td>
-                              <td className={`stat-cell ${activeSortKey === 'gr' ? 'sorted-cell' : ''}`}>
-                                    {s.gr ?? '—'}
-                              </td>
-                                  <td className={`stat-cell ${activeSortKey === 'maxPts' ? 'sorted-cell' : ''}`}>
-                                    {s.maxPts ?? '—'}
-                              </td>
+                              <td className={`stat-cell ${activeSortKey === 'gr' ? 'sorted-cell' : ''}`}>{s.gr ?? '—'}</td>
+                              <td className={`stat-cell ${activeSortKey === 'maxPts' ? 'sorted-cell' : ''}`}>{s.maxPts ?? '—'}</td>
                             </tr>
                             {playoffTeams && idx === playoffTeams - 1 && (
                               <tr className="playoff-cutoff-row">
@@ -1323,6 +1284,10 @@ export default function Standings() {
     tiedPtsSet={tiedPtsSet}
     rawGames={rawGames}
     totalGamesPerTeam={totalGamesPerTeam}
+    showPerGame={showPerGame}
+    showCoach={showCoach}
+    gfPerG={gfPerG}
+    gaPerG={gaPerG}
   />
 )}
 
@@ -1362,7 +1327,7 @@ export default function Standings() {
           border-radius: 12px;
           border: 3px solid #333;
           box-shadow: 0 0 20px rgba(0,0,0,.5),inset 0 0 20px rgba(0,0,0,.3);
-          justify-content: center;  /* add this */
+          justify-content: center;
         }
         .tab-button { display:flex; align-items:center; gap:.5rem; padding:.75rem 1.5rem; background:linear-gradient(180deg,#1a1a2e 0%,#0f0f1a 100%); border:2px solid #87CEEB; border-radius:8px; color:#87CEEB; font-family:'Press Start 2P',monospace; font-size:.65rem; cursor:pointer; transition:all .3s ease; box-shadow:0 0 10px rgba(135,206,235,.3),inset 0 0 10px rgba(135,206,235,.1); letter-spacing:1px; position:relative; overflow:hidden; }
         .tab-button::before { content:''; position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg,transparent,rgba(135,206,235,.3),transparent); transition:left .5s ease; }
@@ -1400,18 +1365,13 @@ export default function Standings() {
           display: inline-block;
           min-width: 34px;
           text-align: center;
-        
           background: #111;
           color: #ffb300;
-        
           border: 1px solid #ffb300;
           border-radius: 6px;
-        
           padding: .38rem .65rem;
-        
           box-shadow: none;
           text-shadow: none;
-        
           font-weight: 700;
         }
         .arcade-table th:last-child { border-right:none; }
@@ -1430,7 +1390,6 @@ export default function Standings() {
         .tied-row { cursor:default; }
         .row-banner-overlay {
           position: relative;
-        
           -webkit-mask-image: linear-gradient(
             to right,
             rgba(0,0,0,.95) 0%,
@@ -1440,7 +1399,6 @@ export default function Standings() {
             rgba(0,0,0,.05) 85%,
             rgba(0,0,0,0) 100%
           );
-        
           -webkit-mask-repeat: no-repeat;
           -webkit-mask-size: 100% 100%;
         }
@@ -1455,15 +1413,12 @@ export default function Standings() {
           position: absolute;
           left: 0;
           top: 50%;
-        
           transform: translateY(-50%);
           backface-visibility: hidden;
           will-change: transform;
-        
           height: 150%;
           width: auto;
           object-fit: contain;
-        
           filter: brightness(1.3);
         }
         .arcade-table tbody tr { position: relative; }
@@ -1505,8 +1460,11 @@ export default function Standings() {
         .coach-cell { color:#FFF; text-align:left; padding-left:1rem; }
         .pts-cell { font-weight:bold; color:#FFD700; }
         .pts-pct-cell { font-size:1.1rem; color:#87CEEB; }
-        .streak-cell { font-family:'VT323',monospace; font-size:1.4rem; font-weight:bold; letter-spacing:1px; }
-        
+        .streak-cell { font-family:'VT323',monospace; font-size:1.4rem;  letter-spacing:1px; }
+
+        /* Per-game columns */
+        .per-game-cell { font-size:1.05rem; color:#a0d4f5; }
+
         /* STREAK FORMATTING */
         .arcade-table td.streak-cell.streak-w { color:#00c853; }
         .arcade-table td.streak-cell.streak-l { color:#ff0000; }
@@ -1532,7 +1490,6 @@ export default function Standings() {
           cursor: pointer;
           transition: all .2s;
           display: flex; align-items: center; justify-content: center;
-          /* removed: position, right, top, transform */
         }
         .compact-toggle:hover {
           border-color: #FFD700; color: #FFD700;
@@ -1544,14 +1501,10 @@ export default function Standings() {
           box-shadow: 0 0 12px rgba(255,140,0,.4);
         }
 
-        
-
         /* GD FORMATTING */
-
         .arcade-table td.positive-gd { color:#00c853; }
         .arcade-table td.negative-gd { color:#ff0000; }
-        
-       
+
         .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }
         .arcade-table td:not(.sorted-cell) { background:transparent; }
         .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:2rem; }
@@ -1561,11 +1514,11 @@ export default function Standings() {
         @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
         .no-data { display:flex; justify-content:center; align-items:center; min-height:400px; }
         .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FFD700; letter-spacing:3px; }
-        
-        
 
-        /* MOBILE */
-        @media (max-width: 768px) {
+        /* Per-game cols and coach col visibility is handled in JS, not CSS */
+
+        /* PORTRAIT MOBILE layout */
+        @media (max-width: 932px) and (orientation: portrait) {
           .row-banner-overlay { display: none; }
           .view-tabs { flex-direction: column; gap: .5rem; padding: .5rem; }
           .tab-button { padding: .6rem 1rem; font-size: .55rem; justify-content: center; }
@@ -1604,24 +1557,15 @@ export default function Standings() {
           }
         }
         
-        /* Landscape full width */
-
         .col-short { display: none; }
 
+        /* LANDSCAPE MOBILE — tight layout, coach hidden, per-game shown (handled in JS) */
         @media (max-width: 932px) and (orientation: landscape) {
           .standings-page { padding: .5rem !important; }
           .col-full { display: none; }
           .col-short { display: inline; }
-        
-          /* Hide coach column */
-          .arcade-table th:nth-child(3),
-          .arcade-table td:nth-child(3) {
-            display: none !important;
-          }
-        
           .team-code { display: none !important; }
         
-          /* Let table size itself — no fixed layout */
           .arcade-table {
             width: 100% !important;
             min-width: unset !important;
@@ -1637,12 +1581,11 @@ export default function Standings() {
             overflow-x: auto !important;
           }
         
-          /* Tighten padding so columns fit */
-          .arcade-table th { padding: .35rem .15rem !important; font-size: .38rem !important; }
-          .arcade-table td { padding: .2rem .15rem !important; font-size: .9rem !important; }
+          .arcade-table th { padding: .35rem .1rem !important; font-size: .36rem !important; }
+          .arcade-table td { padding: .2rem .1rem !important; font-size: .85rem !important; }
+          .per-game-cell { font-size: .8rem !important; }
           .rank-badge { min-width: 18px !important; padding: .1rem .2rem !important; font-size: .38rem !important; }
           .logo-container { width: 24px !important; height: 24px !important; }
-        }
         }
       `}</style>
     </div>

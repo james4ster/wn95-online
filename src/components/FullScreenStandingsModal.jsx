@@ -62,6 +62,10 @@ export default function FullScreenStandingsModal({
   eliminated,
   tiedPtsSet,
   rawGames,
+  showPerGame,   
+  showCoach,    
+  gfPerG,        
+  gaPerG,
 }) {
   const [sortConfig, setSortConfig] = useState({ key: 'default', direction: 'descending' });
   const reverseSortColumns = ['ga', 'l', 'otl'];
@@ -201,8 +205,8 @@ export default function FullScreenStandingsModal({
                             </div>
                           </td>
 
-                          {/* Coach */}
-                          <td className="fsm-td fsm-td-coach">{s.coach}</td>
+                          {/* Coach — conditional */}
+                          {showCoach && <td className="fsm-td fsm-td-coach">{s.coach}</td>}
 
                           {/* GP */}
                           <td className={`fsm-td fsm-stat ${activeSortKey === 'gp' ? 'fsm-sorted-cell' : ''}`}>{s.gp}</td>
@@ -217,13 +221,25 @@ export default function FullScreenStandingsModal({
                           {/* Pts */}
                           <td className={`fsm-td fsm-stat fsm-pts ${activeSortKey === 'pts' ? 'fsm-sorted-cell' : ''} ${isTied ? 'fsm-tied-pts' : ''}`}>{s.pts}</td>
                           {/* Pts% */}
-                          <td className={`fsm-td fsm-stat fsm-pct ${activeSortKey === 'pts_pct' ? 'fsm-sorted-cell' : ''}`}>
+                          <td className={`fsm-td fsm-stat ${activeSortKey === 'pts_pct' ? 'fsm-sorted-cell' : ''}`}>
                             {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
                           </td>
                           {/* GF */}
                           <td className={`fsm-td fsm-stat ${activeSortKey === 'gf' ? 'fsm-sorted-cell' : ''}`}>{s.gf}</td>
+                          {/* GF/G */}
+                            {showPerGame && (
+                              <td className={`fsm-td fsm-stat ${activeSortKey === 'gf_per_g' ? 'fsm-sorted-cell' : ''}`}>
+                                {gfPerG(s)}
+                              </td>
+                            )}
                           {/* GA */}
                           <td className={`fsm-td fsm-stat ${activeSortKey === 'ga' ? 'fsm-sorted-cell' : ''}`}>{s.ga}</td>
+                          {/* GA/G */}
+                              {showPerGame && (
+                                <td className={`fsm-td fsm-stat ${activeSortKey === 'ga_per_g' ? 'fsm-sorted-cell' : ''}`}>
+                                  {gaPerG(s)}
+                                </td>
+                              )}
                           {/* GD */}
                           <td className={`fsm-td fsm-stat ${s.gd > 0 ? 'fsm-pos' : s.gd < 0 ? 'fsm-neg' : ''} ${activeSortKey === 'gd' ? 'fsm-sorted-cell' : ''}`}>
                             {s.gd > 0 ? '+' : ''}{s.gd}
@@ -450,7 +466,7 @@ export default function FullScreenStandingsModal({
         .fsm-pct  { color: #87CEEB; font-size: 1rem; }
         .fsm-pos  { color: #00c853; }
         .fsm-neg  { color: #ff4444; }
-        .fsm-streak { font-weight: bold; }
+       
         .fsm-streak-w { color: #00c853; }
         .fsm-streak-l { color: #ff4444; }
         .fsm-streak-t { color: #888; }

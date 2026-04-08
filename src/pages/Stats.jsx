@@ -1081,7 +1081,7 @@ function secondsToMMSS(secs) {
 }
 
 // ─── Player stats aggregation ─────────────────────────────────────────────
-function buildPlayerStats(rows) {
+function buildPlayerStats(rows, teamGPMap) {
   const m = new Map();
 
   const ensurePlayer = (name, team) => {
@@ -1152,7 +1152,11 @@ function buildPlayerStats(rows) {
     ({ _goalsByGame, _assistsByGame, _pointsByGame, ...s }) => {
       const assists = s.primary_assists + s.secondary_assists;
       const pts = s.goals + assists;
-      const gp = new Set(Object.keys(_pointsByGame)).size;
+
+      // GP = team's total games played
+      const teamCode = (s.team || '').trim().toUpperCase();
+      const gpSet = teamGPMap?.get(teamCode);
+      const gp = gpSet ? gpSet.size : new Set(Object.keys(_pointsByGame)).size;
 
       let hat_tricks = 0;
       let multi_goal_games = 0;
@@ -1685,7 +1689,7 @@ const PLAYER_COLS = [
   { key: 'rank', label: '#', tip: 'Rank', align: 'center' },
   { key: 'name', label: 'PLAYER', tip: 'Player Name', align: 'left' },
   { key: 'team', label: 'TEAM', tip: 'Team', align: 'center' },
-  { key: 'gp', label: 'GP', tip: 'Games With a Point', align: 'center' },
+  { key: 'gp', label: 'GP', tip: 'Games Played', align: 'center' },
   { key: 'pts', label: 'PTS', tip: 'Total Points', align: 'center' },
   { key: 'goals', label: 'G', tip: 'Goals', align: 'center' },
   { key: 'assists', label: 'A', tip: 'Total Assists', align: 'center' },
@@ -2316,6 +2320,8 @@ export default function Stats() {
   const [h2hSort, dispatchH2hSort] = useState({ key: 'pct', dir: 'desc' });
   const [teamSort, dispatchTeamSort] = useState({ key: 'gf', dir: 'desc' });
 
+  const [playerTeamGPMap, setPlayerTeamGPMap] = useState(new Map());
+  
   const sortKey = sort.key;
   const sortDir = sort.dir;
   const h2hSortKey = h2hSort.key;
@@ -2584,14 +2590,11 @@ export default function Stats() {
         .not('team_a_score', 'is', null),
     ]).then(([scoringRes, gamesRes, playoffGamesRes]) => {
       if (scoringRes.error) {
-        console.error(
-          '[Stats] game_raw_scoring error:',
-          scoringRes.error.message
-        );
+        console.error('[Stats] game_raw_scoring error:', scoringRes.error.message);
         setPlayerStatsLoading(false);
         return;
       }
-
+    
       // Build game score lookups for GWG calculation
       const gameScores = new Map();
       for (const g of gamesRes.data || []) {
@@ -2609,6 +2612,18 @@ export default function Stats() {
           score_home: g.team_a_score,
           score_away: g.team_b_score,
         });
+      }
+    
+      // Build teamCode → Set<gameKey> for GP lookup
+      const teamGPMap = new Map();
+      for (const [gameKey, game] of gameScores.entries()) {
+        const home = (game.home || '').trim().toUpperCase();
+        const away = (game.away || '').trim().toUpperCase();
+        for (const code of [home, away]) {
+          if (!code) continue;
+          if (!teamGPMap.has(code)) teamGPMap.set(code, new Set());
+          teamGPMap.get(code).add(gameKey);
+        }
       }
 
       // Annotate GWG: group goals by game, find winning team's winning goal
@@ -2675,7 +2690,9 @@ export default function Stats() {
       } else if (modeFilter === 'PLAYOFFS') {
         rows = rows.filter((r) => r.playoff_game_id != null);
       }
+
       setPlayerStatsData(rows);
+      setPlayerTeamGPMap(teamGPMap);
       setPlayerStatsLoading(false);
     });
   }, [tab, playerSeasonFilter, playerSeasonFrom, selectedLeague, modeFilter]);
@@ -2812,10 +2829,11 @@ export default function Stats() {
   }, [teamRows, teamSortKey, teamSortDir]);
 
   // ── Player rows ──────────────────────────────────────────────────────────
+      
   const playerRows = useMemo(() => {
     if (!playerStatsData.length) return [];
-    return buildPlayerStats(playerStatsData);
-  }, [playerStatsData]);
+    return buildPlayerStats(playerStatsData, playerTeamGPMap);
+  }, [playerStatsData, playerTeamGPMap]);
 
   const sortedPlayerRows = useMemo(() => {
     return [...playerRows].sort((a, b) => {

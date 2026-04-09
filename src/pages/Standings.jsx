@@ -10,6 +10,7 @@ import { useLeague } from '../components/LeagueContext';
 import PlayoffBracket from '../components/PlayoffBracket';
 import { createPortal } from 'react-dom';
 import FullScreenStandingsModal from '../components/FullScreenStandingsModal';
+import { usePersistedState } from '../hooks/usePersistedState';
 
 function computeH2H(teamA, teamB, games) {
   let ptsA = 0,
@@ -505,7 +506,7 @@ function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
 export default function Standings() {
   const { selectedLeague } = useLeague();
   const [seasons, setSeasons] = useState([]);
-  const [selectedSeason, setSelectedSeason] = useState('');
+  const [selectedSeason, setSelectedSeason] = usePersistedState('standings_season', '');
   const [rawGames, setRawGames] = useState([]);
   const [loading, setLoading] = useState(false);
   const [playoffTeams, setPlayoffTeams] = useState(null);
@@ -567,7 +568,10 @@ export default function Standings() {
       }
       const filtered = data.filter((s) => s.lg.startsWith(selectedLeague));
       setSeasons(filtered);
-      if (filtered.length > 0) setSelectedSeason(filtered[0].lg);
+      if (filtered.length > 0) setSelectedSeason(prev => {
+        const match = filtered.find(s => s.lg === prev);
+        return match ? prev : filtered[0].lg;
+      });
     })();
   }, [selectedLeague]);
 
@@ -625,7 +629,7 @@ export default function Standings() {
   useEffect(() => {
     if (!selectedSeason) {
       setDivisionMap([]);
-      setActiveView('overall');
+      setActiveView(prev => prev === 'playoffs' ? prev : 'overall');
       return;
     }
     (async () => {
@@ -637,7 +641,7 @@ export default function Standings() {
         console.error('Error fetching division map:', error);
         setDivisionMap([]);
       } else setDivisionMap(data || []);
-      setActiveView('overall');
+      setActiveView(prev => prev === 'playoffs' ? prev : 'overall');
     })();
   }, [selectedSeason]);
 

@@ -460,6 +460,7 @@ export default function MainNavigation() {
           .main-navigation {
             position: sticky;
             top: auto;
+            z-index: 1000; 
           }
         }
       `}</style>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLeague } from '../components/LeagueContext';
 import { supabase } from '../utils/supabaseClient';
+import { usePersistedState } from '../hooks/usePersistedState';
 
 const GAMES_PER_OPPONENT = 2; // adjust if format changes
 
@@ -8,9 +9,9 @@ export default function Schedule() {
   const { selectedLeague } = useLeague();
 
   const [seasons, setSeasons] = useState([]);
-  const [selectedSeason, setSelectedSeason] = useState('');
+  const [selectedSeason, setSelectedSeason] = usePersistedState('schedule_season', '');
   const [teams, setTeams] = useState([]);
-  const [selectedTeamAbr, setSelectedTeamAbr] = useState('');
+  const [selectedTeamAbr, setSelectedTeamAbr] = usePersistedState('schedule_team', '');
   const [completedGames, setCompletedGames] = useState([]);
   const [remainingOpponents, setRemainingOpponents] = useState([]);
   const [h2hRecords, setH2hRecords] = useState({});
@@ -37,9 +38,12 @@ export default function Schedule() {
         .from('teams').select('team, abr').eq('lg', selectedSeason).order('team', { ascending: true });
       if (error || !data || data.length === 0) { setTeams([]); setSelectedTeamAbr(''); return; }
       setTeams(data);
-      setSelectedTeamAbr(data[0].abr);
-    })();
-  }, [selectedSeason]);
+      setSelectedTeamAbr(prev => {
+        const match = data.find(t => t.abr.toLowerCase() === prev.toLowerCase());
+        return match ? prev : data[0].abr;
+      });   
+          })(); 
+        }, [selectedSeason]);  
 
   useEffect(() => {
     if (!selectedSeason || !selectedTeamAbr) {

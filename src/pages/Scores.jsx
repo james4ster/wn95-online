@@ -59,20 +59,22 @@ function GameCard({ game, selectedTeam, index, onOpenModal, streak, isAll }) {
       className={`gc gc-${result}`}
       style={{ '--stripe': RC.s, '--glow': RC.g, animationDelay: `${index * 0.04}s` }}
     >
-      <div className="gc-row" style={isAll ? { gridTemplateColumns: '1fr 180px 1fr 120px' } : {}}>
+      <div className="gc-row">
           {/* Result badge */}
-          {!isAll && (
-            <div className="gc-badge" style={{ color: RC.c, borderColor: `${RC.c}60`, background: `${RC.c}14` }}>
-              {game.isPlayoff ? (
-                <>
-                  <div>{BADGE[result]}</div>
-                  <div style={{ fontSize: '.42rem', opacity: 0.85, marginTop: 3, letterSpacing: 1 }}>
-                    R{game.round}·G{game.game_number}
-                  </div>
-                </>
-              ) : BADGE[result]}
-            </div>
-          )}
+          <div className="gc-badge" style={
+            isAll
+              ? { visibility: 'hidden' }
+              : { color: RC.c, borderColor: `${RC.c}60`, background: `${RC.c}14` }
+          }>
+            {!isAll && (game.isPlayoff ? (
+              <>
+                <div>{BADGE[result]}</div>
+                <div style={{ fontSize: '.42rem', opacity: 0.85, marginTop: 3, letterSpacing: 1 }}>
+                  R{game.round}·G{game.game_number}
+                </div>
+              </>
+            ) : BADGE[result])}
+          </div>
       
         {/* Away team + streak if selected */}
         <div className="gc-side gc-away">
@@ -420,12 +422,51 @@ export default function Scores() {
            RESPONSIVE
         ════════════════════════════════════════════════════════════════════ */
         @media(max-width:640px){
-          .sp { padding:1rem 1rem 4rem; }
+          .sp { padding:1rem .6rem 4rem; }
           .sp-led { font-size:1.5rem; letter-spacing:3px; }
-          .gc-row { grid-template-columns:44px 1fr 150px 1fr auto; gap:.45rem; padding:.8rem .7rem; }
-          .gc-code { font-size:.64rem; }
-          .gc-num  { font-size:2.6rem; }
-          .streak-badge { font-size:.4rem; padding:.18rem .28rem; }
+        
+          .sp-fx { gap:.75rem; }
+          .sp-sel { min-width:120px; font-size:1.1rem; padding:.45rem .7rem; }
+        
+          /* Hide overview button and team codes */
+          .gc-actions { display:none; }
+          .gc-code { display:none; }
+        
+          /* 4-col grid: badge | away(logo) | score | home(logo) */
+          .gc-row {
+            grid-template-columns: 42px 52px 1fr 52px !important;
+            gap:.4rem !important;
+            padding:.65rem .6rem !important;
+            align-items:center;
+          }
+        
+          /* Sides: just the logo, centered */
+          .gc-side {
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:0;
+          }
+          .gc-away { justify-content:center; }
+          .gc-home { justify-content:center; }
+        
+          /* Make logos bigger and visible */
+          .gc-side img {
+            width:42px !important;
+            height:42px !important;
+          }
+        
+          /* Streak badge sits outside the logo area — hide on portrait to save space */
+          .streak-badge { display:none; }
+        
+          /* Score pill */
+          .gc-score-pill { padding:.4rem .3rem; }
+          .gc-num  { font-size:2.6rem; min-width:20px; }
+          .gc-sep  { min-width:22px; }
+          .gc-dash { font-size:2rem; }
+        
+          /* Badge (W/L) — keep it */
+          .gc-badge { font-size:.48rem; padding:.28rem .35rem; }
         }
       `}</style>
 

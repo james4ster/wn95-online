@@ -451,6 +451,7 @@ export default function MainNavigation() {
           .nav-container { padding: 0 8px; height: 60px; overflow: hidden; }
           .nav-center { gap: 0.4rem; }
           .nav-link { padding: 0.5rem 0.65rem; font-size: 0.55rem; }
+          .nav-right { display: none; }
           .link-label { display: none; }
           .nav-icon { font-size: 1.1rem; }
           .discord-label { display: none; }

@@ -48,8 +48,8 @@ function AppShell() {
 
   return (
     <div className="app">
-      <MainNavigation />
       <ScoresBar />
+      <MainNavigation />
       <LeagueSubNav />
       <Routes>
         <Route path="/" element={<Home />} />

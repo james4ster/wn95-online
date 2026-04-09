@@ -15,7 +15,8 @@ body {
 
 .app {
   height: auto !important;
-  overflow-x: visible !important;
+  overflow-x: clip !important;  
+  position: relative;
 }
 
 /* Global retro background */

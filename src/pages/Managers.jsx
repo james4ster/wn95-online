@@ -1,16 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import { usePersistedState } from '../hooks/usePersistedState';
 
 export default function Managers() {
   const [managers, setManagers]           = useState([]);
   const [managerMeta, setManagerMeta]     = useState({});
-  const [selectedMgr, setSelectedMgr]     = useState('');
+  const [selectedMgr, setSelectedMgr] = usePersistedState('managers_selected', '');
   const [teams, setTeams]                 = useState([]);
   const [careerStats, setCareerStats]     = useState(null);
   const [leagueStats, setLeagueStats]     = useState({});
   const [championships, setChampionships] = useState([]);
   const [loading, setLoading]             = useState(false);
-  const [activeTab, setActiveTab]         = useState('overview');
+  const [activeTab, setActiveTab] = usePersistedState('managers_tab', 'overview');
   const [twitchLive, setTwitchLive]       = useState(false);
   const [bannerAbr, setBannerAbr]         = useState(null);
 
@@ -30,7 +31,9 @@ export default function Managers() {
               mapLower[m.coach_name?.toLowerCase().trim()] = m;
             });
             setManagerMeta(map);
-      if (unique.length > 0) setSelectedMgr(unique[0]);
+            if (unique.length > 0) setSelectedMgr(prev => {
+              return unique.includes(prev) ? prev : unique[0];
+            });
     })();
   }, []);
 
@@ -672,7 +675,7 @@ const leagueGroups = uniqueTeams.reduce((acc, t) => {
         <div className="control-group">
           <label>SELECT MANAGER</label>
           <select className="arcade-select arcade-select--wide" value={selectedMgr}
-            onChange={e => { setSelectedMgr(e.target.value); setActiveTab('overview'); }}
+            onChange={e => { setSelectedMgr(e.target.value); }}
             disabled={!managers.length}>
             <option value="">SELECT A MANAGER</option>
             {managers.map(m => <option key={m} value={m}>{m}</option>)}

@@ -448,17 +448,19 @@ export default function MainNavigation() {
           .nav-center { flex: 1; justify-content: center; }
         }
         @media (max-width: 768px) {
-          .nav-container { padding: 0 8px; height: 60px; }
+          .nav-container { padding: 0 8px; height: 60px;  }
           .nav-center { gap: 0.4rem; }
           .nav-link { padding: 0.5rem 0.65rem; font-size: 0.55rem; }
           .link-label { display: none; }
           .nav-icon { font-size: 1.1rem; }
           .discord-label { display: none; }
           .discord-btn-inner { padding: 0.5rem 0.75rem; }
+          .discord-live-dot { display: none; }
           .league-dropdown-menu { min-width: 230px; }
           .main-navigation {
-            position: static;
+            position: sticky;
             top: auto;
+            z-index: 1000; 
           }
         }
       `}</style>

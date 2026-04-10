@@ -486,7 +486,6 @@ const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
    Now receives: teamNameMap (abr→{city,nickname,full}) + topScorers
 ───────────────────────────────────────────────────────────── */
 async function fetchGazetteEdition({ leagueLabel, currentSeason, isPlayoffActive }) {
-  const today = new Date().toISOString().split('T')[0];
   const isOffseason = currentSeason?.status === 'offseason';
   const season = currentSeason?.lg || leagueLabel;
 
@@ -508,17 +507,15 @@ async function fetchGazetteEdition({ leagueLabel, currentSeason, isPlayoffActive
       .limit(1)
       .maybeSingle();
 
-    const cached = res.data;
-    if (!cached?.data) {
-      console.log('[Gazette] No cache found for', cacheKey);
-      return null;
-    }
-    if (cached.date === today) {
-      console.log('[Gazette] ✅ Serving cached edition for', cacheKey);
+      const cached = res.data;
+      if (!cached?.data) {
+        console.log('[Gazette] No cache found for', cacheKey);
+        return null;
+      }
+      // Serve most recent row regardless of date — cron writes UTC dates which
+      // can be ahead of the browser's local date, causing a false "stale" result.
+      console.log('[Gazette] ✅ Serving cached edition for', cacheKey, '(date:', cached.date, ')');
       return typeof cached.data === 'string' ? JSON.parse(cached.data) : cached.data;
-    }
-    console.log('[Gazette] Cache is stale for', cacheKey);
-    return null;
   } catch (e) {
     console.log('[Gazette] Cache lookup failed:', e.message);
     return null;

@@ -20,6 +20,7 @@ import StreamOverlayMatchupDefault from './overlays/StreamOverlayMatchupDefault'
 import StreamOverlayMatchupIcey from './overlays/StreamOverlayMatchupIcey';
 import PodcastOverlay from './overlays/PodcastOverlay';
 import PodcastCtrl from './overlays/PodcastCtrl';
+import PowerRankings from './pages/PowerRankings';
 //import GettingStarted from './pages/GettingStarted';
 
 const OVERLAY_PATHS = [
@@ -57,6 +58,7 @@ function AppShell() {
         <Route path="/league/:leagueCode/stats" element={<Stats />} />
         <Route path="/league/:leagueCode/managers" element={<Managers />} />
         <Route path="/league/:leagueCode/schedule" element={<Schedule />} />
+        <Route path="/league/:leagueId/power-rankings" element={<PowerRankings />} />
         <Route path="/players" element={<Players />} />
         <Route path="/league/:leagueCode/teams" element={<Teams />} />
         <Route path="/league/:leagueCode/scores" element={<Scores />} />

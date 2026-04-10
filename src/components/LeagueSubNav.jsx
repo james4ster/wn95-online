@@ -36,6 +36,14 @@ export default function LeagueSubNav() {
         </NavLink>
 
         <NavLink
+          to={`/league/${selectedLeague}/power-rankings`}
+          className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
+        >
+          <span className="sni">🔄</span>
+          <span className="snt">POWER RANKINGS</span>
+        </NavLink>
+
+        <NavLink
           to={`/league/${selectedLeague}/teams`}
           className={({ isActive }) => `snl${isActive ? ' snl-on' : ''}`}
         >

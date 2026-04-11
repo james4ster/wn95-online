@@ -14,11 +14,11 @@
   </url>
   <url>
     <loc>https://wn95-online.vercel.app/media</loc>
-    <changefreq>weekly</changefreq>
+    <changefreq>daily</changefreq>
     <priority>0.6</priority>
   </url>
 
-  <!-- W17 (current season) -->
+  <!-- League W -->
   <url>
     <loc>https://wn95-online.vercel.app/league/W/standings</loc>
     <changefreq>daily</changefreq>
@@ -56,6 +56,90 @@
   </url>
   <url>
     <loc>https://wn95-online.vercel.app/league/W/managers</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- League Q -->
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/standings</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/scores</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/schedule</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/power-rankings</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/teams</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/stats</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/transactions</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/Q/managers</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <!-- League V -->
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/standings</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/scores</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/schedule</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/power-rankings</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/teams</loc>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/stats</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/transactions</loc>
+    <changefreq>daily</changefreq>
+    <priority>0.6</priority>
+  </url>
+  <url>
+    <loc>https://wn95-online.vercel.app/league/V/managers</loc>
     <changefreq>weekly</changefreq>
     <priority>0.6</priority>
   </url>

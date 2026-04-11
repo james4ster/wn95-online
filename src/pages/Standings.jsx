@@ -580,6 +580,7 @@ export default function Standings() {
       setPlayoffTeams(null);
       return;
     }
+    setTiebreakerInfo(null);
     const season = seasons.find((s) => s.lg === selectedSeason);
     setPlayoffTeams(season?.playoff_teams ?? null);
     setRsGamesVs(season?.rs_games_vs ?? null);
@@ -742,6 +743,7 @@ export default function Standings() {
   // Auto-open fullscreen on mobile
   useEffect(() => {
     if (computedStandings.length > 0 && window.innerWidth <= 932) {
+      setTiebreakerInfo(null);
       setFullScreenOpen(true);
     }
   }, [computedStandings.length]);

@@ -792,6 +792,7 @@ export default function Standings() {
 
   const handleRowMouseEnter = useCallback(
     (e, team, pts) => {
+      if (window.matchMedia('(hover: none)').matches) return; // if mobile return
       const tiedTeams = sortedStandings.filter(
         (s) => Number(s.pts) === Number(pts)
       );

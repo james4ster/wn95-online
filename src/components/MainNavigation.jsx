@@ -42,7 +42,7 @@ export default function MainNavigation() {
   return (
     <nav className="main-navigation">
       <div className="nav-container">
-        {/* LEFT — LOGO, pinned to match home grid left edge */}
+        {/* LEFT — LOGO */}
         <Link to="/" className="nav-logo">
           <img
             src="/assets/leagueLogos/mainLogo.png"
@@ -120,8 +120,16 @@ export default function MainNavigation() {
           </div>
         </div>
 
-        {/* RIGHT — DISCORD, pinned to match home grid right edge */}
+        {/* RIGHT — GUIDE + DISCORD */}
         <div className="nav-right">
+          {/* GUIDE BUTTON — sits just left of Discord */}
+          <Link to="/getting-started" className="guide-btn">
+            <div className="guide-btn-inner">
+              <span className="guide-icon">📖</span>
+              <span className="guide-label">GUIDES</span>
+            </div>
+          </Link>
+
           <a
             href="https://discord.gg/QxRDBgz3"
             target="_blank"
@@ -156,20 +164,15 @@ export default function MainNavigation() {
           z-index: 1000;
         }
 
-        /*
-         * nav-container uses the SAME side padding as .cg (14px) so the logo
-         * and discord button sit flush with the home page's left/right panels.
-         * Three-zone layout: logo | center links | discord
-         */
         .nav-container {
-          padding: 0 14px;           /* matches home .cg padding */
+          padding: 0 14px;
           display: grid;
-          grid-template-columns: 360px 1fr 360px;  /* matches home .cg columns */
+          grid-template-columns: 360px 1fr 360px;
           align-items: center;
           height: 72px;
         }
 
-        /* ── LOGO — left-aligned inside its 360px column ── */
+        /* ── LOGO ── */
         .nav-logo {
           text-decoration: none;
           display: flex;
@@ -199,7 +202,7 @@ export default function MainNavigation() {
           text-shadow: 0 0 10px #FFD700, 0 0 20px #FF8C00;
         }
 
-        /* ── CENTER — HOME / PLAYERS / LEAGUE, centered in the middle column ── */
+        /* ── CENTER ── */
         .nav-center {
           display: flex;
           gap: 0.75rem;
@@ -207,11 +210,12 @@ export default function MainNavigation() {
           justify-content: center;
         }
 
-        /* ── RIGHT — Discord pinned to right edge of its 360px column ── */
+        /* ── RIGHT — Guide + Discord, right-aligned ── */
         .nav-right {
           display: flex;
           align-items: center;
           justify-content: flex-end;
+          gap: 0.6rem;
         }
 
         /* ── Shared nav link styles ── */
@@ -367,6 +371,57 @@ export default function MainNavigation() {
 
         .league-option.selected .league-opt-code { color: #FFD700; }
 
+        /* ── GUIDE BUTTON ── */
+        .guide-btn {
+          display: inline-flex;
+          align-items: center;
+          text-decoration: none;
+        }
+
+        .guide-btn-inner {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.55rem 1rem;
+          background: rgba(255,215,0,0.07);
+          border: 1px solid rgba(255,215,0,0.35);
+          border-radius: 8px;
+          color: rgba(255,215,0,0.8);
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.58rem;
+          letter-spacing: 1px;
+          transition: all 0.3s ease;
+          overflow: hidden;
+          position: relative;
+          box-shadow: 0 0 8px rgba(255,215,0,0.1);
+        }
+
+        .guide-btn-inner::before {
+          content: '';
+          position: absolute;
+          top: 0; left: -100%;
+          width: 100%; height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,215,0,0.1), transparent);
+          transition: left 0.5s ease;
+        }
+
+        .guide-btn:hover .guide-btn-inner::before { left: 100%; }
+
+        .guide-btn:hover .guide-btn-inner {
+          background: rgba(255,215,0,0.16);
+          border-color: rgba(255,215,0,0.8);
+          color: #FFD700;
+          transform: translateY(-1px);
+          box-shadow: 0 0 18px rgba(255,215,0,0.35);
+        }
+
+        .guide-icon {
+          font-size: 0.9rem;
+          flex-shrink: 0;
+        }
+
+        .guide-label { position: relative; z-index: 1; }
+
         /* ── DISCORD BUTTON ── */
         .discord-btn {
           display: inline-flex;
@@ -439,7 +494,6 @@ export default function MainNavigation() {
 
         /* ── MOBILE ── */
         @media (max-width: 1100px) {
-          /* Switch to simple flexbox when grid columns no longer make sense */
           .nav-container {
             display: flex;
             justify-content: space-between;
@@ -448,19 +502,19 @@ export default function MainNavigation() {
           .nav-center { flex: 1; justify-content: center; }
         }
         @media (max-width: 768px) {
-          .nav-container { padding: 0 8px; height: 60px;  }
+          .nav-container { padding: 0 8px; height: 60px; }
           .nav-center { gap: 0.4rem; }
           .nav-link { padding: 0.5rem 0.65rem; font-size: 0.55rem; }
           .link-label { display: none; }
           .nav-icon { font-size: 1.1rem; }
           .discord-label { display: none; }
+          .guide-label { display: none; }
           .discord-btn-inner { padding: 0.5rem 0.75rem; }
-          .discord-live-dot { display: none; }
+          .guide-btn-inner { padding: 0.5rem 0.75rem; }
           .league-dropdown-menu { min-width: 230px; }
           .main-navigation {
-            position: sticky;
+            position: static;
             top: auto;
-            z-index: 1000; 
           }
         }
       `}</style>

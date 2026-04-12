@@ -2,6 +2,12 @@ import React, { useState } from 'react';
 
 const sections = [
   {
+    id: 'overview',
+    icon: '🗺️',
+    label: 'OVERVIEW',
+    color: '#FFB347',
+  },
+  {
     id: 'retroarch',
     icon: '🕹️',
     label: 'RETROARCH SETUP',
@@ -34,58 +40,210 @@ const sections = [
 ];
 
 const stepData = {
-  retroarch: {
-    title: 'RETROARCH SETUP',
-    subtitle: 'Get up and running with version 1.17',
+  overview: {
+    title: 'OVERVIEW',
+    subtitle: 'Getting started is easy',
+    description: 'Start here to get the lay of the land. The following is an overview of what each tab is for...',
     steps: [
       {
         num: '01',
-        heading: 'Download RetroArch',
+        heading: 'RetroArch Setup',
         body: (
           <>
-            Download the preconfigured RetroArch v1.17 build from the link
-            below. This build is mostly pre-configured for NHL 95 netplay, so
-            you won't need to tweak much out of the box.{' '}
-            <span className="placeholder-badge">
-              ⚠ DOWNLOAD LINK COMING SOON
-            </span>
+            RetroArch is the emulator that runs NHL '95. We'll walk you through
+            downloading our preconfigured build and getting it running — no
+            tinkering required out of the box.
           </>
         ),
       },
       {
         num: '02',
-        heading: 'Configure RetroArch',
+        heading: 'Netplay & Firewall',
         body: (
           <>
-            Follow the configuration guide from the NHL94 community. Since you're
-            using the preconfigured build, most settings are already dialed in —
-            but it's worth reading through to understand the key options.{' '}
-            <a
-              href="https://nhl94online.com/html/getting-started.php"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="guide-link"
-            >
-              NHL94 Getting Started Guide →
-            </a>
+            <p>Netplay is a part of Retroarch and used to connect players together.</p>
+            <p>To play online, your router needs to have a port opened for RetroArch.
+            We'll cover exactly which port to forward and how to verify your
+            connection is ready for netplay.</p>
+            <p>Retroarch must be allowed through your Firewall</p>
           </>
         ),
       },
       {
         num: '03',
-        heading: 'Port Forwarding',
+        heading: 'ROM & Testing',
         body: (
           <>
-            Port forwarding is done within your home router/ISP environment —
-            outside of RetroArch itself. The process is the same for everyone,
-            but each ISP has slightly different menus. If you get stuck, drop a
-            message in the{' '}
-            <span className="channel-tag">#help</span> channel on Discord and
-            someone will get you sorted. Google{' '}
-            <em>"how to port forward [your router model]"</em> is also a solid
-            starting point.
+           <p>ROM = The game file;  What you load to launch NHL 95</p>
+           <p>This tab explains how to get the NHL 95 ROM, how to launch it in RetroArch, and how to test it.</p>
           </>
         ),
+      },
+      {
+        num: '04',
+        heading: 'Streaming (Twitch)',
+        body: (
+          <>
+            This tab is completely optional but encouraged if you decide to join the league — if you want to broadcast your games to
+            Twitch, this tab shows a basic setup guide to stream your games live.
+          </>
+        ),
+      },
+    ],
+  },
+  retroarch: {
+    title: 'RETROARCH SETUP',
+    subtitle: 'Get up and running with version 1.17',
+    sections: [
+      {
+        id: 'downloads',
+        label: '⬇️ STEP 1 — GET THE FILES',
+        steps: [
+          {
+            num: '01',
+            heading: 'Download RetroArch',
+            body: (
+              <>
+                <p>Download the preconfigured RetroArch v1.17 build below. This build
+                is pre-configured for NHL '95 netplay — no tweaking required out of the box.</p>
+                <a href="https://github.com/james4ster/wn95-online/releases/download/retroarch-1.17-Winx64/RetroArch-1.17-Win64.zip" className="guide-link" download>
+                  💾 Download RetroArch v1.17 (Win64) →
+                </a>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Extract & Save',
+            body: (
+              <>
+                Extract the downloaded zip file and save the folder somewhere easy to access.
+              </>
+            ),
+          },
+          {
+            num: '03',
+            heading: 'Create Shortcut',
+            body: (
+              <>
+                <p>Open the unzipped folder and find the retroarch.exe application file.</p>
+                <img
+                    src="/assets/screenshots/guide/RA-exe.png"
+                    alt="RetroArch file"
+                    className="guide-screenshot"
+                  />        
+                <p><b>Create a shortcut to this file, and place it on your Desktop or Taskbar;
+                   The shortcut will be how you'll launch RA going forward</b></p> 
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'configuration',
+        label: '⚙️ STEP 2 — CONFIGURE',
+        steps: [
+          {
+            num: '01',
+            heading: 'Launch Retroarch',
+            body: (
+              
+                <>
+                <p>Open Retroarch using the shortcut</p>
+                <img
+                    src="/assets/screenshots/guide/RA-main-screen.png"
+                    alt="RetroArch Main Menu"
+                    className="guide-screenshot"
+                  />     
+                <p><i>Since you're using the preconfigured build, most settings are already dialed in.</i></p>
+                </>
+              
+            ),
+          },
+
+          {
+            num: '02',
+            heading: 'Navigation Controls',
+            body: (
+              
+                <>
+                <p>Move Selection - Arrows on keyboard </p>
+                <p>Select - ENTER key </p>
+                <p>Back - Backspace key </p>
+                <p>Exit RetroArch - ESC key</p>
+                </>
+              
+            ),
+          },
+
+          {
+            num: '03',
+            heading: 'Controller Configuration',
+            body: (
+              <>
+                <p>RetroArch contains many common controller configuration files, so there is a very good chance your controller
+                  will work "out of the box". </p>
+                <p>If you see a message that says "controller not configured", you will need to configure it manually. Follow the instructions
+                  put together from the NHL 94 community:{' '}
+                  <a href="https://nhl94online.com/html/controller.php" target="_blank" rel="noopener noreferrer" className="guide-link">
+                    Controller Configuration Guide →
+                  </a>
+                </p>
+                <br></br>
+                <h5>If you are new to emulator games and need to purchase a controller there are 2 popular options:</h5>
+
+                <p>
+                   
+                    <a href="https://amzn.to/4oNhQ8a" target="_blank" rel="noopener noreferrer" className="guide-link">
+                      Retrobit Genesis Controller →
+                    </a>{' '}
+                    — cheaper option, works fine, won't last as long as the next option. Suggest buying 2 at a time. Doesn't always require controller configuration.
+                  </p>
+                  <p>
+                   
+                    <a href="https://amzn.to/47EvSlv" target="_blank" rel="noopener noreferrer" className="guide-link">
+                      8bitDo M30 Controller →
+                    </a>{' '}
+                    — more expensive but lasts much longer than Retrobit. Controller configuration is more complicated and usually requires someone to share a picture of the setup. Comes with a wire even though not shown on Amazon, but some use wireless. Note that newer versions of 8bitDo may not work — multiple cases reported.
+                  </p>
+              </>
+            ),
+          },          
+
+          {
+            num: '04',
+            heading: 'Setup User Name',
+            body: (
+              
+                <>
+                <p>In RetroArch, go to Settings ~ User. Set a User Name. This is how opponents will find you.</p>
+                <img
+                    src="/assets/screenshots/guide/RA-set-user-name.png"
+                    alt="RetroArch User Menu"
+                    className="guide-screenshot"
+                  />  
+
+                <p><i>This only needs to be done once. Spaces are allowed, but do not use any special characters (like an underscore). 
+                  Once you set it, please exit RetroArch and restart it so it saves your name.</i></p>
+                </>
+              
+            ),
+          },
+
+          /* This will be new Section */
+          {
+            num: '02',
+            heading: 'Port Forwarding',
+            body: (
+              <>
+                <p>Port forwarding is done within your home router — outside of RetroArch itself.
+                Each ISP has slightly different menus but the process is the same for everyone.</p>
+                <p>Google <em>"how to port forward [your router model]"</em> for step-by-step instructions,
+                or drop a message in <span className="channel-tag">#help</span> on Discord and someone will get you sorted.</p>
+              </>
+            ),
+          },
+        ],
       },
     ],
   },
@@ -294,7 +452,7 @@ const stepData = {
 };
 
 export default function GettingStarted() {
-  const [activeSection, setActiveSection] = useState('retroarch');
+  const [activeSection, setActiveSection] = useState('overview');
 
   const current = stepData[activeSection];
 
@@ -335,6 +493,11 @@ export default function GettingStarted() {
           <p className="gs-section-subtitle">{current.subtitle}</p>
         </div>
 
+        {/* ── PAGE DESCRIPTION ── */}      
+        {current.description && (
+          <p className="gs-description">{current.description}</p>
+        )}
+
         {/* Steps layout */}
         {current.steps && (
           <div className="gs-steps">
@@ -344,6 +507,30 @@ export default function GettingStarted() {
                 <div className="step-body">
                   <h3 className="step-heading">{step.heading}</h3>
                   <p className="step-text">{step.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Sections layout  */}
+        {current.sections && (
+          <div className="gs-sections">
+            {current.sections.map((section) => (
+              <div className="gs-subsection" key={section.id}>
+                <div className="gs-subsection-header">
+                  <span className="gs-subsection-label">{section.label}</span>
+                </div>
+                <div className="gs-steps">
+                  {section.steps.map((step) => (
+                    <div className="gs-step" key={step.num + step.heading}>
+                      <div className="step-num">{step.num}</div>
+                      <div className="step-body">
+                        <h3 className="step-heading">{step.heading}</h3>
+                        <div className="step-text">{step.body}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -526,6 +713,45 @@ export default function GettingStarted() {
           opacity: 0.75;
           margin: 0;
           letter-spacing: 0.5px;
+        }
+
+        .gs-description {
+          font-size: 1.1rem;
+          line-height: 1.75;
+          color: #a0a0bc;
+          margin: 0 0 2.5rem 0;
+          letter-spacing: 0.3px;
+          font-style: italic;
+        }
+
+        .gs-subsection {
+          margin-bottom: 3rem;
+        }
+        
+        .gs-subsection-header {
+          margin-bottom: 1.5rem;
+          padding: 0.75rem 1.25rem;
+          background: rgba(135, 206, 235, 0.06);
+          border-left: 3px solid #87CEEB;
+          border-radius: 0 6px 6px 0;
+        }
+        
+        .gs-subsection-label {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.6rem;
+          color: #87CEEB;
+          letter-spacing: 2px;
+          text-shadow: 0 0 10px rgba(135, 206, 235, 0.5);
+        }
+
+        .guide-screenshot {
+          display: block;
+          width: 100%;
+          max-width: 700px;
+          border: 1px solid rgba(135, 206, 235, 0.2);
+          border-radius: 6px;
+          margin: 1rem 0;
+          box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
         }
 
         /* ── STEPS ── */

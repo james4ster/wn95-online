@@ -580,6 +580,10 @@ export default function Standings() {
       setPlayoffTeams(null);
       return;
     }
+    
+    // Guard against tiebreakers/playoff clinch/elims running until seasons array is populated
+    if (seasons.length === 0) return;
+
     setTiebreakerInfo(null);
     const season = seasons.find((s) => s.lg === selectedSeason);
     setPlayoffTeams(season?.playoff_teams ?? null);
@@ -591,6 +595,9 @@ export default function Standings() {
       setRawGames([]);
       return;
     }
+    // Guard against tiebreakers/playoff clinch/elims running until seasons array is populated
+    if (seasons.length === 0) return;
+
     (async () => {
       setLoading(true);
       const [
@@ -625,7 +632,7 @@ export default function Standings() {
             setTotalGamesPerTeam(gamesPerTeam);
             setLoading(false);
           })();
-        }, [selectedLeague, selectedSeason]);
+        }, [selectedLeague, selectedSeason, seasons]);
 
   useEffect(() => {
     if (!selectedSeason) {

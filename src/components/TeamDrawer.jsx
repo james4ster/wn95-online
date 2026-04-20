@@ -102,17 +102,18 @@ function rankColor(r, total) {
   return 'rgba(255,255,255,.3)';
 }
 
-/** TRUE competition ranking — ties share rank, next rank skips */
+/** TRUE competition ranking — rank = count of players strictly better + 1
+ *  e.g. if 120 players have 2+ assists and you have 1, you rank #121, not #20
+ */
 function rankVal(val, allVals, hi = true) {
   if (val == null || val === '' || !allVals?.length) return null;
   const n = parseFloat(val);
   if (isNaN(n)) return null;
 
   const nums = allVals.map(v => parseFloat(v)).filter(v => !isNaN(v));
-  // Sort unique values
-  const sorted = [...new Set(nums)].sort((a, b) => hi ? b - a : a - b);
-  const idx = sorted.findIndex(v => Math.abs(v - n) < 0.001);
-  return idx >= 0 ? idx + 1 : null;
+  // Count how many values are strictly better than n
+  const betterCount = nums.filter(v => hi ? v > n + 0.0001 : v < n - 0.0001).length;
+  return betterCount + 1;
 }
 
 /** Rank a value within computedStandings by key — TRUE competition ranking */
@@ -124,22 +125,21 @@ function rankInStandings(myVal, key, computedStandings, hi = true) {
   return rankVal(myVal, vals, hi);
 }
 
-/** TRUE competition ranking for players */
+/** TRUE competition ranking for players — rank = count of players strictly better + 1 */
 function computeLeagueRanks(allPlayers, statKeys) {
   const ranks = {};
   statKeys.forEach((key) => {
-    // Build sorted unique values
     const nums = allPlayers
       .filter(p => p[key] != null && p[key] !== '' && !isNaN(parseFloat(p[key])))
-      .map(p => parseFloat(p[key]));
-    const sorted = [...new Set(nums)].sort((a, b) => b - a);
+      .map(p => ({ name: p.player_name, val: parseFloat(p[key]) }));
 
     allPlayers.forEach(p => {
       const n = parseFloat(p[key]);
       if (isNaN(n)) return;
       if (!ranks[p.player_name]) ranks[p.player_name] = {};
-      const idx = sorted.findIndex(v => Math.abs(v - n) < 0.001);
-      ranks[p.player_name][key] = idx >= 0 ? idx + 1 : null;
+      // Count players strictly better (higher is better for all current uses)
+      const betterCount = nums.filter(({ val }) => val > n + 0.0001).length;
+      ranks[p.player_name][key] = betterCount + 1;
     });
   });
   return ranks;
@@ -824,31 +824,21 @@ export default function TeamDrawer({ selectedSeason, computedStandings, primaryT
     // Base ranks for raw counting stats — TRUE competition ranking
     const base = computeLeagueRanks(aggregatedGoalies, ['saves', 'shutouts', 'shots_against', 'goals_against']);
 
-    // GAA: lower is better — active only, TRUE competition ranking
-    const gaaVals = active
-      .filter(p => p._gaa != null)
-      .map(p => parseFloat(p._gaa))
-      .filter(v => !isNaN(v));
-    const gaaSortedUniq = [...new Set(gaaVals)].sort((a, b) => a - b); // ascending (lower = better)
-
-    // SV%: higher is better — active only, TRUE competition ranking
-    const svVals = active
-      .filter(p => p._svpct != null)
-      .map(p => parseFloat(p._svpct))
-      .filter(v => !isNaN(v));
-    const svSortedUniq = [...new Set(svVals)].sort((a, b) => b - a); // descending
+    // GAA and SV% are handled below with count-based ranking
 
     active.forEach(p => {
       if (!base[p.player_name]) base[p.player_name] = {};
       if (p._gaa != null) {
         const n = parseFloat(p._gaa);
-        const idx = gaaSortedUniq.findIndex(v => Math.abs(v - n) < 0.001);
-        base[p.player_name]._gaa = idx >= 0 ? idx + 1 : null;
+        // GAA: lower is better — count players with strictly lower GAA
+        const betterCount = active.filter(x => x._gaa != null && parseFloat(x._gaa) < n - 0.0001).length;
+        base[p.player_name]._gaa = betterCount + 1;
       }
       if (p._svpct != null) {
         const n = parseFloat(p._svpct);
-        const idx = svSortedUniq.findIndex(v => Math.abs(v - n) < 0.001);
-        base[p.player_name]._svpct = idx >= 0 ? idx + 1 : null;
+        // SV%: higher is better — count players with strictly higher SV%
+        const betterCount = active.filter(x => x._svpct != null && parseFloat(x._svpct) > n + 0.0001).length;
+        base[p.player_name]._svpct = betterCount + 1;
       }
     });
 

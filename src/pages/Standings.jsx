@@ -11,6 +11,7 @@ import PlayoffBracket from '../components/PlayoffBracket';
 import { createPortal } from 'react-dom';
 import FullScreenStandingsModal from '../components/FullScreenStandingsModal';
 import { usePersistedState } from '../hooks/usePersistedState';
+import TeamDrawer from '../components/TeamDrawer';
 
 function computeH2H(teamA, teamB, games) {
   let ptsA = 0,
@@ -520,6 +521,10 @@ export default function Standings() {
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
 
+  //TeamDrawer States
+  const [drawerPrimary, setDrawerPrimary] = useState(null);
+  const [drawerCompare, setDrawerCompare] = useState(null);
+
   // JS-driven breakpoint detection — avoids CSS column count mismatches in HTML tables
   const [isMobileLandscape, setIsMobileLandscape] = useState(
     () => window.matchMedia('(max-width: 932px) and (orientation: landscape)').matches
@@ -1027,13 +1032,13 @@ export default function Standings() {
               </button>
             )}
           </div>
-  <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '8px' }}>
-    <button className={`compact-toggle ${compactView ? 'active' : ''}`}
-      onClick={() => setCompactView(v => !v)} title="Compact View">⊞</button>
-    <button className="compact-toggle"
-      onClick={() => setFullScreenOpen(true)} title="Full Screen View">⛶</button>
-  </div>
-</div>
+                <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '8px' }}>
+                  <button className={`compact-toggle ${compactView ? 'active' : ''}`}
+                    onClick={() => setCompactView(v => !v)} title="Compact View">⊞</button>
+                  <button className="compact-toggle"
+                    onClick={() => setFullScreenOpen(true)} title="Full Screen View">⛶</button>
+                </div>
+              </div>
       )}
 
       {loading ? (
@@ -1147,19 +1152,24 @@ export default function Standings() {
                           <React.Fragment key={`${s.team}-${idx}`}>
                             <tr
                               className={rowClass}
-                              onMouseEnter={
-                                isTied
-                                  ? (e) =>
-                                      handleRowMouseEnter(
-                                        e,
-                                        s.team,
-                                        Number(s.pts)
-                                      )
-                                  : undefined
-                              }
-                              onMouseLeave={
-                                isTied ? handleRowMouseLeave : undefined
-                              }
+                              style={{ cursor: 'pointer' }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!drawerPrimary) {
+                                  setDrawerPrimary(s.team);
+                                  setDrawerCompare(null);
+                                } else if (drawerPrimary === s.team) {
+                                  setDrawerPrimary(null);
+                                  setDrawerCompare(null);
+                                } else if (drawerCompare === s.team) {
+                                  setDrawerCompare(null);
+                                } else {
+                                  // Different team clicked while drawer open → set as compare, keep primary
+                                  setDrawerCompare(s.team);
+                                }
+                              }}
+                              onMouseEnter={isTied ? (e) => handleRowMouseEnter(e, s.team, Number(s.pts)) : undefined}
+                              onMouseLeave={isTied ? handleRowMouseLeave : undefined}
                             >
                               <td className="rank-cell">
                                 <span className="rank-badge">{idx + 1}</span>
@@ -1282,6 +1292,16 @@ export default function Standings() {
                 </div>
               </div>
             ))}
+            <TeamDrawer
+              selectedSeason={selectedSeason}
+              computedStandings={computedStandings}   
+              primaryTeam={drawerPrimary}
+              compareTeam={drawerCompare}
+              onClose={() => {
+                setDrawerPrimary(null);
+                setDrawerCompare(null);
+              }}
+            />
           </div>
         </>
       )}

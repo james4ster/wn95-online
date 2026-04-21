@@ -91,50 +91,36 @@ function computeStandings(games) {
         home.w++;
         home.otw++;
         home.pts += 2;
-    
         away.otl++;
         away.pts += 1;
-    
         home._results.push('W');
         away._results.push('L');
       } else {
         home.w++;
         home.pts += 2;
-    
         away.l++;
-    
         home._results.push('W');
         away._results.push('L');
       }
-    
     } else {
       if (isOT) {
         away.w++;
         away.otw++;
         away.pts += 2;
-    
         home.otl++;
         home.pts += 1;
-    
         away._results.push('W');
         home._results.push('L');
       } else {
         away.w++;
         away.pts += 2;
-    
         home.l++;
-    
         away._results.push('W');
         home._results.push('L');
       }
     }
     if (sa === 0) home.shutouts++;
     if (sh === 0) away.shutouts++;
-  });
-
-  const streakMap = {};
-  Object.entries(teamMap).forEach(([code, t]) => {
-    streakMap[code] = t._results || [];
   });
 
   return Object.values(teamMap).map(({ _lastId, _results, ...t }) => {
@@ -204,7 +190,6 @@ function sortWithTiebreakers(teams, games) {
       } else {
         const enriched = withH2H(tier);
         enriched.sort((a, b) => {
-          // Within a pts tier: teams that have played rank above teams that haven't
           if (b.gp !== a.gp && pts === 0) return b.gp - a.gp;
           if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
           if (b.w !== a.w) return b.w - a.w;
@@ -216,22 +201,13 @@ function sortWithTiebreakers(teams, games) {
   return result;
 }
 
-function TiebreakerTooltip({
-  hoveredTeam,
-  tiedStandings,
-  seasonGames,
-  anchorRect,
-}) {
-  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect)
-    return null;
+function TiebreakerTooltip({ hoveredTeam, tiedStandings, seasonGames, anchorRect }) {
+  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect) return null;
   const tooltipW = 360;
   const fixedLeft = window.innerWidth - tooltipW - 16;
   const tooltipHeight = 200;
   const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
-  const fixedTop = Math.max(
-    16,
-    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
-  );
+  const fixedTop = Math.max(16, Math.min(desiredTop, window.innerHeight - tooltipHeight - 16));
   const enriched = tiedStandings.map((s) => {
     let h2hPts = 0;
     tiedStandings.forEach((other) => {
@@ -249,223 +225,38 @@ function TiebreakerTooltip({
   const baseSeed = Math.min(...tiedStandings.map((s) => s._sortRank ?? 1));
   const maxH2H = Math.max(...ranked.map((r) => r.h2hPts), 1);
   const StatBar = ({ value, max, color }) => (
-    <div
-      style={{
-        flex: 1,
-        height: 5,
-        background: 'rgba(255,255,255,.08)',
-        borderRadius: 2,
-        overflow: 'hidden',
-      }}
-    >
-      <div
-        style={{
-          height: '100%',
-          width: `${Math.max(0, (value / (max || 1)) * 100)}%`,
-          background: color,
-          borderRadius: 2,
-          boxShadow: `0 0 6px ${color}`,
-          transition: 'width .4s cubic-bezier(.4,0,.2,1)',
-        }}
-      />
+    <div style={{ flex: 1, height: 5, background: 'rgba(255,255,255,.08)', borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{ height: '100%', width: `${Math.max(0, (value / (max || 1)) * 100)}%`, background: color, borderRadius: 2, boxShadow: `0 0 6px ${color}`, transition: 'width .4s cubic-bezier(.4,0,.2,1)' }} />
     </div>
   );
   return (
-    <div
-      style={{
-        position: 'fixed',
-        top: fixedTop,
-        left: fixedLeft,
-        zIndex: 9999,
-        width: tooltipW,
-        pointerEvents: 'none',
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute',
-          inset: -8,
-          background:
-            'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)',
-          borderRadius: 16,
-          pointerEvents: 'none',
-        }}
-      />
-      <div
-        style={{
-          background:
-            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
-          border: '1px solid rgba(255,215,0,.5)',
-          borderRadius: 12,
-          boxShadow:
-            '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          style={{
-            padding: '10px 16px 8px',
-            borderBottom: '1px solid rgba(255,215,0,.15)',
-            background:
-              'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "'Press Start 2P', monospace",
-              fontSize: '.6rem',
-              color: '#FF8C00',
-              letterSpacing: 2,
-              textShadow: '0 0 8px rgba(255,140,0,.7)',
-            }}
-          >
-            TIEBREAKER
-          </div>
-          <div
-            style={{
-              fontFamily: "'Press Start 2P', monospace",
-              fontSize: '.5rem',
-              color: 'rgba(255,255,255,.4)',
-              letterSpacing: 1,
-            }}
-          >
-            {ranked.length} TEAMS · {ranked[0].pts} PTS
-          </div>
+    <div style={{ position: 'fixed', top: fixedTop, left: fixedLeft, zIndex: 9999, width: tooltipW, pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', inset: -8, background: 'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)', borderRadius: 16, pointerEvents: 'none' }} />
+      <div style={{ background: 'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)', border: '1px solid rgba(255,215,0,.5)', borderRadius: 12, boxShadow: '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)', overflow: 'hidden' }}>
+        <div style={{ padding: '10px 16px 8px', borderBottom: '1px solid rgba(255,215,0,.15)', background: 'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.6rem', color: '#FF8C00', letterSpacing: 2, textShadow: '0 0 8px rgba(255,140,0,.7)' }}>TIEBREAKER</div>
+          <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem', color: 'rgba(255,255,255,.4)', letterSpacing: 1 }}>{ranked.length} TEAMS · {ranked[0].pts} PTS</div>
         </div>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '44px 1fr 56px 56px 56px',
-            gap: '0 6px',
-            padding: '6px 16px 4px',
-            borderBottom: '1px solid rgba(255,255,255,.05)',
-          }}
-        >
-          <div
-            style={{
-              fontFamily: "'Press Start 2P', monospace",
-              fontSize: '.45rem',
-              color: 'rgba(255,255,255,.3)',
-              textAlign: 'center',
-            }}
-          >
-            SEED
-          </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '44px 1fr 56px 56px 56px', gap: '0 6px', padding: '6px 16px 4px', borderBottom: '1px solid rgba(255,255,255,.05)' }}>
+          <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.45rem', color: 'rgba(255,255,255,.3)', textAlign: 'center' }}>SEED</div>
           <div />
           {['H2H', 'W', 'GD'].map((lbl) => (
-            <div
-              key={lbl}
-              style={{
-                fontFamily: "'Press Start 2P', monospace",
-                fontSize: '.65rem',
-                color: 'rgba(135,206,235,.5)',
-                textAlign: 'center',
-                letterSpacing: 1,
-              }}
-            >
-              {lbl}
-            </div>
+            <div key={lbl} style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.65rem', color: 'rgba(135,206,235,.5)', textAlign: 'center', letterSpacing: 1 }}>{lbl}</div>
           ))}
         </div>
         {ranked.map((row, idx) => {
           const seedNum = baseSeed + idx;
           const gdSign = row.gd > 0 ? '+' : '';
           return (
-            <div
-              key={row.team}
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '44px 1fr 56px 56px 56px',
-                gap: '0 6px',
-                padding: '9px 16px',
-                background:
-                  idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
-                borderBottom:
-                  idx < ranked.length - 1
-                    ? '1px solid rgba(255,255,255,.04)'
-                    : 'none',
-                alignItems: 'center',
-              }}
-            >
-              <div
-                style={{
-                  fontFamily: "'VT323', monospace",
-                  fontSize: '1.6rem',
-                  color: '#FF8C00',
-                  textAlign: 'center',
-                  textShadow: '0 0 8px rgba(255,140,0,.6)',
-                  lineHeight: 1,
-                }}
-              >
-                {seedNum}
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 5,
-                  minWidth: 0,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "'VT323', monospace",
-                    fontSize: '1.5rem',
-                    color: '#E0E0E0',
-                    letterSpacing: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    lineHeight: 1,
-                  }}
-                >
-                  {row.team}
-                </span>
+            <div key={row.team} style={{ display: 'grid', gridTemplateColumns: '44px 1fr 56px 56px 56px', gap: '0 6px', padding: '9px 16px', background: idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent', borderBottom: idx < ranked.length - 1 ? '1px solid rgba(255,255,255,.04)' : 'none', alignItems: 'center' }}>
+              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.6rem', color: '#FF8C00', textAlign: 'center', textShadow: '0 0 8px rgba(255,140,0,.6)', lineHeight: 1 }}>{seedNum}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+                <span style={{ fontFamily: "'VT323', monospace", fontSize: '1.5rem', color: '#E0E0E0', letterSpacing: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', lineHeight: 1 }}>{row.team}</span>
                 <StatBar value={row.h2hPts} max={maxH2H} color="#FF8C00" />
               </div>
-              <div
-                style={{
-                  fontFamily: "'VT323', monospace",
-                  fontSize: '1.4rem',
-                  color: '#FF8C00',
-                  textAlign: 'center',
-                  textShadow: '0 0 6px rgba(255,140,0,.5)',
-                }}
-              >
-                {row.h2hPts}
-              </div>
-              <div
-                style={{
-                  fontFamily: "'VT323', monospace",
-                  fontSize: '1.4rem',
-                  color: '#87CEEB',
-                  textAlign: 'center',
-                  textShadow: '0 0 6px rgba(135,206,235,.4)',
-                }}
-              >
-                {row.w}
-              </div>
-              <div
-                style={{
-                  fontFamily: "'VT323', monospace",
-                  fontSize: '1.4rem',
-                  color:
-                    row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888',
-                  textAlign: 'center',
-                  textShadow:
-                    row.gd > 0
-                      ? '0 0 6px rgba(0,255,136,.5)'
-                      : row.gd < 0
-                      ? '0 0 6px rgba(255,68,68,.5)'
-                      : 'none',
-                }}
-              >
-                {gdSign}
-                {row.gd}
-              </div>
+              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.4rem', color: '#FF8C00', textAlign: 'center', textShadow: '0 0 6px rgba(255,140,0,.5)' }}>{row.h2hPts}</div>
+              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.4rem', color: '#87CEEB', textAlign: 'center', textShadow: '0 0 6px rgba(135,206,235,.4)' }}>{row.w}</div>
+              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.4rem', color: row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888', textAlign: 'center', textShadow: row.gd > 0 ? '0 0 6px rgba(0,255,136,.5)' : row.gd < 0 ? '0 0 6px rgba(255,68,68,.5)' : 'none' }}>{gdSign}{row.gd}</div>
             </div>
           );
         })}
@@ -477,15 +268,11 @@ function TiebreakerTooltip({
 function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
   const clinched = new Set();
   const eliminated = new Set();
-  if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0)
-    return { clinched, eliminated };
-  const avgGP =
-    sortedStandings.reduce((sum, t) => sum + (t.gp || 0), 0) /
-    sortedStandings.length;
+  if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0) return { clinched, eliminated };
+  const avgGP = sortedStandings.reduce((sum, t) => sum + (t.gp || 0), 0) / sortedStandings.length;
   if (avgGP < totalGamesPerTeam * 0.5) return { clinched, eliminated };
   const n = sortedStandings.length;
-  const maxPts = (t) =>
-    (t.pts || 0) + Math.max(0, totalGamesPerTeam - (t.gp || 0)) * 2;
+  const maxPts = (t) => (t.pts || 0) + Math.max(0, totalGamesPerTeam - (t.gp || 0)) * 2;
   const bubbleIdx = Math.min(playoffTeams - 1, n - 1);
   const bubblePts = sortedStandings[bubbleIdx]?.pts || 0;
   for (let r = 0; r < Math.min(playoffTeams, n); r++) {
@@ -494,12 +281,10 @@ function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
     for (let j = playoffTeams; j < n; j++) {
       if (maxPts(sortedStandings[j]) > myPts) couldFinishAbove++;
     }
-    if (couldFinishAbove < playoffTeams - r)
-      clinched.add(sortedStandings[r].team);
+    if (couldFinishAbove < playoffTeams - r) clinched.add(sortedStandings[r].team);
   }
   for (let r = playoffTeams; r < n; r++) {
-    if (maxPts(sortedStandings[r]) < bubblePts)
-      eliminated.add(sortedStandings[r].team);
+    if (maxPts(sortedStandings[r]) < bubblePts) eliminated.add(sortedStandings[r].team);
   }
   return { clinched, eliminated };
 }
@@ -514,25 +299,22 @@ export default function Standings() {
   const [divisionMap, setDivisionMap] = useState([]);
   const [activeView, setActiveView] = useState('overall');
   const [playoffGames, setPlayoffGames] = useState([]);
-  const [sortConfig, setSortConfig] = useState({
-    key: 'default',
-    direction: 'descending',
-  });
+  const [sortConfig, setSortConfig] = useState({ key: 'default', direction: 'descending' });
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
 
-  //TeamDrawer States
+  // TeamDrawer state
   const [drawerPrimary, setDrawerPrimary] = useState(null);
   const [drawerCompare, setDrawerCompare] = useState(null);
 
-  // JS-driven breakpoint detection — avoids CSS column count mismatches in HTML tables
+  // JS-driven breakpoint detection
   const [isMobileLandscape, setIsMobileLandscape] = useState(
     () => window.matchMedia('(max-width: 932px) and (orientation: landscape)').matches
   );
   const [isMobilePortrait, setIsMobilePortrait] = useState(
     () => window.matchMedia('(max-width: 932px) and (orientation: portrait)').matches
   );
-  
+
   useEffect(() => {
     const mql = window.matchMedia('(max-width: 932px) and (orientation: landscape)');
     const mqp = window.matchMedia('(max-width: 932px) and (orientation: portrait)');
@@ -548,6 +330,17 @@ export default function Standings() {
       mqp.removeEventListener('change', update);
     };
   }, []);
+
+  // ── PATCH 1: Series click handler for playoff bracket ─────────────────────
+  // Opens TeamDrawer in compare mode with both teams from a clicked series.
+  // Blocked on mobile (landscape + portrait).
+  const handleSeriesClick = useCallback((teamA, teamB) => {
+    if (isMobileLandscape || isMobilePortrait) return;
+    setDrawerPrimary(teamA);
+    setDrawerCompare(teamB);
+  }, [isMobileLandscape, isMobilePortrait]);
+  // ─────────────────────────────────────────────────────────────────────────
+
   const tableContainerRef = useRef(null);
   const stickyScrollRef = useRef(null);
   const [seasonTeams, setSeasonTeams] = useState([]);
@@ -567,10 +360,7 @@ export default function Standings() {
         .from('seasons')
         .select('lg, year, end_date, playoff_teams, rs_games_vs')
         .order('year', { ascending: false });
-      if (error) {
-        console.error('Error fetching seasons:', error);
-        return;
-      }
+      if (error) { console.error('Error fetching seasons:', error); return; }
       const filtered = data.filter((s) => s.lg.startsWith(selectedLeague));
       setSeasons(filtered);
       if (filtered.length > 0) setSelectedSeason(prev => {
@@ -581,14 +371,8 @@ export default function Standings() {
   }, [selectedLeague]);
 
   useEffect(() => {
-    if (!selectedSeason) {
-      setPlayoffTeams(null);
-      return;
-    }
-    
-    // Guard against tiebreakers/playoff clinch/elims running until seasons array is populated
+    if (!selectedSeason) { setPlayoffTeams(null); return; }
     if (seasons.length === 0) return;
-
     setTiebreakerInfo(null);
     const season = seasons.find((s) => s.lg === selectedSeason);
     setPlayoffTeams(season?.playoff_teams ?? null);
@@ -596,34 +380,20 @@ export default function Standings() {
   }, [selectedSeason, seasons]);
 
   useEffect(() => {
-    if (!selectedLeague || !selectedSeason) {
-      setRawGames([]);
-      return;
-    }
-    // Guard against tiebreakers/playoff clinch/elims running until seasons array is populated
+    if (!selectedLeague || !selectedSeason) { setRawGames([]); return; }
     if (seasons.length === 0) return;
-
     (async () => {
       setLoading(true);
-      const [
-        { data: gamesData, error },
-        { data: teamsData },
-      ] = await Promise.all([
+      const [{ data: gamesData, error }, { data: teamsData }] = await Promise.all([
         supabase
           .from('games')
-          .select(
-            'id, home, away, score_home, score_away, ot, coach_home, coach_away'
-          )
+          .select('id, home, away, score_home, score_away, ot, coach_home, coach_away')
           .eq('lg', selectedSeason)
           .ilike('mode', 'season')
           .not('score_home', 'is', null)
           .order('id', { ascending: true }),
         supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
-        supabase
-          .from('games')
-          .select('home')
-          .eq('lg', selectedSeason)
-          .ilike('mode', 'season')
+        supabase.from('games').select('home').eq('lg', selectedSeason).ilike('mode', 'season'),
       ]);
       if (error) console.error('Error fetching games:', error);
       setRawGames(gamesData || []);
@@ -631,44 +401,28 @@ export default function Standings() {
       const numTeams = (teamsData || []).length;
       const seasonMeta = seasons.find((s) => s.lg === selectedSeason);
       const rsVs = seasonMeta?.rs_games_vs ?? null;
-      const gamesPerTeam = rsVs != null && numTeams > 0
-              ? (numTeams - 1) * rsVs
-              : null;
-            setTotalGamesPerTeam(gamesPerTeam);
-            setLoading(false);
-          })();
-        }, [selectedLeague, selectedSeason, seasons]);
+      const gamesPerTeam = rsVs != null && numTeams > 0 ? (numTeams - 1) * rsVs : null;
+      setTotalGamesPerTeam(gamesPerTeam);
+      setLoading(false);
+    })();
+  }, [selectedLeague, selectedSeason, seasons]);
 
   useEffect(() => {
-    if (!selectedSeason) {
-      setDivisionMap([]);
-      setActiveView(prev => prev === 'playoffs' ? prev : 'overall');
-      return;
-    }
+    if (!selectedSeason) { setDivisionMap([]); setActiveView(prev => prev === 'playoffs' ? prev : 'overall'); return; }
     (async () => {
-      const { data, error } = await supabase
-        .from('historical_division_map')
-        .select('*')
-        .eq('season', selectedSeason);
-      if (error) {
-        console.error('Error fetching division map:', error);
-        setDivisionMap([]);
-      } else setDivisionMap(data || []);
+      const { data, error } = await supabase.from('historical_division_map').select('*').eq('season', selectedSeason);
+      if (error) { console.error('Error fetching division map:', error); setDivisionMap([]); }
+      else setDivisionMap(data || []);
       setActiveView(prev => prev === 'playoffs' ? prev : 'overall');
     })();
   }, [selectedSeason]);
 
   useEffect(() => {
-    if (!selectedSeason) {
-      setPlayoffGames([]);
-      return;
-    }
+    if (!selectedSeason) { setPlayoffGames([]); return; }
     (async () => {
       const { data, error } = await supabase
         .from('playoff_games')
-        .select(
-          'lg,round,series_number,game_number,team_code_a,team_code_b,team_a_score,team_b_score,game_date,seed_a,seed_b'
-        )
+        .select('lg,round,series_number,game_number,team_code_a,team_code_b,team_a_score,team_b_score,game_date,seed_a,seed_b')
         .eq('lg', selectedSeason)
         .order('game_number', { ascending: true });
       if (error) console.error('Error fetching playoff_games:', error);
@@ -676,45 +430,36 @@ export default function Standings() {
     })();
   }, [selectedSeason]);
 
-  
   const computedStandings = useMemo(() => {
     const standings = computeStandings(rawGames);
     const playedTeams = new Set(standings.map((s) => s.team));
     const zeroed = seasonTeams
-        .filter(({ abr }) => !playedTeams.has(abr))
-        .map(({ abr, coach }) => ({
-          team: abr, coach: coach || '',
-          gp: 0, w: 0, l: 0, t: 0, otl: 0, otw: 0, pts: 0,
-          gf: 0, ga: 0, gd: 0, shutouts: 0, pts_pct: 0,
-        }));
-      return [...standings, ...zeroed].map((s) => {
-        const gr = totalGamesPerTeam != null
-          ? Math.max(0, totalGamesPerTeam - (s.gp || 0))
-          : null;
-        return {
-          ...s,
-          gr,
-          maxPts: gr != null ? (s.pts || 0) + gr * 2 : null,
-          gf_per_g: s.gp > 0 ? s.gf / s.gp : null,
-          ga_per_g: s.gp > 0 ? s.ga / s.gp : null,
-        };
-      });
-    }, [rawGames, seasonTeams, totalGamesPerTeam]);
+      .filter(({ abr }) => !playedTeams.has(abr))
+      .map(({ abr, coach }) => ({
+        team: abr, coach: coach || '',
+        gp: 0, w: 0, l: 0, t: 0, otl: 0, otw: 0, pts: 0,
+        gf: 0, ga: 0, gd: 0, shutouts: 0, pts_pct: 0,
+      }));
+    return [...standings, ...zeroed].map((s) => {
+      const gr = totalGamesPerTeam != null ? Math.max(0, totalGamesPerTeam - (s.gp || 0)) : null;
+      return {
+        ...s,
+        gr,
+        maxPts: gr != null ? (s.pts || 0) + gr * 2 : null,
+        gf_per_g: s.gp > 0 ? s.gf / s.gp : null,
+        ga_per_g: s.gp > 0 ? s.ga / s.gp : null,
+      };
+    });
+  }, [rawGames, seasonTeams, totalGamesPerTeam]);
 
   const defaultSorted = useMemo(
-    () =>
-      sortWithTiebreakers(computedStandings, rawGames).map((s, idx) => ({
-        ...s,
-        _sortRank: idx + 1,
-      })),
+    () => sortWithTiebreakers(computedStandings, rawGames).map((s, idx) => ({ ...s, _sortRank: idx + 1 })),
     [computedStandings, rawGames]
   );
 
   const sortedStandings = useMemo(() => {
     if (sortConfig.key === 'default' || sortConfig.key === 'pts') {
-      return sortConfig.direction === 'descending'
-        ? defaultSorted
-        : [...defaultSorted].reverse();
+      return sortConfig.direction === 'descending' ? defaultSorted : [...defaultSorted].reverse();
     }
     if (sortConfig.key === 'season_rank') return defaultSorted;
     return [...defaultSorted].sort((a, b) => {
@@ -722,9 +467,7 @@ export default function Standings() {
       if (a[key] === null || a[key] === undefined) return 1;
       if (b[key] === null || b[key] === undefined) return -1;
       if (typeof a[key] === 'string') {
-        return direction === 'ascending'
-          ? a[key].localeCompare(b[key])
-          : b[key].localeCompare(a[key]);
+        return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
       }
       return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
     });
@@ -747,12 +490,11 @@ export default function Standings() {
       if (teams.length < 2) return;
       const anyNearEnd = teams.some((t) => (t.gr ?? 0) <= 10);
       const anyHasPlayed = teams.some((t) => (t.gp || 0) > 0);
-            if (anyNearEnd && anyHasPlayed) result.add(Number(p));
-          });
-          return result;
+      if (anyNearEnd && anyHasPlayed) result.add(Number(p));
+    });
+    return result;
   }, [sortedStandings, totalGamesPerTeam]);
 
-  // Auto-open fullscreen on mobile
   useEffect(() => {
     if (computedStandings.length > 0 && window.innerWidth <= 932) {
       setTiebreakerInfo(null);
@@ -760,24 +502,17 @@ export default function Standings() {
     }
   }, [computedStandings.length]);
 
-
   useEffect(() => {
     const container = tableContainerRef.current;
     const sticky = stickyScrollRef.current;
     if (!container || !sticky) return;
     const inner = sticky.querySelector('.sticky-scroll-inner');
-    const syncWidth = () => {
-      inner.style.width = container.scrollWidth + 'px';
-    };
+    const syncWidth = () => { inner.style.width = container.scrollWidth + 'px'; };
     syncWidth();
     const ro = new ResizeObserver(syncWidth);
     ro.observe(container);
-    const onContainerScroll = () => {
-      sticky.scrollLeft = container.scrollLeft;
-    };
-    const onStickyScroll = () => {
-      container.scrollLeft = sticky.scrollLeft;
-    };
+    const onContainerScroll = () => { sticky.scrollLeft = container.scrollLeft; };
+    const onStickyScroll = () => { container.scrollLeft = sticky.scrollLeft; };
     container.addEventListener('scroll', onContainerScroll);
     sticky.addEventListener('scroll', onStickyScroll);
     return () => {
@@ -788,55 +523,28 @@ export default function Standings() {
   }, [sortedStandings, activeView, divisionMap]);
 
   const handleSort = (key) => {
-    if (key === 'season_rank') {
-      setSortConfig({ key: 'default', direction: 'descending' });
-      return;
-    }
+    if (key === 'season_rank') { setSortConfig({ key: 'default', direction: 'descending' }); return; }
     let direction = 'ascending';
     if (sortConfig.key === key) {
-      direction =
-        sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+      direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
     } else {
       direction = reverseSortColumns.includes(key) ? 'ascending' : 'descending';
     }
     setSortConfig({ key, direction });
   };
 
-  const handleRowMouseEnter = useCallback(
-    (e, team, pts) => {
-      if (window.matchMedia('(hover: none)').matches) return; // if mobile return
-      const tiedTeams = sortedStandings.filter(
-        (s) => Number(s.pts) === Number(pts)
-      );
-      if (tiedTeams.length < 2) {
-        setTiebreakerInfo(null);
-        return;
-      }
-      const anyNearEnd = tiedTeams.some((t) => (t.gr ?? 0) <= 10);
-        if (!anyNearEnd) {
-          setTiebreakerInfo(null);
-          return;
-        }
+  const handleRowMouseEnter = useCallback((e, team, pts) => {
+    if (window.matchMedia('(hover: none)').matches) return;
+    const tiedTeams = sortedStandings.filter((s) => Number(s.pts) === Number(pts));
+    if (tiedTeams.length < 2) { setTiebreakerInfo(null); return; }
+    const anyNearEnd = tiedTeams.some((t) => (t.gr ?? 0) <= 10);
+    if (!anyNearEnd) { setTiebreakerInfo(null); return; }
+    const el = e.currentTarget;
+    const r = el.getBoundingClientRect();
+    setTiebreakerInfo({ hoveredTeam: team, tiedStandings: tiedTeams, anchorRect: { top: r.top, right: r.right, left: r.left, height: r.height } });
+  }, [sortedStandings, totalGamesPerTeam]);
 
-      const el = e.currentTarget;
-      const r = el.getBoundingClientRect();
-      setTiebreakerInfo({
-        hoveredTeam: team,
-        tiedStandings: tiedTeams,
-        anchorRect: {
-          top: r.top,
-          right: r.right,
-          left: r.left,
-          height: r.height,
-        },
-      });
-    },
-    [sortedStandings, totalGamesPerTeam]
-  );
-
-  const handleRowMouseLeave = useCallback(() => {
-    setTiebreakerInfo(null);
-  }, []);
+  const handleRowMouseLeave = useCallback(() => { setTiebreakerInfo(null); }, []);
 
   const hasConferences = divisionMap.some((d) => d.conference != null);
   const hasDivisions = divisionMap.some((d) => d.division != null);
@@ -852,75 +560,45 @@ export default function Standings() {
       return [{ title: null, subtitle: null, teams: sortedStandings }];
     }
     const sortGroup = (teams) => {
-      if (
-        sortConfig.key !== 'default' &&
-        sortConfig.key !== 'pts' &&
-        sortConfig.key !== 'season_rank'
-      ) {
+      if (sortConfig.key !== 'default' && sortConfig.key !== 'pts' && sortConfig.key !== 'season_rank') {
         return [...teams].sort((a, b) => {
           const { key, direction } = sortConfig;
           if (a[key] === null || a[key] === undefined) return 1;
           if (b[key] === null || b[key] === undefined) return -1;
           if (typeof a[key] === 'string') {
-            return direction === 'ascending'
-              ? a[key].localeCompare(b[key])
-              : b[key].localeCompare(a[key]);
+            return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
           }
           return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
         });
       }
-      return sortWithTiebreakers(teams, rawGames).map((s, idx) => ({
-        ...s,
-        _sortRank: idx + 1,
-      }));
+      return sortWithTiebreakers(teams, rawGames).map((s, idx) => ({ ...s, _sortRank: idx + 1 }));
     };
     if (activeView === 'conference' && hasConferences) {
-      const conferences = [
-        ...new Set(divisionMap.map((d) => d.conference).filter(Boolean)),
-      ];
+      const conferences = [...new Set(divisionMap.map((d) => d.conference).filter(Boolean))];
       return conferences.map((conf) => {
-        const teams = sortedStandings.filter(
-          (s) => divisionMap.find((d) => d.team === s.team)?.conference === conf
-        );
+        const teams = sortedStandings.filter((s) => divisionMap.find((d) => d.team === s.team)?.conference === conf);
         return { title: conf, subtitle: null, teams: sortGroup(teams) };
       });
     }
     if (activeView === 'division' && hasDivisions) {
       if (hasConferences) {
         const result = [];
-        const conferences = [
-          ...new Set(divisionMap.map((d) => d.conference).filter(Boolean)),
-        ];
+        const conferences = [...new Set(divisionMap.map((d) => d.conference).filter(Boolean))];
         conferences.forEach((conf) => {
-          const divs = [
-            ...new Set(
-              divisionMap
-                .filter((d) => d.conference === conf)
-                .map((d) => d.division)
-                .filter(Boolean)
-            ),
-          ];
+          const divs = [...new Set(divisionMap.filter((d) => d.conference === conf).map((d) => d.division).filter(Boolean))];
           divs.forEach((div) => {
             const teams = sortedStandings.filter((s) => {
               const ti = divisionMap.find((d) => d.team === s.team);
               return ti?.conference === conf && ti?.division === div;
             });
-            result.push({
-              title: conf,
-              subtitle: div,
-              teams: sortGroup(teams),
-            });
+            result.push({ title: conf, subtitle: div, teams: sortGroup(teams) });
           });
         });
         return result;
       } else {
-        const divisions = [
-          ...new Set(divisionMap.map((d) => d.division).filter(Boolean)),
-        ];
+        const divisions = [...new Set(divisionMap.map((d) => d.division).filter(Boolean))];
         return divisions.map((div) => {
-          const teams = sortedStandings.filter(
-            (s) => divisionMap.find((d) => d.team === s.team)?.division === div
-          );
+          const teams = sortedStandings.filter((s) => divisionMap.find((d) => d.team === s.team)?.division === div);
           return { title: div, subtitle: null, teams: sortGroup(teams) };
         });
       }
@@ -930,11 +608,9 @@ export default function Standings() {
 
   const groupedStandings = getGroupedStandings();
 
-  // Column visibility driven by JS (not CSS) so thead and tbody always match
-  const showPerGame = !isMobilePortrait;   // desktop + landscape = show; portrait = hide
-  const showCoach   = !isMobileLandscape;  // desktop + portrait  = show; landscape = hide
+  const showPerGame = !isMobilePortrait;
+  const showCoach   = !isMobileLandscape;
 
-  // ── Column definitions ──────────────────────────────────────────────────
   const columns = [
     { label: 'Rank',    key: 'season_rank', width: '5px' },
     { label: 'Team',    key: 'team',        width: '5px' },
@@ -959,8 +635,6 @@ export default function Standings() {
   ];
 
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
-
-  // Helper: format per-game values for display
   const gfPerG = (s) => (s.gf_per_g != null ? s.gf_per_g.toFixed(2) : '—');
   const gaPerG = (s) => (s.ga_per_g != null ? s.ga_per_g.toFixed(2) : '—');
 
@@ -978,67 +652,42 @@ export default function Standings() {
           <select
             className="arcade-select"
             value={selectedSeason}
-            onChange={(e) => {
-              setSelectedSeason(e.target.value);
-              setSortConfig({ key: 'default', direction: 'descending' });
-            }}
+            onChange={(e) => { setSelectedSeason(e.target.value); setSortConfig({ key: 'default', direction: 'descending' }); }}
             disabled={!selectedLeague || seasons.length === 0}
           >
             <option value="">SELECT SEASON</option>
-            {seasons.map((s) => (
-              <option key={s.lg} value={s.lg}>
-                {s.lg} ({s.year})
-              </option>
-            ))}
+            {seasons.map((s) => <option key={s.lg} value={s.lg}>{s.lg} ({s.year})</option>)}
           </select>
         </div>
       </div>
 
       {computedStandings.length > 0 && (
         <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', marginBottom: '2rem', marginTop: '1rem' }}>
-        <div className="view-tabs">
-            <button
-              className={`tab-button ${activeView === 'overall' ? 'active' : ''}`}
-              onClick={() => setActiveView('overall')}
-            >
-              <span className="tab-icon">⚡</span>
-              <span className="tab-text">OVERALL</span>
+          <div className="view-tabs">
+            <button className={`tab-button ${activeView === 'overall' ? 'active' : ''}`} onClick={() => setActiveView('overall')}>
+              <span className="tab-icon">⚡</span><span className="tab-text">OVERALL</span>
             </button>
             {availableViews.conference && (
-              <button
-                className={`tab-button ${activeView === 'conference' ? 'active' : ''}`}
-                onClick={() => setActiveView('conference')}
-              >
-                <span className="tab-icon">🏆</span>
-                <span className="tab-text">CONFERENCE</span>
+              <button className={`tab-button ${activeView === 'conference' ? 'active' : ''}`} onClick={() => setActiveView('conference')}>
+                <span className="tab-icon">🏆</span><span className="tab-text">CONFERENCE</span>
               </button>
             )}
             {availableViews.division && (
-              <button
-                className={`tab-button ${activeView === 'division' ? 'active' : ''}`}
-                onClick={() => setActiveView('division')}
-              >
-                <span className="tab-icon">🎯</span>
-                <span className="tab-text">DIVISION</span>
+              <button className={`tab-button ${activeView === 'division' ? 'active' : ''}`} onClick={() => setActiveView('division')}>
+                <span className="tab-icon">🎯</span><span className="tab-text">DIVISION</span>
               </button>
             )}
             {availableViews.playoffs && (
-              <button
-                className={`tab-button playoffs-tab ${activeView === 'playoffs' ? 'active' : ''}`}
-                onClick={() => setActiveView('playoffs')}
-              >
-                <span className="tab-icon">🏅</span>
-                <span className="tab-text">PLAYOFFS</span>
+              <button className={`tab-button playoffs-tab ${activeView === 'playoffs' ? 'active' : ''}`} onClick={() => setActiveView('playoffs')}>
+                <span className="tab-icon">🏅</span><span className="tab-text">PLAYOFFS</span>
               </button>
             )}
           </div>
-                <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '8px' }}>
-                  <button className={`compact-toggle ${compactView ? 'active' : ''}`}
-                    onClick={() => setCompactView(v => !v)} title="Compact View">⊞</button>
-                  <button className="compact-toggle"
-                    onClick={() => setFullScreenOpen(true)} title="Full Screen View">⛶</button>
-                </div>
-              </div>
+          <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', gap: '8px' }}>
+            <button className={`compact-toggle ${compactView ? 'active' : ''}`} onClick={() => setCompactView(v => !v)} title="Compact View">⊞</button>
+            <button className="compact-toggle" onClick={() => setFullScreenOpen(true)} title="Full Screen View">⛶</button>
+          </div>
+        </div>
       )}
 
       {loading ? (
@@ -1047,41 +696,35 @@ export default function Standings() {
           <div className="loading-text">LOADING DATA...</div>
         </div>
       ) : !selectedLeague ? (
-        <div className="no-data">
-          <div className="no-data-text">SELECT A LEAGUE FROM THE MENU</div>
-        </div>
+        <div className="no-data"><div className="no-data-text">SELECT A LEAGUE FROM THE MENU</div></div>
       ) : computedStandings.length === 0 ? (
-        <div className="no-data">
-          <div className="no-data-text">SELECT A SEASON</div>
-        </div>
+        <div className="no-data"><div className="no-data-text">SELECT A SEASON</div></div>
       ) : activeView === 'playoffs' ? (
         playoffGames?.length ? (
           <div style={{ overflowX: 'auto', width: '100%' }}>
+            {/* PATCH 2: Pass onSeriesClick so clicking a series opens TeamDrawer in compare mode */}
             <PlayoffBracket
               playoffGames={playoffGames}
               seasonGames={rawGames}
               selectedSeason={selectedSeason}
               selectedLeague={selectedLeague}
+              onSeriesClick={handleSeriesClick}
             />
           </div>
         ) : (
-          <div className="no-data">
-            <div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div>
-          </div>
+          <div className="no-data"><div className="no-data-text">NOT ENOUGH TEAMS FOR BRACKET</div></div>
         )
       ) : (
         <>
-          {tiebreakerInfo &&
-            tiebreakerInfo.anchorRect &&
-            createPortal(
-              <TiebreakerTooltip
-                hoveredTeam={tiebreakerInfo.hoveredTeam}
-                tiedStandings={tiebreakerInfo.tiedStandings}
-                seasonGames={rawGames}
-                anchorRect={tiebreakerInfo.anchorRect}
-              />,
-              document.body
-            )}
+          {tiebreakerInfo && tiebreakerInfo.anchorRect && createPortal(
+            <TiebreakerTooltip
+              hoveredTeam={tiebreakerInfo.hoveredTeam}
+              tiedStandings={tiebreakerInfo.tiedStandings}
+              seasonGames={rawGames}
+              anchorRect={tiebreakerInfo.anchorRect}
+            />,
+            document.body
+          )}
 
           <div className={`table-container ${compactView ? 'compact' : ''}`} ref={tableContainerRef}>
             {groupedStandings.map((group, groupIdx) => (
@@ -1090,43 +733,23 @@ export default function Standings() {
                   <div className="group-header">
                     <div className="group-title">
                       {group.title}
-                      {group.subtitle && (
-                        <span className="group-subtitle">
-                          {' '}
-                          - {group.subtitle}
-                        </span>
-                      )}
+                      {group.subtitle && <span className="group-subtitle"> - {group.subtitle}</span>}
                     </div>
                   </div>
                 )}
                 {!group.title && group.subtitle && (
-                  <div className="group-header">
-                    <div className="group-title">{group.subtitle}</div>
-                  </div>
+                  <div className="group-header"><div className="group-title">{group.subtitle}</div></div>
                 )}
                 <div className="scoreboard-frame">
                   <table className="arcade-table">
                     <thead>
                       <tr>
                         {columns.map((col) => (
-                          <th
-                            key={col.key}
-                            onClick={() => handleSort(col.key)}
-                            style={{ width: col.width }}
-                            className={[
-                              activeSortKey === col.key ? 'sorted-column' : '',
-                              col.key === 'season_rank' ? 'rank-column' : '',
-                            ].filter(Boolean).join(' ')}
-                          >
+                          <th key={col.key} onClick={() => handleSort(col.key)} style={{ width: col.width }}
+                            className={[activeSortKey === col.key ? 'sorted-column' : '', col.key === 'season_rank' ? 'rank-column' : ''].filter(Boolean).join(' ')}>
                             <div className="th-content">
                               <span>{col.label}</span>
-                              {activeSortKey === col.key && (
-                                <span className="sort-indicator">
-                                  {sortConfig.direction === 'ascending'
-                                    ? '▲'
-                                    : '▼'}
-                                </span>
-                              )}
+                              {activeSortKey === col.key && <span className="sort-indicator">{sortConfig.direction === 'ascending' ? '▲' : '▼'}</span>}
                             </div>
                           </th>
                         ))}
@@ -1139,15 +762,11 @@ export default function Standings() {
                         const isElim = eliminated.has(s.team);
                         const rowClass = [
                           idx % 2 === 0 ? 'even-row' : 'odd-row',
-                          playoffTeams && s._sortRank <= playoffTeams
-                            ? 'playoff-team'
-                            : 'non-playoff-team',
+                          playoffTeams && s._sortRank <= playoffTeams ? 'playoff-team' : 'non-playoff-team',
                           isTied ? 'tied-row' : '',
                           isClinched ? 'clinched-row' : '',
                           isElim ? 'eliminated-row' : '',
-                        ]
-                          .filter(Boolean)
-                          .join(' ');
+                        ].filter(Boolean).join(' ');
                         return (
                           <React.Fragment key={`${s.team}-${idx}`}>
                             <tr
@@ -1164,53 +783,22 @@ export default function Standings() {
                                 } else if (drawerCompare === s.team) {
                                   setDrawerCompare(null);
                                 } else {
-                                  // Different team clicked while drawer open → set as compare, keep primary
                                   setDrawerCompare(s.team);
                                 }
                               }}
                               onMouseEnter={isTied ? (e) => handleRowMouseEnter(e, s.team, Number(s.pts)) : undefined}
                               onMouseLeave={isTied ? handleRowMouseLeave : undefined}
                             >
-                              <td className="rank-cell">
-                                <span className="rank-badge">{idx + 1}</span>
-                              </td>
+                              <td className="rank-cell"><span className="rank-badge">{idx + 1}</span></td>
                               <td className="team-cell">
                                 <div className="row-banner-overlay">
-                                  <img
-                                    src={`/assets/banners/${s.team}.png`}
-                                    alt=""
-                                    className="banner-image"
-                                    onError={(e) => {
-                                      e.target.style.display = 'none';
-                                    }}
-                                  />
+                                  <img src={`/assets/banners/${s.team}.png`} alt="" className="banner-image" onError={(e) => { e.target.style.display = 'none'; }} />
                                 </div>
                                 <div className="team-info">
-                                  <div
-                                    className={`logo-container${
-                                      isClinched
-                                        ? ' logo-clinched'
-                                        : isElim
-                                        ? ' logo-elim'
-                                        : ''
-                                    }`}
-                                  >
-                                    <img
-                                      src={`/assets/teamLogos/${s.team}.png`}
-                                      alt={s.team}
-                                      className="team-logo"
-                                      onError={(e) => {
-                                        e.target.style.display = 'none';
-                                        e.target.nextElementSibling.style.display =
-                                          'flex';
-                                      }}
-                                    />
-                                    <div
-                                      className="logo-fallback"
-                                      style={{ display: 'none' }}
-                                    >
-                                      {s.team}
-                                    </div>
+                                  <div className={`logo-container${isClinched ? ' logo-clinched' : isElim ? ' logo-elim' : ''}`}>
+                                    <img src={`/assets/teamLogos/${s.team}.png`} alt={s.team} className="team-logo"
+                                      onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling.style.display = 'flex'; }} />
+                                    <div className="logo-fallback" style={{ display: 'none' }}>{s.team}</div>
                                   </div>
                                   <span className="team-code">{s.team}</span>
                                 </div>
@@ -1222,63 +810,30 @@ export default function Standings() {
                               <td className={`stat-cell ${activeSortKey === 't' ? 'sorted-cell' : ''}`}>{s.t}</td>
                               <td className={`stat-cell ${activeSortKey === 'otl' ? 'sorted-cell' : ''}`}>{s.otl}</td>
                               <td className={`stat-cell pts-cell ${activeSortKey === 'pts' ? 'sorted-cell' : ''} ${isTied ? 'tied-pts' : ''}`}>{s.pts}</td>
-                              <td className={`stat-cell ${activeSortKey === 'pts_pct' ? 'sorted-cell' : ''}`}>
-                                {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
-                              </td>
+                              <td className={`stat-cell ${activeSortKey === 'pts_pct' ? 'sorted-cell' : ''}`}>{s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}</td>
                               <td className={`stat-cell ${activeSortKey === 'gf' ? 'sorted-cell' : ''}`}>{s.gf}</td>
-                              {showPerGame && (
-                                <td className={`stat-cell per-game-cell ${activeSortKey === 'gf_per_g' ? 'sorted-cell' : ''}`}>
-                                  {gfPerG(s)}
-                                </td>
-                              )}
+                              {showPerGame && <td className={`stat-cell per-game-cell ${activeSortKey === 'gf_per_g' ? 'sorted-cell' : ''}`}>{gfPerG(s)}</td>}
                               <td className={`stat-cell ${activeSortKey === 'ga' ? 'sorted-cell' : ''}`}>{s.ga}</td>
-                              {showPerGame && (
-                                <td className={`stat-cell ${activeSortKey === 'ga_per_g' ? 'sorted-cell' : ''}`}>
-                                  {gaPerG(s)}
-                                </td>
-                              )}
-
-                              <td
-                                className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${activeSortKey === 'gd' ? 'sorted-cell' : ''}`}
-                              >
-                                {s.gd > 0 ? '+' : ''}{s.gd}
-                              </td>
+                              {showPerGame && <td className={`stat-cell ${activeSortKey === 'ga_per_g' ? 'sorted-cell' : ''}`}>{gaPerG(s)}</td>}
+                              <td className={`stat-cell ${s.gd > 0 ? 'positive-gd' : s.gd < 0 ? 'negative-gd' : ''} ${activeSortKey === 'gd' ? 'sorted-cell' : ''}`}>{s.gd > 0 ? '+' : ''}{s.gd}</td>
                               <td className={`stat-cell ${activeSortKey === 'otw' ? 'sorted-cell' : ''}`}>{s.otw}</td>
                               <td className={`stat-cell ${activeSortKey === 'shutouts' ? 'sorted-cell' : ''}`}>{s.shutouts}</td>
-                              <td
-                                className={`stat-cell streak-cell ${activeSortKey === 'streakVal' ? 'sorted-cell' : ''} ${
-                                  s.streakType === 'W' ? 'streak-w'
-                                  : s.streakType === 'L' ? 'streak-l'
-                                  : 'streak-t'
-                                }`}
-                              >
-                                {s.streak}
-                              </td>
+                              <td className={`stat-cell streak-cell ${activeSortKey === 'streakVal' ? 'sorted-cell' : ''} ${s.streakType === 'W' ? 'streak-w' : s.streakType === 'L' ? 'streak-l' : 'streak-t'}`}>{s.streak}</td>
                               <td className={`stat-cell ${activeSortKey === 'gr' ? 'sorted-cell' : ''}`}>{s.gr ?? '—'}</td>
                               <td className={`stat-cell ${activeSortKey === 'maxPts' ? 'sorted-cell' : ''}`}>{s.maxPts ?? '—'}</td>
                             </tr>
                             {playoffTeams && idx === playoffTeams - 1 && (
                               <tr className="playoff-cutoff-row">
-                                <td
-                                  colSpan={columns.length}
-                                  className="playoff-cutoff-cell"
-                                >
+                                <td colSpan={columns.length} className="playoff-cutoff-cell">
                                   <div className="playoff-cutoff-line">
                                     <div className="cutoff-glow" />
                                     <div className="cutoff-content">
                                       <div className="cutoff-diamond" />
-                                      <span className="cutoff-text">
-                                        PLAYOFF LINE
-                                      </span>
+                                      <span className="cutoff-text">PLAYOFF LINE</span>
                                       <div className="cutoff-diamond" />
                                     </div>
                                     <div className="cutoff-particles">
-                                      {[1, 2, 3, 4, 5].map((n) => (
-                                        <div
-                                          key={n}
-                                          className={`particle particle-${n}`}
-                                        />
-                                      ))}
+                                      {[1,2,3,4,5].map((n) => <div key={n} className={`particle particle-${n}`} />)}
                                     </div>
                                   </div>
                                 </td>
@@ -1292,57 +847,54 @@ export default function Standings() {
                 </div>
               </div>
             ))}
-            <TeamDrawer
-              selectedSeason={selectedSeason}
-              computedStandings={computedStandings}   
-              primaryTeam={drawerPrimary}
-              compareTeam={drawerCompare}
-              onClose={() => {
-                setDrawerPrimary(null);
-                setDrawerCompare(null);
-              }}
-            />
           </div>
+          {/* NOTE: TeamDrawer moved outside table-container — see PATCH 3 below */}
         </>
       )}
 
-{fullScreenOpen && (
-  <FullScreenStandingsModal
-    onClose={() => setFullScreenOpen(false)}
-    groupedStandings={groupedStandings}
-    columns={columns}
-    sortConfig={sortConfig}
-    playoffTeams={playoffTeams}
-    clinched={clinched}
-    eliminated={eliminated}
-    tiedPtsSet={tiedPtsSet}
-    rawGames={rawGames}
-    totalGamesPerTeam={totalGamesPerTeam}
-    showPerGame={showPerGame}
-    showCoach={showCoach}
-    gfPerG={gfPerG}
-    gaPerG={gaPerG}
-  />
-)}
+      {fullScreenOpen && (
+        <FullScreenStandingsModal
+          onClose={() => setFullScreenOpen(false)}
+          groupedStandings={groupedStandings}
+          columns={columns}
+          sortConfig={sortConfig}
+          playoffTeams={playoffTeams}
+          clinched={clinched}
+          eliminated={eliminated}
+          tiedPtsSet={tiedPtsSet}
+          rawGames={rawGames}
+          totalGamesPerTeam={totalGamesPerTeam}
+          showPerGame={showPerGame}
+          showCoach={showCoach}
+          gfPerG={gfPerG}
+          gaPerG={gaPerG}
+        />
+      )}
+
+      {/* PATCH 3: TeamDrawer lives here — outside both the standings table-container
+          AND the playoffs block, so it renders regardless of activeView.
+          Blocked on mobile (both orientations). */}
+      {!isMobileLandscape && !isMobilePortrait && (
+        <TeamDrawer
+          selectedSeason={selectedSeason}
+          computedStandings={computedStandings}
+          primaryTeam={drawerPrimary}
+          compareTeam={drawerCompare}
+          onClose={() => {
+            setDrawerPrimary(null);
+            setDrawerCompare(null);
+          }}
+        />
+      )}
 
       <style>{`
         html { overflow-x: auto; }
         body { overflow-x: auto; }
-        .standings-page {
-          overflow-x: visible;
-        }
+        .standings-page { overflow-x: visible; }
         .standings-page { padding:1rem 2rem; min-height:100vh; background:radial-gradient(ellipse at top,#0a0a15 0%,#000 100%); }
-        .table-container {
-          overflow-x: auto;
-          display: block;
-          width: 100%;
-        }
+        .table-container { overflow-x: auto; display: block; width: 100%; }
         .table-container::-webkit-scrollbar { display: none; }
-        .arcade-table {
-          width: max-content;
-          min-width: 100%;
-          display: inline-table;
-        }
+        .arcade-table { width: max-content; min-width: 100%; display: inline-table; }
         .scoreboard-header-container { display:flex; justify-content:center; margin-bottom:1rem; }
         .scoreboard-header { background:#000; border:6px solid #333; border-radius:8px; padding:1rem 2rem; box-shadow:0 0 0 2px #000,inset 0 0 20px rgba(0,0,0,.8),0 8px 16px rgba(0,0,0,.5),0 0 40px rgba(255,215,0,.3); position:relative; overflow:hidden; }
         .scoreboard-header::before { content:''; position:absolute; inset:0; background:repeating-linear-gradient(0deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px),repeating-linear-gradient(90deg,transparent 0px,transparent 2px,rgba(255,215,0,.03) 2px,rgba(255,215,0,.03) 4px); pointer-events:none; }
@@ -1352,17 +904,7 @@ export default function Standings() {
         .control-panel { display:flex; gap:2rem; justify-content:center; margin-bottom:1.5rem; flex-wrap:wrap; }
         .control-group { display:flex; flex-direction:column; gap:.5rem; }
         .control-group label { font-family:'Press Start 2P',monospace; font-size:.7rem; color:#FFD700; letter-spacing:2px; }
-        .view-tabs-container { display:flex; justify-content:center; margin-bottom:2rem; margin-top:1rem; }
-        .view-tabs {
-          display: inline-flex;
-          gap: 1rem;
-          background: linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%);
-          padding: .75rem;
-          border-radius: 12px;
-          border: 3px solid #333;
-          box-shadow: 0 0 20px rgba(0,0,0,.5),inset 0 0 20px rgba(0,0,0,.3);
-          justify-content: center;
-        }
+        .view-tabs { display:inline-flex; gap:1rem; background:linear-gradient(180deg,#0a0a15 0%,#1a1a2e 100%); padding:.75rem; border-radius:12px; border:3px solid #333; box-shadow:0 0 20px rgba(0,0,0,.5),inset 0 0 20px rgba(0,0,0,.3); justify-content:center; }
         .tab-button { display:flex; align-items:center; gap:.5rem; padding:.75rem 1.5rem; background:linear-gradient(180deg,#1a1a2e 0%,#0f0f1a 100%); border:2px solid #87CEEB; border-radius:8px; color:#87CEEB; font-family:'Press Start 2P',monospace; font-size:.65rem; cursor:pointer; transition:all .3s ease; box-shadow:0 0 10px rgba(135,206,235,.3),inset 0 0 10px rgba(135,206,235,.1); letter-spacing:1px; position:relative; overflow:hidden; }
         .tab-button::before { content:''; position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg,transparent,rgba(135,206,235,.3),transparent); transition:left .5s ease; }
         .tab-button:hover::before { left:100%; }
@@ -1384,30 +926,13 @@ export default function Standings() {
         .arcade-select:hover:not(:disabled) { border-color:#FFD700; color:#FFD700; transform:translateY(-2px); }
         .arcade-select:disabled { opacity:.4; cursor:not-allowed; }
         .arcade-select option { background:#1a1a2e; color:#87CEEB; }
-        .scoreboard-frame {
-          display: inline-block;
-          width: max-content;
-          min-width: 100%;
-          box-sizing: border-box;
-        }
+        .scoreboard-frame { display:inline-block; width:max-content; min-width:100%; box-sizing:border-box; }
         .arcade-table td,.arcade-table th { box-sizing:border-box; }
         .arcade-table thead { background:linear-gradient(180deg,#FFD700 0%,#FF6347 100%); }
         .arcade-table th { padding:.75rem .5rem; font-family:'Press Start 2P',monospace; font-size:.6rem; color:#FFF; text-align:center; cursor:pointer; user-select:none; transition:all .3s ease; position:relative; border-right:1px solid rgba(255,255,255,.2); }
         .arcade-table td { padding:.25rem .5rem; text-align:center; font-size:1.2rem; color:#E0E0E0; border-bottom:1px solid rgba(255,140,0,.2); letter-spacing:1px; position:relative; }
         .arcade-table .rank-cell { font-family:'Press Start 2P',monospace; font-size:.9rem; color:#FF8C00; font-weight:bold; text-shadow:0 0 5px #FF8C00; position:relative; z-index:10; white-space:nowrap; }
-        .rank-badge {
-          display: inline-block;
-          min-width: 34px;
-          text-align: center;
-          background: #111;
-          color: #ffb300;
-          border: 1px solid #ffb300;
-          border-radius: 6px;
-          padding: .38rem .65rem;
-          box-shadow: none;
-          text-shadow: none;
-          font-weight: 700;
-        }
+        .rank-badge { display:inline-block; min-width:34px; text-align:center; background:#111; color:#ffb300; border:1px solid #ffb300; border-radius:6px; padding:.38rem .65rem; font-weight:700; }
         .arcade-table th:last-child { border-right:none; }
         .arcade-table th:hover:not(.rank-column) { background:linear-gradient(180deg,#FF8C00 0%,#FF8C00 100%); transform:translateY(-2px); }
         .arcade-table th.sorted-column { background:linear-gradient(180deg,#FF8C00 0%,#FFA500 100%); }
@@ -1417,46 +942,15 @@ export default function Standings() {
         @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
         .arcade-table tbody tr { transition:all .2s ease; position:relative; }
         .playoff-team .rank-cell::before { content:''; position:absolute; left:-8px; top:-1px; bottom:-1px; width:4px; background:linear-gradient(180deg,#00FF00 0%,#00CC00 100%); box-shadow:0 0 10px rgba(0,255,0,.6); z-index:100; }
-        .tied-pts { position:relative; animation: none !important; }
-        .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); animation: none !important; }
-        @keyframes triangle-pulse { 0%,100%{border-color:transparent rgba(255,140,0,.6) transparent transparent} 50%{border-color:transparent rgba(255,215,0,1) transparent transparent; filter:drop-shadow(0 0 5px rgba(255,215,0,.9))} }
-        @keyframes tied-pulse { 0%,100%{text-shadow:0 0 8px rgba(255,140,0,.4)} 50%{text-shadow:0 0 16px rgba(255,140,0,.9),0 0 24px rgba(255,215,0,.4)} }
+        .tied-pts { position:relative; }
+        .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); }
         .tied-row { cursor:default; }
-        .row-banner-overlay {
-          position: relative;
-          -webkit-mask-image: linear-gradient(
-            to right,
-            rgba(0,0,0,.95) 0%,
-            rgba(0,0,0,.9) 25%,
-            rgba(0,0,0,.65) 50%,
-            rgba(0,0,0,.25) 70%,
-            rgba(0,0,0,.05) 85%,
-            rgba(0,0,0,0) 100%
-          );
-          -webkit-mask-repeat: no-repeat;
-          -webkit-mask-size: 100% 100%;
-        }
-        .arcade-table tbody tr:hover {
-          transform: translateZ(0) scale(1.01);
-        }
-        .arcade-table td.sorted-cell {
-          background: rgba(255, 140, 0, 0.10) !important;
-          box-shadow: inset 0 0 8px rgba(255, 140, 0, 0.25);
-        }
-        .banner-image {
-          position: absolute;
-          left: 0;
-          top: 50%;
-          transform: translateY(-50%);
-          backface-visibility: hidden;
-          will-change: transform;
-          height: 150%;
-          width: auto;
-          object-fit: contain;
-          filter: brightness(1.3);
-        }
-        .arcade-table tbody tr { position: relative; }
-        .arcade-table tbody tr:hover .banner-image { filter: brightness(1.5); transform:translateY(-50%) scale(1.03); }
+        .row-banner-overlay { position:relative; -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-repeat:no-repeat; -webkit-mask-size:100% 100%; }
+        .arcade-table tbody tr:hover { transform:translateZ(0) scale(1.01); }
+        .arcade-table td.sorted-cell { background:rgba(255,140,0,.10)!important; box-shadow:inset 0 0 8px rgba(255,140,0,.25); }
+        .banner-image { position:absolute; left:0; top:50%; transform:translateY(-50%); backface-visibility:hidden; will-change:transform; height:150%; width:auto; object-fit:contain; filter:brightness(1.3); }
+        .arcade-table tbody tr { position:relative; }
+        .arcade-table tbody tr:hover .banner-image { filter:brightness(1.5); transform:translateY(-50%) scale(1.03); }
         .arcade-table tbody tr.even-row { background:rgba(0,30,60,.4); }
         .arcade-table tbody tr.odd-row { background:rgba(0,20,40,.6); }
         .arcade-table tbody tr:hover { background:rgba(255,140,0,.15)!important; transform:scale(1.01); box-shadow:0 0 15px rgba(255,140,0,.4); z-index:2; }
@@ -1483,62 +977,32 @@ export default function Standings() {
         .team-code { display:none; }
         .logo-container { position:relative; width:38px; height:38px; flex-shrink:0; background:rgba(0,0,0,.6); border-radius:8px; padding:3px; border:2px solid rgba(135,206,235,.4); box-shadow:0 0 10px rgba(135,206,235,.3); transition:all .3s ease; }
         .arcade-table tbody tr:hover .logo-container { border-color:rgba(255,140,0,.8); box-shadow:0 0 15px rgba(255,140,0,.6); }
-        .logo-clinched { border:3px solid #00DD60 !important; box-shadow:0 0 10px rgba(0,221,96,.6), 0 0 20px rgba(0,221,96,.25) !important; animation:clinch-logo-pulse 2.4s ease-in-out infinite; }
-        @keyframes clinch-logo-pulse { 0%,100% { box-shadow:0 0 8px rgba(0,221,96,.5), 0 0 16px rgba(0,221,96,.2); border-color:#00DD60; } 50% { box-shadow:0 0 14px rgba(0,255,100,.8), 0 0 28px rgba(0,255,100,.4); border-color:#00FF70; } }
-        .arcade-table tbody tr:hover .logo-clinched { border-color:#00FF70 !important; box-shadow:0 0 18px rgba(0,255,100,.9), 0 0 32px rgba(0,255,100,.4) !important; }
-        .logo-elim { border:5px solid #FF0000 !important; box-shadow:0 0 10px #FF0000, 0 0 20px rgba(255,0,0,0.4), inset 0 0 6px rgba(255,0,0,0.6); filter:saturate(0.7); transition:all 0.3s ease; }
-        .arcade-table tbody tr:hover .logo-elim { border-color:#FF3333 !important; box-shadow:0 0 12px rgba(255,50,50,.6), 0 0 22px rgba(255,50,50,.3) !important; filter:saturate(0.7); }
+        .logo-clinched { border:3px solid #00DD60!important; box-shadow:0 0 10px rgba(0,221,96,.6),0 0 20px rgba(0,221,96,.25)!important; animation:clinch-logo-pulse 2.4s ease-in-out infinite; }
+        @keyframes clinch-logo-pulse { 0%,100%{box-shadow:0 0 8px rgba(0,221,96,.5),0 0 16px rgba(0,221,96,.2);border-color:#00DD60} 50%{box-shadow:0 0 14px rgba(0,255,100,.8),0 0 28px rgba(0,255,100,.4);border-color:#00FF70} }
+        .logo-elim { border:5px solid #FF0000!important; box-shadow:0 0 10px #FF0000,0 0 20px rgba(255,0,0,.4),inset 0 0 6px rgba(255,0,0,.6); filter:saturate(0.7); }
         .team-logo { width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 0 6px rgba(135,206,235,.4)); transition:all .3s ease; }
         .arcade-table tbody tr:hover .team-logo { filter:drop-shadow(0 0 15px rgba(255,140,0,1)); transform:scale(1.15); }
         .logo-fallback { display:flex; align-items:center; justify-content:center; width:100%; height:100%; background:linear-gradient(135deg,#87CEEB 0%,#4682B4 100%); border:2px solid #87CEEB; border-radius:8px; font-family:'Press Start 2P',monospace; font-size:.5rem; color:#000; font-weight:bold; }
         .coach-cell { color:#FFF; text-align:left; padding-left:1rem; }
         .pts-cell { font-weight:bold; color:#FFD700; }
-        .pts-pct-cell { font-size:1.1rem; color:#87CEEB; }
-        .streak-cell { font-family:'VT323',monospace; font-size:1.4rem;  letter-spacing:1px; }
-
-        /* Per-game columns */
+        .streak-cell { font-family:'VT323',monospace; font-size:1.4rem; letter-spacing:1px; }
         .per-game-cell { font-size:1.05rem; color:#a0d4f5; }
-
-        /* STREAK FORMATTING */
         .arcade-table td.streak-cell.streak-w { color:#00c853; }
         .arcade-table td.streak-cell.streak-l { color:#ff0000; }
         .arcade-table td.streak-cell.streak-t { color:#888; }
-       
-        /* ── COMPACT VIEW ─────────────────────────────────── */
-        .compact .row-banner-overlay { display: none; }
-        .compact .arcade-table td { padding: .1rem .35rem; font-size: .95rem; }
-        .compact .arcade-table th { padding: .45rem .35rem; font-size: .48rem; }
-        .compact .logo-container { width: 26px; height: 26px; padding: 2px; }
-        .compact .rank-badge { min-width: 24px; padding: .2rem .4rem; font-size: .65rem; }
-        .compact .coach-cell { font-size: .85rem; }
-        .compact .pts-cell { font-size: 1rem; }
-        .compact .streak-cell { font-size: 1.1rem; }
-        
-        .compact-toggle {
-          background: rgba(135,206,235,.08);
-          border: 2px solid rgba(135,206,235,.3);
-          border-radius: 8px;
-          color: rgba(135,206,235,.6);
-          font-size: 1.2rem;
-          width: 38px; height: 38px;
-          cursor: pointer;
-          transition: all .2s;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .compact-toggle:hover {
-          border-color: #FFD700; color: #FFD700;
-          box-shadow: 0 0 10px rgba(255,215,0,.3);
-        }
-        .compact-toggle.active {
-          background: rgba(255,140,0,.15);
-          border-color: #FF8C00; color: #FF8C00;
-          box-shadow: 0 0 12px rgba(255,140,0,.4);
-        }
-
-        /* GD FORMATTING */
+        .compact .row-banner-overlay { display:none; }
+        .compact .arcade-table td { padding:.1rem .35rem; font-size:.95rem; }
+        .compact .arcade-table th { padding:.45rem .35rem; font-size:.48rem; }
+        .compact .logo-container { width:26px; height:26px; padding:2px; }
+        .compact .rank-badge { min-width:24px; padding:.2rem .4rem; font-size:.65rem; }
+        .compact .coach-cell { font-size:.85rem; }
+        .compact .pts-cell { font-size:1rem; }
+        .compact .streak-cell { font-size:1.1rem; }
+        .compact-toggle { background:rgba(135,206,235,.08); border:2px solid rgba(135,206,235,.3); border-radius:8px; color:rgba(135,206,235,.6); font-size:1.2rem; width:38px; height:38px; cursor:pointer; transition:all .2s; display:flex; align-items:center; justify-content:center; }
+        .compact-toggle:hover { border-color:#FFD700; color:#FFD700; box-shadow:0 0 10px rgba(255,215,0,.3); }
+        .compact-toggle.active { background:rgba(255,140,0,.15); border-color:#FF8C00; color:#FF8C00; box-shadow:0 0 12px rgba(255,140,0,.4); }
         .arcade-table td.positive-gd { color:#00c853; }
         .arcade-table td.negative-gd { color:#ff0000; }
-
         .sorted-cell { background:rgba(255,215,0,.15)!important; box-shadow:inset 0 0 8px rgba(255,215,0,.3)!important; }
         .arcade-table td:not(.sorted-cell) { background:transparent; }
         .loading-screen { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:400px; gap:2rem; }
@@ -1548,78 +1012,33 @@ export default function Standings() {
         @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
         .no-data { display:flex; justify-content:center; align-items:center; min-height:400px; }
         .no-data-text { font-family:'Press Start 2P',monospace; font-size:1.2rem; color:#FFD700; letter-spacing:3px; }
-
-        /* Per-game cols and coach col visibility is handled in JS, not CSS */
-
-        /* PORTRAIT MOBILE layout */
-        @media (max-width: 932px) and (orientation: portrait) {
-          .row-banner-overlay { display: none; }
-          .view-tabs { flex-direction: column; gap: .5rem; padding: .5rem; }
-          .tab-button { padding: .6rem 1rem; font-size: .55rem; justify-content: center; }
-          .arcade-table {
-            width: max-content;
-            min-width: 100%;
-            display: table;
-          }
-          .scoreboard-frame {
-            display: inline-block;
-            min-width: 100%;
-          }
+        .col-short { display:none; }
+        @media (max-width:932px) and (orientation:portrait) {
+          .row-banner-overlay { display:none; }
+          .view-tabs { flex-direction:column; gap:.5rem; padding:.5rem; }
+          .tab-button { padding:.6rem 1rem; font-size:.55rem; justify-content:center; }
+          .arcade-table { width:max-content; min-width:100%; display:table; }
+          .scoreboard-frame { display:inline-block; min-width:100%; }
         }
-        
-        @media (max-width: 600px) {
-          .standings-page { padding: .5rem !important; }
-          .scoreboard-header-container {
-            width: 100%;
-            padding: 0;
-            box-sizing: border-box;
-            overflow: hidden;
-          }
-          .scoreboard-header {
-            width: 100%;
-            box-sizing: border-box;
-            padding: .5rem !important;
-            border-width: 3px !important;
-            overflow: hidden;
-          }
-          .led-text {
-            font-size: .7rem !important;
-            letter-spacing: 1px !important;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-          }
+        @media (max-width:600px) {
+          .standings-page { padding:.5rem!important; }
+          .scoreboard-header-container { width:100%; padding:0; box-sizing:border-box; overflow:hidden; }
+          .scoreboard-header { width:100%; box-sizing:border-box; padding:.5rem!important; border-width:3px!important; overflow:hidden; }
+          .led-text { font-size:.7rem!important; letter-spacing:1px!important; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
         }
-        
-        .col-short { display: none; }
-
-        /* LANDSCAPE MOBILE — tight layout, coach hidden, per-game shown (handled in JS) */
-        @media (max-width: 932px) and (orientation: landscape) {
-          .standings-page { padding: .5rem !important; }
-          .col-full { display: none; }
-          .col-short { display: inline; }
-          .team-code { display: none !important; }
-        
-          .arcade-table {
-            width: 100% !important;
-            min-width: unset !important;
-            display: table !important;
-            table-layout: auto !important;
-          }
-          .scoreboard-frame {
-            width: 100% !important;
-            min-width: unset !important;
-            display: block !important;
-          }
-          .table-container {
-            overflow-x: auto !important;
-          }
-        
-          .arcade-table th { padding: .35rem .1rem !important; font-size: .36rem !important; }
-          .arcade-table td { padding: .2rem .1rem !important; font-size: .85rem !important; }
-          .per-game-cell { font-size: .8rem !important; }
-          .rank-badge { min-width: 18px !important; padding: .1rem .2rem !important; font-size: .38rem !important; }
-          .logo-container { width: 24px !important; height: 24px !important; }
+        @media (max-width:932px) and (orientation:landscape) {
+          .standings-page { padding:.5rem!important; }
+          .col-full { display:none; }
+          .col-short { display:inline; }
+          .team-code { display:none!important; }
+          .arcade-table { width:100%!important; min-width:unset!important; display:table!important; table-layout:auto!important; }
+          .scoreboard-frame { width:100%!important; min-width:unset!important; display:block!important; }
+          .table-container { overflow-x:auto!important; }
+          .arcade-table th { padding:.35rem .1rem!important; font-size:.36rem!important; }
+          .arcade-table td { padding:.2rem .1rem!important; font-size:.85rem!important; }
+          .per-game-cell { font-size:.8rem!important; }
+          .rank-badge { min-width:18px!important; padding:.1rem .2rem!important; font-size:.38rem!important; }
+          .logo-container { width:24px!important; height:24px!important; }
         }
       `}</style>
     </div>

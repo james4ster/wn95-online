@@ -396,7 +396,7 @@ function BottomBar({ topW, botW, winner, topTeam, botTeam, seasonGames }) {
 }
 
 // MatchupCard reads winsNeeded and seriesLength from slot — no more hardcoded default of 4
-function MatchupCard({ slot, seasonGames, cardRef, flipped = false }) {
+function MatchupCard({ slot, seasonGames, cardRef, flipped = false, onSeriesClick }) {
   const {
     topTeam, botTeam, topSeed, botSeed, topW, botW, games, winner,
     winsNeeded = 4,      // from slot — dynamic per series
@@ -414,7 +414,12 @@ function MatchupCard({ slot, seasonGames, cardRef, flipped = false }) {
       background: 'linear-gradient(155deg,rgba(8,8,22,.98),rgba(16,16,38,.98))',
       boxShadow: `0 0 12px ${glw},0 3px 16px rgba(0,0,0,.5),inset 0 0 14px rgba(0,0,0,.4)`,
       overflow: 'hidden', position: 'relative', boxSizing: 'border-box',
-    }}>
+      cursor: onSeriesClick && topTeam && botTeam ? 'pointer' : 'default',
+    }}
+      onClick={() => {
+        if (onSeriesClick && topTeam && botTeam) onSeriesClick(topTeam, botTeam);
+      }}
+    >
       <div style={{
         position: 'absolute', top: 0, right: 0, width: 36, height: 36,
         background: `radial-gradient(circle at top right,${done ? 'rgba(255,215,0,.08)' : 'rgba(135,206,235,.04)'},transparent 70%)`,
@@ -440,7 +445,7 @@ function MatchupCard({ slot, seasonGames, cardRef, flipped = false }) {
 }
 
 // ChampCard also reads winsNeeded/seriesLength from slot
-function ChampCard({ slot, selectedLeague, cardRef, seasonGames }) {
+function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }) {
   const [tErr, setTErr] = useState(false);
   const tSrc = selectedLeague?.toUpperCase().startsWith('Q')
     ? '/assets/awards/q_champ.png'
@@ -507,7 +512,12 @@ function ChampCard({ slot, selectedLeague, cardRef, seasonGames }) {
         background: 'linear-gradient(155deg,rgba(14,11,30,.99),rgba(30,22,6,.99))',
         boxShadow: '0 0 28px rgba(255,215,0,.26),0 0 56px rgba(255,140,0,.12),inset 0 0 28px rgba(255,215,0,.07)',
         overflow: 'hidden', position: 'relative',
-      }}>
+        cursor: onSeriesClick && topTeam && botTeam ? 'pointer' : 'default',
+      }}
+        onClick={() => {
+          if (onSeriesClick && topTeam && botTeam) onSeriesClick(topTeam, botTeam);
+        }}
+      >
         <div style={{
           position: 'absolute', inset: 0, pointerEvents: 'none',
           background: 'linear-gradient(45deg,transparent 30%,rgba(255,215,0,.04) 50%,transparent 70%)',
@@ -670,7 +680,7 @@ function BracketLines({ getBox, leftRefs, rightRefs, champRef, leftRounds, right
    MAIN EXPORT
 ═══════════════════════════════════════════════════════════════ */
 export default function PlayoffBracket({
-  playoffGames = [], seasonGames = [], selectedSeason, selectedLeague, playoffTeams,
+  playoffGames = [], seasonGames = [], selectedSeason, selectedLeague, playoffTeams, onSeriesClick,      
 }) {
   const containerRef = useRef(null);
   const champRef     = useRef(null);
@@ -758,10 +768,11 @@ export default function PlayoffBracket({
           return (
             <MatchupCard
               key={`${ri}-${mi}`}
-              slot={slot}              // slot carries winsNeeded + seriesLength
+              slot={slot}
               seasonGames={seasonGames}
               cardRef={refsGrid[ri][mi]}
               flipped={flipped}
+              onSeriesClick={onSeriesClick}
             />
           );
         })}
@@ -812,7 +823,7 @@ export default function PlayoffBracket({
         </div>
 
         <div style={{ flexShrink: 0, zIndex: 1, position: 'relative', alignSelf: 'center' }}>
-        <ChampCard slot={champSlot} selectedLeague={selectedLeague} cardRef={champRef} seasonGames={seasonGames} />
+        <ChampCard slot={champSlot} selectedLeague={selectedLeague} cardRef={champRef} seasonGames={seasonGames} onSeriesClick={onSeriesClick} />
         </div>
 
         <div style={{

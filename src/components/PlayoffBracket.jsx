@@ -2,17 +2,6 @@ import React, { useRef, useState, useLayoutEffect, useCallback } from 'react';
 
 /* ═══════════════════════════════════════════════════════════════
    SEED BRACKET MATH
-   Standard single-elimination — slots ordered so sequential
-   pairing (slot[i*2] vs slot[i*2+1]) produces the correct R2+
-   matchups that actually appear in the database.
-
-   16 teams — LEFT: 1v16, 8v9, 4v13, 6v11  |  RIGHT: 5v12, 3v14, 7v10, 2v15
-     R2: (1/16 winner vs 8/9 winner), (4/13 winner vs 6/11 winner),
-         (5/12 winner vs 3/14 winner), (7/10 winner vs 2/15 winner)
-    8 teams — LEFT: 1v8, 4v5  |  RIGHT: 3v6, 2v7
-     R2: (1/8 winner vs 4/5 winner), (3/6 winner vs 2/7 winner)
-    4 teams: 1v4 | 2v3
-    2 teams: 1v2
 ═══════════════════════════════════════════════════════════════ */
 const FIRST_ROUND_PAIRS = {
   2:  [[1,2]],
@@ -26,42 +15,28 @@ function bracketSize(n) {
   return 16;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   BUILD FULL BRACKET SCAFFOLD
-
-   Each slot now carries:
-     seriesLength  – from series_length column (e.g. 7, 5, 3, 1)
-     winsNeeded    – Math.ceil(seriesLength / 2)
-                     Best-of-7 → 4, Best-of-5 → 3, Best-of-3 → 2, Best-of-1 → 1
-═══════════════════════════════════════════════════════════════ */
 function buildBracket(playoffGames, numTeams) {
   const size   = bracketSize(numTeams || 8);
   const pairs  = FIRST_ROUND_PAIRS[size];
-  const nR     = Math.log2(size); // total rounds including championship
+  const nR     = Math.log2(size);
 
-  // Index games by round → Map of (series_number → games[]) AND (teamA-teamB → games[])
   const byRound = new Map();
-
   (playoffGames || []).forEach(g => {
     const r = g.round;
     if (!byRound.has(r)) byRound.set(r, new Map());
     const rMap = byRound.get(r);
-
     const addTo = (key) => {
       if (!rMap.has(key)) rMap.set(key, []);
       if (!rMap.get(key).find(x => x.game_number === g.game_number && x.team_code_a === g.team_code_a)) {
         rMap.get(key).push(g);
       }
     };
-
     if (g.series_number != null) addTo(g.series_number);
     if (g.team_code_a && g.team_code_b) {
       addTo(`${g.team_code_a}-${g.team_code_b}`);
       addTo(`${g.team_code_b}-${g.team_code_a}`);
     }
   });
-
-  // Sort all game lists by game_number
   byRound.forEach(rMap => {
     rMap.forEach((games, k) => {
       rMap.set(k, games.sort((a,b) => (a.game_number ?? 0) - (b.game_number ?? 0)));
@@ -78,15 +53,12 @@ function buildBracket(playoffGames, numTeams) {
     }
     return [];
   }
-
-  // Read series_length from the games array; default to 7 if absent
   function getSeriesLength(games) {
     for (const g of games) {
       if (g.series_length != null && g.series_length > 0) return g.series_length;
     }
     return 7;
   }
-
   function record(games, topTeam, botTeam) {
     let tW = 0, bW = 0;
     (games || []).forEach(g => {
@@ -97,8 +69,6 @@ function buildBracket(playoffGames, numTeams) {
     });
     return { tW, bW };
   }
-
-  // winsNeeded is now passed per call — derived from seriesLength
   function winner(games, topTeam, botTeam, winsNeeded) {
     if (!topTeam || !botTeam) return null;
     const { tW, bW } = record(games, topTeam, botTeam);
@@ -108,12 +78,6 @@ function buildBracket(playoffGames, numTeams) {
   }
 
   const allRounds = [];
-
-  // Round 1: match each bracket slot to its actual series by seed pair.
-  // We CANNOT assume series_number maps positionally to bracket slots —
-  // the database may number series in any order. Instead, build a lookup
-  // from "lowerSeed-higherSeed" → that series's actual series_number,
-  // then use that series_number (or team-pair fallback) to find games.
   const seedPairToSN = new Map();
   (playoffGames || []).forEach(g => {
     if (g.round !== 1) return;
@@ -124,27 +88,19 @@ function buildBracket(playoffGames, numTeams) {
   });
 
   const r1 = pairs.map((pair, si) => {
-    const [sA, sB] = pair; // sA = top seed (lower number), sB = bottom seed
-
-    // Find the actual series_number for this seed matchup
+    const [sA, sB] = pair;
     const key = `${sA}-${sB}`;
     const actualSN = seedPairToSN.get(key) ?? null;
-
-    // Look up games by the real series_number (not by positional si+1)
     const games = getGames(1, actualSN, null, null);
-
-    // Determine which team is top (lower seed number = higher rank)
     let top = null, bot = null;
     if (games.length) {
       const g0 = games[0];
       if ((g0.seed_a ?? 99) <= (g0.seed_b ?? 99)) { top = g0.team_code_a; bot = g0.team_code_b; }
       else                                          { top = g0.team_code_b; bot = g0.team_code_a; }
     }
-
     const seriesLength = getSeriesLength(games);
     const winsNeeded   = Math.ceil(seriesLength / 2);
     const rec          = record(games, top, bot);
-
     return {
       round: 1, si, topSeed: sA, botSeed: sB,
       topTeam: top, botTeam: bot,
@@ -156,12 +112,10 @@ function buildBracket(playoffGames, numTeams) {
   });
   allRounds.push(r1);
 
-  // Subsequent rounds
   for (let r = 2; r <= nR; r++) {
     const prev = allRounds[r - 2];
     const n    = Math.floor(prev.length / 2);
     const rnd  = [];
-
     for (let i = 0; i < n; i++) {
       const topPrev = prev[i * 2];
       const botPrev = prev[i * 2 + 1];
@@ -169,17 +123,15 @@ function buildBracket(playoffGames, numTeams) {
       const bot     = botPrev.winner || null;
       const topSeed = top ? (top === topPrev.topTeam ? topPrev.topSeed : topPrev.botSeed) : null;
       const botSeed = bot ? (bot === botPrev.topTeam ? botPrev.topSeed : botPrev.botSeed) : null;
-
       const games        = getGames(r, null, top, bot);
-      const seriesLength = getSeriesLength(games);        // ← dynamic per series
-      const winsNeeded   = Math.ceil(seriesLength / 2);  // ← dynamic per series
+      const seriesLength = getSeriesLength(games);
+      const winsNeeded   = Math.ceil(seriesLength / 2);
       const rec          = record(games, top, bot);
-
       rnd.push({
         round: r, si: i, topSeed, botSeed,
         topTeam: top, botTeam: bot,
         topW: rec.tW, botW: rec.bW,
-        games, seriesLength, winsNeeded,                  // ← stored on slot
+        games, seriesLength, winsNeeded,
         winner: winner(games, top, bot, winsNeeded),
         sn: null,
       });
@@ -188,7 +140,6 @@ function buildBracket(playoffGames, numTeams) {
   }
 
   const champSlot = allRounds[allRounds.length - 1][0];
-
   const leftRounds = allRounds.slice(0, -1).map((rnd) => {
     const h = Math.ceil(rnd.length / 2);
     return rnd.slice(0, h);
@@ -198,7 +149,7 @@ function buildBracket(playoffGames, numTeams) {
     return rnd.slice(h);
   });
 
-  return { leftRounds, rightRounds, champSlot, nRounds: nR };
+  return { leftRounds, rightRounds, champSlot, nRounds: nR, allRounds };
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -219,7 +170,7 @@ function getRsRec(t1, t2, sg) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   UI PRIMITIVES — unchanged except winsNeeded/seriesLength are now dynamic
+   DESKTOP UI PRIMITIVES (unchanged)
 ═══════════════════════════════════════════════════════════════ */
 function Logo({ team, size = 24 }) {
   const [err, setErr] = useState(false);
@@ -239,7 +190,6 @@ function Logo({ team, size = 24 }) {
   return <img src={`/assets/teamLogos/${team}.png`} alt={team} style={s} onError={() => setErr(true)} />;
 }
 
-// winsNeeded now comes from slot.winsNeeded (dynamic per series)
 function TeamRow({ team, seed, wins, isWinner, winsNeeded = 4, flipped = false }) {
   return (
     <div style={{
@@ -264,7 +214,6 @@ function TeamRow({ team, seed, wins, isWinner, winsNeeded = 4, flipped = false }
         textShadow: isWinner ? '0 0 10px rgba(255,215,0,.6)' : 'none',
         textAlign: flipped ? 'right' : 'left',
       }}>{team || 'TBD'}</span>
-      {/* Pip count driven by winsNeeded so a best-of-3 shows 2 dots, best-of-5 shows 3, etc. */}
       <div style={{ display: 'flex', gap: 3, flexDirection: flipped ? 'row-reverse' : 'row' }}>
         {Array.from({ length: winsNeeded }).map((_, i) => (
           <div key={i} style={{
@@ -282,10 +231,9 @@ function TeamRow({ team, seed, wins, isWinner, winsNeeded = 4, flipped = false }
   );
 }
 
-// seriesLength caps displayed game columns (replaces hardcoded slice(0,7))
 function ScoreGrid({ games, topTeam, botTeam, flipped = false, seriesLength = 7 }) {
   if (!games?.length) return null;
-  const gCapped = games.slice(0, seriesLength); // show at most seriesLength columns
+  const gCapped = games.slice(0, seriesLength);
   return (
     <div style={{
       background: 'rgba(0,0,0,.5)',
@@ -332,17 +280,9 @@ function ScoreGrid({ games, topTeam, botTeam, flipped = false, seriesLength = 7 
   );
 }
 
-/* Single bottom bar:
-   - Complete series  → enlarged "WINNER WINS X-Y"
-   - In progress      → small series lead/tied + RS record
-   - Not started      → RS record only
-*/
 function BottomBar({ topW, botW, winner, topTeam, botTeam, seasonGames }) {
   if (!topTeam || !botTeam) return null;
-
   const rsRec = getRsRec(topTeam, botTeam, seasonGames);
-
-  // Series finished — one big winner line, no separate RS bar needed
   if (winner) {
     const winnerW = winner === topTeam ? topW : botW;
     const loserW  = winner === topTeam ? botW : topW;
@@ -356,7 +296,6 @@ function BottomBar({ topW, botW, winner, topTeam, botTeam, seasonGames }) {
       }}>{winner} WINS {winnerW}-{loserW}</div>
     );
   }
-
   const hasGames = (topW + botW) > 0;
   return (
     <div>
@@ -395,12 +334,11 @@ function BottomBar({ topW, botW, winner, topTeam, botTeam, seasonGames }) {
   );
 }
 
-// MatchupCard reads winsNeeded and seriesLength from slot — no more hardcoded default of 4
 function MatchupCard({ slot, seasonGames, cardRef, flipped = false, onSeriesClick }) {
   const {
     topTeam, botTeam, topSeed, botSeed, topW, botW, games, winner,
-    winsNeeded = 4,      // from slot — dynamic per series
-    seriesLength = 7,    // from slot — dynamic per series
+    winsNeeded = 4,
+    seriesLength = 7,
   } = slot;
 
   const done   = !!winner;
@@ -444,7 +382,6 @@ function MatchupCard({ slot, seasonGames, cardRef, flipped = false, onSeriesClic
   );
 }
 
-// ChampCard also reads winsNeeded/seriesLength from slot
 function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }) {
   const [tErr, setTErr] = useState(false);
   const tSrc = selectedLeague?.toUpperCase().startsWith('Q')
@@ -453,8 +390,8 @@ function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }
 
   const {
     topTeam, botTeam, topSeed, botSeed, topW, botW, games, winner,
-    winsNeeded = 4,      // from slot — dynamic
-    seriesLength = 7,    // from slot — dynamic
+    winsNeeded = 4,
+    seriesLength = 7,
   } = slot || {};
 
   function CRow({ team, seed, wins, isWinner }) {
@@ -479,7 +416,6 @@ function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }
           fontFamily: "'VT323',monospace", fontSize: '1.25rem', letterSpacing: 1.5,
           textShadow: isWinner ? '0 0 12px rgba(255,215,0,.7)' : 'none',
         }}>{team || 'TBD'}</span>
-        {/* Championship pips respect the actual series length */}
         <div style={{ display: 'flex', gap: 4 }}>
           {Array.from({ length: winsNeeded }).map((_, i) => (
             <div key={i} style={{
@@ -523,7 +459,6 @@ function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }
           background: 'linear-gradient(45deg,transparent 30%,rgba(255,215,0,.04) 50%,transparent 70%)',
           animation: 'champShimmer 4s infinite',
         }} />
-
         <div style={{
           textAlign: 'center', padding: '8px 0 5px',
           fontFamily: "'Press Start 2P',monospace", fontSize: '.44rem',
@@ -535,7 +470,6 @@ function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }
           background: 'linear-gradient(90deg,transparent,rgba(255,215,0,.4),transparent)',
           margin: '2px 0',
         }} />
-
         <CRow team={topTeam} seed={topSeed} wins={topW || 0} isWinner={winner === topTeam} />
         <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,140,0,.2),transparent)' }} />
         {(games || []).length > 0
@@ -571,7 +505,7 @@ function ChampCard({ slot, selectedLeague, cardRef, seasonGames, onSeriesClick }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SVG CONNECTOR LINES — unchanged
+   SVG CONNECTOR LINES
 ═══════════════════════════════════════════════════════════════ */
 function BracketLines({ getBox, leftRefs, rightRefs, champRef, leftRounds, rightRounds }) {
   const [segs, setSegs] = useState([]);
@@ -677,15 +611,475 @@ function BracketLines({ getBox, leftRefs, rightRefs, champRef, leftRounds, right
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   MOBILE PRIMITIVES
+═══════════════════════════════════════════════════════════════ */
+
+/** Small logo for mobile — seed only, no team code */
+function MobileLogo({ team, size = 28 }) {
+  const [err, setErr] = useState(false);
+  const s = {
+    width: size, height: size, flexShrink: 0, borderRadius: 4,
+    background: 'rgba(0,0,0,.5)', padding: 2, objectFit: 'contain',
+    display: 'block',
+  };
+  if (!team) return (
+    <div style={{ ...s, border: '1px dashed rgba(255,255,255,.15)', display: 'flex',
+      alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,.2)', fontSize: 9 }}>?</div>
+  );
+  if (err) return (
+    <div style={{ ...s, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(135,206,235,.1)', borderRadius: 4,
+      color: '#87CEEB', fontSize: 8, fontFamily: "'Press Start 2P',monospace" }}>{team.slice(0,3)}</div>
+  );
+  return <img src={`/assets/teamLogos/${team}.png`} alt={team} style={s} onError={() => setErr(true)} />;
+}
+
+/**
+ * A single team row inside a mobile matchup — logo + seed on one side, bold win number on the other.
+ * flipped=true mirrors it (right-side bracket).
+ */
+function MobileTeamRow({ team, seed, wins, isWinner, flipped = false, isPortrait = false }) {
+  const winColor = isWinner
+    ? '#FFD700'
+    : wins > 0 ? '#87CEEB' : 'rgba(255,255,255,.28)';
+
+  // ── PORTRAIT: stacked vertical (logo → seed → wins) ──────────
+  if (isPortrait) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '4px 2px',
+        minHeight: 48,
+        gap: 1,
+        background: isWinner ? 'rgba(0,210,90,.1)' : 'transparent',
+        borderBottom: isWinner ? '2px solid #00FF88' : '2px solid transparent',
+        boxSizing: 'border-box',
+      }}>
+        <MobileLogo team={team} size={22} />
+        {seed != null && (
+          <span style={{
+            fontFamily: "'Press Start 2P',monospace",
+            fontSize: '.36rem',
+            color: '#FF8C00',
+            textShadow: '0 0 4px rgba(255,140,0,.5)',
+            lineHeight: 1,
+          }}>{seed}</span>
+        )}
+        <span style={{
+          fontFamily: "'VT323',monospace",
+          fontSize: '1.35rem',
+          color: winColor,
+          lineHeight: 1,
+          textShadow: isWinner
+            ? '0 0 10px rgba(255,215,0,.8)'
+            : wins > 0 ? '0 0 6px rgba(135,206,235,.4)' : 'none',
+        }}>{team ? wins : '—'}</span>
+      </div>
+    );
+  }
+
+  // ── LANDSCAPE / ORIGINAL: horizontal row (seed | logo | name | win dots) ──
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 5, padding: '5px 7px', minHeight: 34,
+      background: isWinner
+        ? 'linear-gradient(90deg,rgba(0,210,90,.13),rgba(0,210,90,.02))'
+        : 'transparent',
+      borderLeft:  !flipped && isWinner ? '2px solid #00FF88' : '2px solid transparent',
+      borderRight:  flipped && isWinner ? '2px solid #00FF88' : '2px solid transparent',
+      flexDirection: flipped ? 'row-reverse' : 'row',
+      boxSizing: 'border-box',
+    }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 4,
+        flexDirection: flipped ? 'row-reverse' : 'row',
+      }}>
+        <MobileLogo team={team} size={26} />
+        {seed != null && (
+          <span style={{
+            fontFamily: "'Press Start 2P',monospace",
+            fontSize: '.55rem',
+            color: '#FF8C00',
+            textShadow: '0 0 5px rgba(255,140,0,.5)',
+            lineHeight: 1,
+          }}>{seed}</span>
+        )}
+      </div>
+      <span style={{
+        fontFamily: "'VT323',monospace",
+        fontSize: '1.7rem',
+        fontWeight: 'bold',
+        color: winColor,
+        textShadow: isWinner
+          ? '0 0 12px rgba(255,215,0,.8)'
+          : wins > 0 ? '0 0 8px rgba(135,206,235,.5)' : 'none',
+        lineHeight: 1,
+        minWidth: 18,
+        textAlign: 'right',
+        marginLeft: 'auto',
+      }}>{team ? wins : '—'}</span>
+    </div>
+  );
+}
+
+/**
+ * Compact matchup card for mobile.
+ * Shows: top team row / divider / bottom team row.
+ * No score grid, no bottom bar.
+ */
+function MobileMatchupCard({ slot, onSeriesClick, style = {}, isPortrait = false }) {
+  const { topTeam, botTeam, topSeed, botSeed, topW, botW, winner } = slot;
+  const done   = !!winner;
+  const active = !done && (topW + botW) > 0;
+  const bdr = done   ? 'rgba(255,215,0,.55)'
+            : active ? 'rgba(0,255,136,.3)'
+            :          'rgba(135,206,235,.18)';
+  const glow = done   ? '0 0 10px rgba(255,215,0,.2)'
+             : active ? '0 0 8px rgba(0,255,136,.1)'
+             :          'none';
+
+  return (
+    <div
+      onClick={() => { if (onSeriesClick && topTeam && botTeam) onSeriesClick(topTeam, botTeam); }}
+      style={{
+        border: `1px solid ${bdr}`,
+        borderRadius: 8,
+        background: 'linear-gradient(155deg,rgba(8,8,22,.97),rgba(16,16,38,.97))',
+        boxShadow: glow,
+        overflow: 'hidden',
+        cursor: onSeriesClick && topTeam && botTeam ? 'pointer' : 'default',
+        ...style,
+      }}
+    >
+      <MobileTeamRow team={topTeam} seed={topSeed} wins={topW} isWinner={winner === topTeam} isPortrait={isPortrait} />
+      <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,140,0,.2),transparent)' }} />
+      <MobileTeamRow team={botTeam} seed={botSeed} wins={botW} isWinner={winner === botTeam} isPortrait={isPortrait} />
+    </div>
+  );
+}
+
+/**
+ * Grouped R1 card — two matchups stacked in one bordered container,
+ * matching the NHL screenshot style.
+ */
+function MobileR1GroupCard({ slotA, slotB, onSeriesClick, isPortrait = false }) {
+  return (
+    <div style={{
+      border: '1px solid rgba(135,206,235,.12)',
+      borderRadius: 10,
+      background: 'rgba(0,0,0,.3)',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+    }}>
+      <MobileMatchupCard slot={slotA} onSeriesClick={onSeriesClick} isPortrait={isPortrait} />
+      <div style={{ height: 2, background: 'rgba(135,206,235,.08)' }} />
+      <MobileMatchupCard slot={slotB} onSeriesClick={onSeriesClick} isPortrait={isPortrait} />
+    </div>
+  );
+}
+
+/**
+ * Round label badge
+ */
+function MobileRoundLabel({ label, isChampion = false }) {
+  return (
+    <div style={{
+      textAlign: 'center',
+      fontFamily: "'Press Start 2P',monospace",
+      fontSize: '.4rem',
+      letterSpacing: 2,
+      color: isChampion ? '#FFD700' : '#87CEEB',
+      textShadow: isChampion ? '0 0 8px #FFD700' : '0 0 6px #87CEEB',
+      marginBottom: 5,
+      paddingTop: 2,
+    }}>{label}</div>
+  );
+}
+
+/**
+ * Mobile championship card — centered, trophy + two teams, bold win numbers
+ */
+function MobileChampCard({ slot, selectedLeague, onSeriesClick }) {
+  const [tErr, setTErr] = useState(false);
+  const tSrc = selectedLeague?.toUpperCase().startsWith('Q')
+    ? '/assets/awards/q_champ.png'
+    : '/assets/awards/w_champ.png';
+
+  const { topTeam, botTeam, topSeed, botSeed, topW, botW, winner } = slot || {};
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+      {/* Trophy */}
+      <div>
+        {!tErr
+          ? <img src={tSrc} alt="Trophy" onError={() => setTErr(true)}
+              style={{ width: 40, height: 40, filter: 'drop-shadow(0 0 14px rgba(255,215,0,.9))' }} />
+          : <div style={{ fontSize: '1.8rem' }}>🏆</div>
+        }
+      </div>
+
+      {/* Card */}
+      <div
+        onClick={() => { if (onSeriesClick && topTeam && botTeam) onSeriesClick(topTeam, botTeam); }}
+        style={{
+          width: '100%',
+          border: '2px solid rgba(255,215,0,.6)',
+          borderRadius: 10,
+          background: 'linear-gradient(155deg,rgba(14,11,30,.99),rgba(30,22,6,.99))',
+          boxShadow: '0 0 20px rgba(255,215,0,.2),inset 0 0 20px rgba(255,215,0,.05)',
+          overflow: 'hidden',
+          cursor: onSeriesClick && topTeam && botTeam ? 'pointer' : 'default',
+        }}
+      >
+        <div style={{
+          textAlign: 'center', padding: '5px 0 4px',
+          fontFamily: "'Press Start 2P',monospace", fontSize: '.38rem',
+          color: '#FFD700', letterSpacing: 2,
+          textShadow: '0 0 8px #FFD700,0 0 16px #FF8C00',
+        }}>CHAMPIONSHIP</div>
+        <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,215,0,.4),transparent)' }} />
+
+        {/* Top team */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '6px 8px', minHeight: 38,
+          background: winner === topTeam ? 'linear-gradient(90deg,rgba(0,210,90,.15),rgba(0,210,90,.03))' : 'transparent',
+          borderLeft: winner === topTeam ? '3px solid #00FF88' : '3px solid transparent',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <MobileLogo team={topTeam} size={28} />
+            {topSeed != null && (
+              <span style={{ fontFamily: "'Press Start 2P',monospace", fontSize: '.5rem', color: '#FF8C00' }}>{topSeed}</span>
+            )}
+          </div>
+          <span style={{
+            fontFamily: "'VT323',monospace", fontSize: '1.8rem', fontWeight: 'bold',
+            color: winner === topTeam ? '#FFD700' : topW > 0 ? '#87CEEB' : 'rgba(255,255,255,.25)',
+            textShadow: winner === topTeam ? '0 0 12px rgba(255,215,0,.8)' : 'none',
+          }}>{topTeam ? topW : '—'}</span>
+        </div>
+
+        <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(255,140,0,.2),transparent)' }} />
+
+        {/* Bottom team */}
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '6px 8px', minHeight: 38,
+          background: winner === botTeam ? 'linear-gradient(90deg,rgba(0,210,90,.15),rgba(0,210,90,.03))' : 'transparent',
+          borderLeft: winner === botTeam ? '3px solid #00FF88' : '3px solid transparent',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <MobileLogo team={botTeam} size={28} />
+            {botSeed != null && (
+              <span style={{ fontFamily: "'Press Start 2P',monospace", fontSize: '.5rem', color: '#FF8C00' }}>{botSeed}</span>
+            )}
+          </div>
+          <span style={{
+            fontFamily: "'VT323',monospace", fontSize: '1.8rem', fontWeight: 'bold',
+            color: winner === botTeam ? '#FFD700' : botW > 0 ? '#87CEEB' : 'rgba(255,255,255,.25)',
+            textShadow: winner === botTeam ? '0 0 12px rgba(255,215,0,.8)' : 'none',
+          }}>{botTeam ? botW : '—'}</span>
+        </div>
+
+        {/* Winner banner */}
+        {winner && (
+          <div style={{
+            textAlign: 'center', padding: '10px 8px 12px',
+            borderTop: '1px solid rgba(255,215,0,.25)',
+            background: 'rgba(255,215,0,.08)',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 6 }}>
+              <MobileLogo team={winner} size={48} />
+            </div>
+            <div style={{
+              fontFamily: "'Press Start 2P',monospace", fontSize: '.4rem',
+              color: '#FF8C00', letterSpacing: 2,
+              textShadow: '0 0 8px #FF8C00,0 0 16px #FFD700',
+            }}>CHAMPION</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE BRACKET LAYOUT
+   
+   Layout (mirrors NHL app):
+   
+   [Left half]    [Champ]    [Right half]
+   
+   Each half is a vertical column of rounds.
+   R1: grouped card (2 matchups per card, pairs of slots)
+   R2+: individual matchup cards
+   Championship: centered column
+═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   MOBILE BRACKET LAYOUT  — horizontal flow, mirrors NHL app
+   
+   Structure per half (left example, 4-team = 2 rounds + CF):
+     [R1 col] → [R2 col] → [CF col]   Championship   [CF col] ← [R2 col] ← [R1 col]
+   
+   Each column is a vertical flex of cards.
+   Cards get taller each round so they vertically span their
+   two "feeder" matchups (implicit bracket alignment).
+═══════════════════════════════════════════════════════════════ */
+function MobileBracket({ leftRounds, rightRounds, champSlot, selectedLeague, nRounds, onSeriesClick }) {
+  const [isPortrait, setIsPortrait] = useState(
+    () => window.matchMedia('(orientation: portrait)').matches
+  );
+  useLayoutEffect(() => {
+    const mql = window.matchMedia('(orientation: portrait)');
+    const update = () => setIsPortrait(mql.matches);
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
+
+  function getRoundLabel(ri, totalHalfRounds) {
+    if (ri === 0) return 'R1';
+    if (ri === totalHalfRounds - 1) return 'CF';
+    return `R${ri + 1}`;
+  }
+
+  function renderHalf(rounds, isRight) {
+    const orderedRounds = isRight ? [...rounds].reverse() : rounds;
+    const totalHalfRounds = rounds.length;
+
+    return (
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'row',
+        gap: 4,
+        minWidth: 0,
+        justifyContent: isRight ? 'flex-end' : 'flex-start',
+        alignItems: 'stretch',
+      }}>
+        {orderedRounds.map((rnd, colIdx) => {
+          const origRi = isRight ? (rounds.length - 1 - colIdx) : colIdx;
+          const label = getRoundLabel(origRi, totalHalfRounds);
+          const isR1 = origRi === 0;
+
+          return (
+            <div key={colIdx} style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 4,
+              flex: 1,
+              minWidth: 0,
+              alignItems: 'stretch',
+            }}>
+              <div style={{
+                textAlign: 'center',
+                fontFamily: "'Press Start 2P',monospace",
+                fontSize: '.38rem',
+                letterSpacing: 2,
+                color: label === 'CF' ? '#FFD700' : '#87CEEB',
+                textShadow: label === 'CF' ? '0 0 8px #FFD700' : '0 0 6px #87CEEB',
+                paddingBottom: 3,
+                flexShrink: 0,
+              }}>{label}</div>
+
+              {isR1 ? (
+                <>
+                  {Array.from({ length: Math.ceil(rnd.length / 2) }).map((_, gi) => {
+                    const slotA = rnd[gi * 2];
+                    const slotB = rnd[gi * 2 + 1];
+                    return slotB
+                      ? <MobileR1GroupCard key={gi} slotA={slotA} slotB={slotB}
+                          onSeriesClick={onSeriesClick} isPortrait={isPortrait} />
+                      : <MobileMatchupCard key={gi} slot={slotA}
+                          onSeriesClick={onSeriesClick} isPortrait={isPortrait} />;
+                  })}
+                </>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-around',
+                  flex: 1,
+                  gap: 4,
+                }}>
+                  {rnd.map((slot, mi) => (
+                    <MobileMatchupCard key={mi} slot={slot}
+                      onSeriesClick={onSeriesClick} isPortrait={isPortrait} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: '10px 6px 20px', background: 'transparent' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'row',
+        gap: 6,
+        alignItems: 'flex-start',
+        width: '100%',
+      }}>
+        {renderHalf(leftRounds, false)}
+
+        <div style={{
+          flexShrink: 0,
+          width: 82,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          alignSelf: 'stretch',
+          paddingTop: 20,
+        }}>
+          <MobileChampCard
+            slot={champSlot}
+            selectedLeague={selectedLeague}
+            onSeriesClick={onSeriesClick}
+          />
+        </div>
+
+        {renderHalf(rightRounds, true)}
+      </div>
+
+      <style>{`
+        @keyframes champShimmer {
+          0%  { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+          100%{ transform: translateX(100%)  translateY(100%)  rotate(45deg); }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    MAIN EXPORT
 ═══════════════════════════════════════════════════════════════ */
 export default function PlayoffBracket({
-  playoffGames = [], seasonGames = [], selectedSeason, selectedLeague, playoffTeams, onSeriesClick,      
+  playoffGames = [], seasonGames = [], selectedSeason, selectedLeague, playoffTeams, onSeriesClick,
 }) {
   const containerRef = useRef(null);
   const champRef     = useRef(null);
   const leftRefs     = useRef([]);
   const rightRefs    = useRef([]);
+
+  // Mobile detection — portrait or landscape phone
+  const [isMobile, setIsMobile] = useState(
+    () => window.matchMedia('(max-width: 932px)').matches
+  );
+  useLayoutEffect(() => {
+    const mql = window.matchMedia('(max-width: 932px)');
+    const update = () => setIsMobile(mql.matches);
+    mql.addEventListener('change', update);
+    return () => mql.removeEventListener('change', update);
+  }, []);
 
   const getBox = useCallback((el) => {
     if (!el || !containerRef.current) return null;
@@ -701,11 +1095,6 @@ export default function PlayoffBracket({
     }}>NO PLAYOFF DATA</div>
   );
 
-  // Determine bracket size.
-  // Priority 1: playoffTeams prop (from seasons table — most reliable).
-  // Priority 2: highest seed number seen in the data snapped up to power-of-2
-  //             (handles Q leagues and any bracket size without a prop).
-  // Priority 3: unique team count snapped up (last resort).
   const numTeams = playoffTeams || (() => {
     let maxSeed = 0;
     (playoffGames || []).forEach(g => {
@@ -720,9 +1109,24 @@ export default function PlayoffBracket({
   })();
 
   const { leftRounds, rightRounds, champSlot, nRounds } = buildBracket(playoffGames, numTeams);
+
+  // ── MOBILE RENDER PATH ──────────────────────────────────────
+  if (isMobile) {
+    return (
+      <MobileBracket
+        leftRounds={leftRounds}
+        rightRounds={rightRounds}
+        champSlot={champSlot}
+        selectedLeague={selectedLeague}
+        nRounds={nRounds}
+        onSeriesClick={onSeriesClick}
+      />
+    );
+  }
+
+  // ── DESKTOP RENDER PATH (unchanged) ─────────────────────────
   const CARD_W = 192, COL_GAP = 42;
 
-  // Allocate refs
   leftRounds.forEach((rnd, ri) => {
     if (!leftRefs.current[ri]) leftRefs.current[ri] = [];
     rnd.forEach((_, mi) => { if (!leftRefs.current[ri][mi]) leftRefs.current[ri][mi] = React.createRef(); });
@@ -784,28 +1188,26 @@ export default function PlayoffBracket({
   const rightCols = rightRounds.map((_, ri) => col(rightRounds, rightRefs.current, ri, true)).reverse();
 
   return (
-    <div
-    style={{
+    <div style={{
       padding: '1.5rem 1.5rem 2rem',
       width: '100vw',
       minWidth: 2000,
       overflowX: 'auto',
-      overflowY: 'hidden'
-    }}
-  >
-    <div
-  ref={containerRef}
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: `${COL_GAP}px`,
-    paddingTop: 36,
-    position: 'relative',
-    minHeight: 10,
-    minWidth: 1400
-  }}
->
+      overflowY: 'hidden',
+    }}>
+      <div
+        ref={containerRef}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          gap: `${COL_GAP}px`,
+          paddingTop: 36,
+          position: 'relative',
+          minHeight: 10,
+          minWidth: 1400,
+        }}
+      >
         <BracketLines
           getBox={getBox}
           leftRefs={leftRefs.current}
@@ -823,7 +1225,7 @@ export default function PlayoffBracket({
         </div>
 
         <div style={{ flexShrink: 0, zIndex: 1, position: 'relative', alignSelf: 'center' }}>
-        <ChampCard slot={champSlot} selectedLeague={selectedLeague} cardRef={champRef} seasonGames={seasonGames} onSeriesClick={onSeriesClick} />
+          <ChampCard slot={champSlot} selectedLeague={selectedLeague} cardRef={champRef} seasonGames={seasonGames} onSeriesClick={onSeriesClick} />
         </div>
 
         <div style={{

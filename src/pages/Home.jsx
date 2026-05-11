@@ -2033,7 +2033,7 @@ export default function Home() {
             isPlayoffActive={isPlayoffActive}
             teamGP={teamGP}
             teamNameMap={teamNameMap}
-            seasonTeams={stableSeasonTeams}
+            seasonTeams={seasonTeams}
           />
          {/* ======== UNCOMMENTING THIS WILL DISPLAY TRANSACTIONS PANEL ==================== 
             <section className="panel">

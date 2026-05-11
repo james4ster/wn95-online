@@ -128,7 +128,7 @@ function ClockDisplay() {
   );
 }
 
-function InlineCountdown({ cfg, tick }) {
+function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
   const uc = tick?.urgent ? '#FF3B3B' : tick?.warning ? '#FFB800' : cfg.color;
 
   const renderRight = () => {
@@ -226,9 +226,33 @@ function InlineCountdown({ cfg, tick }) {
             <span className="icd-season">{tick.seasonLabel}</span>
           ) : null}
         </div>
+        {tick?.mode !== 'offseason' && tick?.mode !== 'playoffs' && tick?.mode !== 'done' && currentSeason?.end_date && (
+          <div className="icd-enddate">
+            ENDS {new Date(currentSeason.end_date).toLocaleDateString('en-US', {
+              month: '2-digit', day: '2-digit', year: 'numeric'
+            }).replace(/\//g, '.')} {new Date(currentSeason.end_date).toLocaleTimeString('en-US', {
+              hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'
+            })} EST
+          </div>
+        )}    
+
       </div>
 
       <div className="icd-right">{renderRight()}</div>
+            {seasonPace && tick?.mode !== 'offseason' && tick?.mode !== 'done' && (
+        <div className="icd-pace">
+          {[
+            { label: 'GP', value: seasonPace.totalGP },
+            { label: 'GP/DAY', value: seasonPace.gpPerDay != null ? seasonPace.gpPerDay.toFixed(1) : '—' },
+            { label: 'LEFT', value: seasonPace.isComplete ? '✓' : (seasonPace.remaining != null ? seasonPace.remaining : '—') },
+            { label: 'NEED/DAY', value: seasonPace.isComplete ? '—' : (seasonPace.paceNeeded != null ? seasonPace.paceNeeded.toFixed(1) : '—') },          ].map(({ label, value }) => (
+            <div key={label} className="icd-pace-cell">
+              <span className="icd-pace-val">{value}</span>
+              <span className="icd-pace-lbl">{label}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -264,166 +288,116 @@ const SL_PANELS = [
     sub: 'Active loss streaks',
   },
   { id: 'scorers', icon: '⭐', label: 'TOP SCORERS', sub: 'Points leaders' },
+  { id: 'shame',   icon: '🤮', label: 'SHAME LIST',     sub: 'Biggest Offenders' },
+
 ];
 
 function Spotlight({
-  recentForm,
-  winStreaks,
-  lossStreaks,
-  loading,
-  topSeasonScorers,
-  isPlayoffActive,
+  recentForm, winStreaks, lossStreaks, loading,
+  topSeasonScorers, isPlayoffActive,
+  teamGP, teamNameMap, seasonTeams,
 }) {
   const [idx, setIdx] = useState(2);
- /* const timerRef = useRef(null);
-  const startTimer = useCallback(() => {
-    clearInterval(timerRef.current);
-    timerRef.current = setInterval(
-      () => setIdx((i) => (i + 1) % SL_PANELS.length),
-      8000
-    );
-  }, []); 
-  useEffect(() => {
-    startTimer();
-    return () => clearInterval(timerRef.current);
-  }, [startTimer]); */
-  
-  const goTo = (i) => {
-    setIdx(i);
-  };
+  const goTo = (i) => setIdx(i);
   const p = SL_PANELS[idx];
 
   const rows = () => {
     if (loading)
       return [1, 2, 3, 4].map((i) => (
-        <div
-          key={i}
-          className="skel"
-          style={{ height: 24, margin: '.12rem .65rem' }}
-        />
+        <div key={i} className="skel" style={{ height: 24, margin: '.12rem .65rem' }} />
       ));
+
     if (p.id === 'hot' || p.id === 'cold') {
       const list = p.id === 'hot' ? recentForm.hot : recentForm.cold;
-      if (!list.length)
-        return <div className="sl-empty">No data available</div>;
+      if (!list.length) return <div className="sl-empty">No data available</div>;
       return list.map((t, i) => (
         <div key={t.team} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img
-            src={`/assets/teamLogos/${t.team}.png`}
-            alt=""
-            className="sl-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          <img src={`/assets/teamLogos/${t.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="sl-team">{t.team}</span>
           <div className="sl-dots">
             {t.last10.map((w, j) => (
-              <span
-                key={j}
-                className={`sl-dot ${w ? 'sl-dot-w' : 'sl-dot-l'}`}
-              />
+              <span key={j} className={`sl-dot ${w ? 'sl-dot-w' : 'sl-dot-l'}`} />
             ))}
           </div>
-          <span
-            className={`sl-val ${
-              p.id === 'hot' ? 'sl-val-hot' : 'sl-val-cold'
-            }`}
-          >
-            {t.w}-{t.l}
-          </span>
+          <span className={`sl-val ${p.id === 'hot' ? 'sl-val-hot' : 'sl-val-cold'}`}>{t.w}-{t.l}</span>
         </div>
       ));
     }
+
     if (p.id === 'wstreak') {
-      if (!winStreaks.length)
-        return <div className="sl-empty">No active win streaks</div>;
+      if (!winStreaks.length) return <div className="sl-empty">No active win streaks</div>;
       return winStreaks.slice(0, 5).map((s, i) => (
         <div key={s.team} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img
-            src={`/assets/teamLogos/${s.team}.png`}
-            alt=""
-            className="sl-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
             {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
               <span key={j} className="sl-dot sl-dot-w" />
             ))}
-            {s.count > 10 && (
-              <span className="sl-dots-more">+{s.count - 10}</span>
-            )}
+            {s.count > 10 && <span className="sl-dots-more">+{s.count - 10}</span>}
           </div>
           <span className="sl-val sl-val-hot">{s.count}W</span>
         </div>
       ));
     }
+
     if (p.id === 'lstreak') {
-      if (!lossStreaks.length)
-        return <div className="sl-empty">No active loss streaks</div>;
+      if (!lossStreaks.length) return <div className="sl-empty">No active loss streaks</div>;
       return lossStreaks.slice(0, 5).map((s, i) => (
         <div key={s.team} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img
-            src={`/assets/teamLogos/${s.team}.png`}
-            alt=""
-            className="sl-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
+          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
             {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
               <span key={j} className="sl-dot sl-dot-l" />
             ))}
-            {s.count > 10 && (
-              <span className="sl-dots-more">+{s.count - 10}</span>
-            )}
+            {s.count > 10 && <span className="sl-dots-more">+{s.count - 10}</span>}
           </div>
           <span className="sl-val sl-val-cold">{s.count}L</span>
         </div>
       ));
     }
+
     if (p.id === 'scorers') {
-      if (!topSeasonScorers?.length)
-        return <div className="sl-empty">No scorer data</div>;
+      if (!topSeasonScorers?.length) return <div className="sl-empty">No scorer data</div>;
       return topSeasonScorers.slice(0, 5).map((s, i) => (
         <div key={s.name} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img
-            src={`/assets/teamLogos/${s.team}.png`}
-            alt=""
-            className="sl-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-            }}
-          />
-
-          <span className="sl-team">
-            {s.name.trim().split(' ').slice(-1)[0]}
-          </span>
+          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <span className="sl-team">{s.name.trim().split(' ').slice(-1)[0]}</span>
           <span className="sl-val sl-val-hot">{s.pts}</span>
         </div>
       ));
     }
 
+    if (p.id === 'shame') {
+      
+      const shameList = (seasonTeams || [])
+        .map(t => ({ code: t.abr, name: teamNameMap?.[t.abr]?.full || t.abr, gp: teamGP?.[t.abr] || 0 }))
+        .sort((a, b) => a.gp - b.gp || a.code.localeCompare(b.code))
+        .slice(0, 5);
+      if (!shameList.length) return <div className="sl-empty">No data available</div>;
+      return shameList.map((t, i) => (
+        <div key={t.code} className="sl-row">
+          <span className="sl-rank">#{i + 1}</span>
+          <img src={`/assets/teamLogos/${t.code}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <span className="sl-team">{t.code}</span>
+          <span className="sl-val sl-val-shame">{t.gp} GP</span>
+        </div>
+      ));
+    }
+
+    // Fallback
     return (
       <div>
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="sl-row" style={{ opacity: 1 - i * 0.15 }}>
             <span className="sl-rank">#{i}</span>
-            <div className="sl-bar-wrap">
-              <div className="sl-bar" style={{ width: `${100 - i * 13}%` }} />
-            </div>
-            <span className="sl-val" style={{ color: 'rgba(255,255,255,.18)' }}>
-              —
-            </span>
+            <div className="sl-bar-wrap"><div className="sl-bar" style={{ width: `${100 - i * 13}%` }} /></div>
+            <span className="sl-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>
           </div>
         ))}
         <div className="sl-coming">PLAYER STATS COMING SOON</div>
@@ -446,19 +420,16 @@ function Spotlight({
         ))}
       </div>
       <div className="sl-titlebar">
-        <span className="sl-title">
-          {p.icon} {p.label}
-        </span>
+        <span className="sl-title">{p.icon} {p.label}</span>
         <span className="sl-sub">{p.sub}</span>
       </div>
       <div className="sl-body">{rows()}</div>
-      
     </section>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   LEAGUE GAZETTE — Daily AI-Generated Newspaper
+   LEAGUE — Daily AI-Generated Newspaper
 ═══════════════════════════════════════════════════════════════ */
 
 
@@ -1395,6 +1366,8 @@ export default function Home() {
   const [newsItems, setNewsItems] = useState([]);
   const [topSeasonScorers, setTopSeasonScorers] = useState([]);
   const [seasonTeams, setSeasonTeams] = useState([]);
+  const [teamGP, setTeamGP] = useState({});       // { teamCode: gameCount }
+  const [seasonPace, setSeasonPace] = useState(null); // { totalGP, gpPerDay, remaining, paceNeeded }
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
   const beltRef = useRef(null);
@@ -1598,6 +1571,55 @@ export default function Home() {
       cold: [...form].sort((a, b) => a.pct - b.pct).slice(0, 5),
     });
     setLoading(false);
+
+    // ── Season pace metrics ───────────────────────────────────────────────────────
+    // Count GP per team (each game counts once per team, not doubled)
+    const gpByTeam = {};
+    (allGames || []).forEach((g) => {
+      if (g.score_home == null) return; // only played games
+      gpByTeam[g.home] = (gpByTeam[g.home] || 0) + 1;
+      gpByTeam[g.away] = (gpByTeam[g.away] || 0) + 1;
+    });
+    setTeamGP(gpByTeam);
+
+    // Total unique games played (not summed per team)
+    const totalGP = (allGames || []).filter(g => g.score_home != null).length;
+
+    // Pace calc using season dates
+    const today = Date.now();
+    const startMs = latest.start_date ? new Date(latest.start_date).getTime() : null;
+    const endMs   = latest.end_date   ? new Date(latest.end_date).getTime()   : null;
+    const daysElapsed  = startMs ? Math.max(1, (today - startMs) / 86400000)  : null;
+    const daysTotal    = (startMs && endMs) ? (endMs - startMs) / 86400000    : null;
+    const daysLeft     = endMs ? Math.max(0, (endMs - today) / 86400000)      : null;
+
+    // Expected total games = teams/2 × games_per_team_scheduled
+    // Simpler: use rs_games_vs from seasons row if available, else skip
+    const numTeams = (fetchedTeams || []).length;
+    // rs_games_vs = total regular season games each team plays
+    const totalExpected = numTeams > 1 ? numTeams * (numTeams - 1) : null;
+
+    // Guard: if we've met or exceeded expected, season is effectively complete
+    const remaining = totalExpected != null
+      ? Math.max(0, totalExpected - totalGP)
+      : null;
+
+    const paceNeeded = (remaining != null && remaining > 0 && daysLeft > 0)
+      ? remaining / daysLeft
+      : remaining === 0 ? null : null;  // null shows '—' when done or unknown
+
+    const gpPerDay = (daysElapsed && daysElapsed > 1)
+      ? totalGP / daysElapsed
+      : null;
+
+    setSeasonPace({
+      totalGP,
+      gpPerDay,
+      remaining,
+      paceNeeded,
+      totalExpected,
+      isComplete: remaining === 0,
+    });
 
     // ── Recent games for gazette ──────────────────────────────────────────
     // Playoff games are "more recent" by definition once playoffs start.
@@ -2001,7 +2023,7 @@ export default function Home() {
       <div className="cg">
         {/* ── LEFT COLUMN ── */}
         <div className="cg-a">
-          <InlineCountdown cfg={cfg} tick={tick} />
+          <InlineCountdown cfg={cfg} tick={tick} seasonPace={seasonPace} currentSeason={currentSeason} />
           <Spotlight
             recentForm={recentForm}
             winStreaks={winStreaks}
@@ -2009,6 +2031,9 @@ export default function Home() {
             loading={loading}
             topSeasonScorers={topSeasonScorers}
             isPlayoffActive={isPlayoffActive}
+            teamGP={teamGP}
+            teamNameMap={teamNameMap}
+            seasonTeams={stableSeasonTeams}
           />
          {/* ======== UNCOMMENTING THIS WILL DISPLAY TRANSACTIONS PANEL ==================== 
             <section className="panel">
@@ -2286,6 +2311,50 @@ export default function Home() {
           text-shadow: 0 0 11px color-mix(in srgb, var(--ic) 65%, transparent);
         }
         .icd-u{font-family:'Press Start 2P',monospace;font-size:8px;color:rgba(255,255,255,.22);letter-spacing:2px;margin-top:1px;}
+        .icd-pace {
+          display: flex;
+          width: 100%;
+          gap: .2rem;
+          padding-top: .25rem;
+          border-top: 1px solid color-mix(in srgb, var(--ic) 14%, transparent);
+          margin-top: .1rem;
+        }
+        .icd-pace-cell {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          background: rgba(0,0,0,.45);
+          border: 1px solid color-mix(in srgb, var(--ic) 16%, transparent);
+          border-radius: 4px;
+          padding: .18rem .1rem .14rem;
+        }
+        .icd-pace-val {
+          font-family: 'VT323', monospace;
+          font-size: 18px;
+          line-height: 1;
+          color: color-mix(in srgb, var(--ic) 90%, #fff);
+        }
+        .icd-pace-lbl {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 6px;
+          color: rgba(255,255,255,.22);
+          letter-spacing: 1px;
+          margin-top: 2px;
+        }
+        .icd-enddate {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 7px;
+          color: var(--ic);
+          letter-spacing: 1px;
+          line-height: 1;
+          background: color-mix(in srgb, var(--ic) 12%, transparent);
+          border: 1px solid color-mix(in srgb, var(--ic) 30%, transparent);
+          border-radius: 3px;
+          padding: .18rem .4rem;
+          align-self: flex-start;
+        }
+
 
         /* ── Panels ── */
         .panel{border:1.5px solid rgba(135,206,235,.1);border-radius:10px;overflow:hidden;background:linear-gradient(155deg,rgba(255,255,255,.02) 0%,rgba(0,0,0,.3) 100%);}
@@ -2327,6 +2396,7 @@ export default function Home() {
         .sl-val{font-family:'Press Start 2P',monospace;font-size:10px;flex-shrink:0;min-width:26px;text-align:right;}
         .sl-val-hot{color:#00CC55;text-shadow:0 0 7px rgba(0,204,85,.4);}
         .sl-val-cold{color:#6B9FFF;text-shadow:0 0 7px rgba(107,159,255,.35);}
+        .sl-val-shame { color:#FF69B4; text-shadow:0 0 7px rgba(255,105,180,.45); }
         .sl-empty{font-family:'VT323',monospace;font-size:17px;color:rgba(255,255,255,.2);text-align:center;padding:1.2rem;letter-spacing:1px;}
         .sl-bar-wrap{flex:1;height:4px;background:rgba(255,255,255,.05);border-radius:3px;overflow:hidden;}
         .sl-bar{height:100%;background:linear-gradient(90deg,rgba(255,140,0,.3),rgba(255,215,0,.2));border-radius:3px;}

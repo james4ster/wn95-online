@@ -713,6 +713,54 @@ function computeSOS(teamCode, allTeams, rsGamesVs, playedGames, standingsMap) {
   return { sos, opponents };
 }
 
+/* Funtion to show playoff bracket before playoff_games table is populated */
+function buildProjectedPlayoffGames(sortedStandings, playoffTeams) {
+  if (!playoffTeams || sortedStandings.length < 2) return [];
+  const size = Math.min(playoffTeams, sortedStandings.length);
+  const seeded = sortedStandings.slice(0, size);
+  const PAIRS = {
+    2: [[1, 2]],
+    4: [
+      [1, 4],
+      [2, 3],
+    ],
+    8: [
+      [1, 8],
+      [4, 5],
+      [3, 6],
+      [2, 7],
+    ],
+    16: [
+      [1, 16],
+      [8, 9],
+      [4, 13],
+      [5, 12],
+      [6, 11],
+      [3, 14],
+      [7, 10],
+      [2, 15],
+    ],
+  };
+  const bracketSz = [2, 4, 8, 16].find((s) => size <= s) || 16;
+  const pairs = PAIRS[bracketSz] || [];
+  const seedMap = {};
+  seeded.forEach((t, i) => {
+    seedMap[i + 1] = t.team;
+  });
+  return pairs.map(([sA, sB], i) => ({
+    lg: null,
+    round: 1,
+    series_number: i + 1,
+    game_number: null,
+    team_code_a: seedMap[sA] ?? null,
+    team_code_b: seedMap[sB] ?? null,
+    team_a_score: null,
+    team_b_score: null,
+    seed_a: sA,
+    seed_b: sB,
+  }));
+}
+
 export default function Standings() {
   const { selectedLeague } = useLeague();
   const [seasons, setSeasons] = useState([]);
@@ -1007,6 +1055,12 @@ export default function Standings() {
       return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
     });
   }, [defaultSorted, sortConfig]);
+
+  const isProjectedBracket =
+    playoffGames.length === 0 && (playoffTeams ?? 0) > 0;
+  const effectivePlayoffGames = isProjectedBracket
+    ? buildProjectedPlayoffGames(defaultSorted, playoffTeams)
+    : playoffGames;
 
   const { clinched, eliminated } = useMemo(
     () => computeClinchElim(defaultSorted, playoffTeams, totalGamesPerTeam),
@@ -1373,14 +1427,14 @@ export default function Standings() {
           <div className="no-data-text">SELECT A SEASON</div>
         </div>
       ) : activeView === 'playoffs' ? (
-        playoffGames?.length ? (
+        effectivePlayoffGames?.length ? (
           <div style={{ overflowX: 'auto', width: '100%' }}>
-            {/* PATCH 2: Pass onSeriesClick so clicking a series opens TeamDrawer in compare mode */}
             <PlayoffBracket
-              playoffGames={playoffGames}
+              playoffGames={effectivePlayoffGames}
               seasonGames={rawGames}
               selectedSeason={selectedSeason}
               selectedLeague={selectedLeague}
+              playoffTeams={playoffTeams}
               onSeriesClick={handleSeriesClick}
             />
           </div>

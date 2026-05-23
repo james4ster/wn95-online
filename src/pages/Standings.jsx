@@ -201,6 +201,174 @@ function sortWithTiebreakers(teams, games) {
   return result;
 }
 
+function SOSTooltip({ sosInfo }) {
+  if (!sosInfo || !sosInfo.anchorRect) return null;
+  const { data, anchorRect } = sosInfo;
+  const { opponents, sos } = data;
+  const tooltipW = 300;
+  const fixedLeft = Math.min(
+    anchorRect.left - tooltipW - 8,
+    window.innerWidth - tooltipW - 16
+  );
+  const tooltipHeight = 80 + opponents.length * 44;
+  const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+  const fixedTop = Math.max(
+    16,
+    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
+  );
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: fixedTop,
+        left: Math.max(8, fixedLeft),
+        zIndex: 9999,
+        width: tooltipW,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -8,
+          background:
+            'radial-gradient(ellipse at center, rgba(135,206,235,.1) 0%, transparent 70%)',
+          borderRadius: 16,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          background:
+            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
+          border: '1px solid rgba(135,206,235,.5)',
+          borderRadius: 12,
+          boxShadow:
+            '0 0 0 1px rgba(135,206,235,.15), 0 8px 32px rgba(0,0,0,.8)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px 8px',
+            borderBottom: '1px solid rgba(135,206,235,.15)',
+            background:
+              'linear-gradient(90deg, rgba(135,206,235,.08) 0%, rgba(135,206,235,.04) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.6rem',
+              color: '#87CEEB',
+              letterSpacing: 2,
+              textShadow: '0 0 8px rgba(135,206,235,.7)',
+            }}
+          >
+            REMAINING SOS
+          </div>
+          <div
+            style={{
+              fontFamily: "'VT323', monospace",
+              fontSize: '1.3rem',
+              color: '#E0E0E0',
+            }}
+          >
+            {sos.toFixed(3)}
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '32px 1fr 56px',
+            gap: '0 8px',
+            padding: '6px 16px 4px',
+            borderBottom: '1px solid rgba(255,255,255,.05)',
+          }}
+        >
+          <div />
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(255,255,255,.3)',
+            }}
+          >
+            OPPONENT
+          </div>
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(135,206,235,.5)',
+              textAlign: 'center',
+            }}
+          >
+            PTS%
+          </div>
+        </div>
+        {opponents.map((opp, idx) => (
+          <div
+            key={opp.team}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '32px 1fr 56px',
+              gap: '0 8px',
+              padding: '8px 16px',
+              background:
+                idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
+              borderBottom:
+                idx < opponents.length - 1
+                  ? '1px solid rgba(255,255,255,.04)'
+                  : 'none',
+              alignItems: 'center',
+            }}
+          >
+            <img
+              src={`/assets/teamLogos/${opp.team}.png`}
+              alt={opp.team}
+              style={{
+                width: 28,
+                height: 28,
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 4px rgba(135,206,235,.4))',
+              }}
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "'VT323', monospace",
+                fontSize: '1.4rem',
+                color: '#E0E0E0',
+                letterSpacing: 1,
+                lineHeight: 1,
+              }}
+            >
+              {opp.team}
+            </span>
+            <span
+              style={{
+                fontFamily: "'VT323', monospace",
+                fontSize: '1.4rem',
+                color: '#E0E0E0',
+                textAlign: 'center',
+              }}
+            >
+              {opp.pts_pct.toFixed(3)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function TiebreakerTooltip({
   hoveredTeam,
   tiedStandings,
@@ -464,28 +632,22 @@ function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
   const eliminated = new Set();
   if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0)
     return { clinched, eliminated };
-  if (totalGamesPerTeam == null) return { clinched, eliminated };
+
+  const effectiveTotal =
+    totalGamesPerTeam ?? Math.max(...sortedStandings.map((t) => t.gp || 0));
+  if (!effectiveTotal || effectiveTotal <= 0) return { clinched, eliminated };
 
   const n = sortedStandings.length;
   const maxPts = (t) =>
-    (t.pts || 0) + Math.max(0, totalGamesPerTeam - (t.gp || 0)) * 2;
+    (t.pts || 0) + Math.max(0, effectiveTotal - (t.gp || 0)) * 2;
 
-  // Clinch: team at rank r (0-indexed) is clinched if no combination of
-  // outside teams can push (playoffTeams - r) of them above this team's pts.
-  // Simplified: sort all teams NOT in top-r by maxPts desc; if the
-  // (playoffTeams - r)-th best maxPts among them is still < team's current pts,
-  // nobody can bump them out.
   for (let r = 0; r < Math.min(playoffTeams, n); r++) {
     const myPts = sortedStandings[r].pts || 0;
-    // Teams that could potentially leapfrog this team: everyone below rank r
     const challengers = sortedStandings
       .slice(r + 1)
       .map((t) => maxPts(t))
       .sort((a, b) => b - a);
-    // How many of them need to surpass myPts to knock this team out?
-    // They need (playoffTeams - r) teams to finish above them
     const spotsNeeded = playoffTeams - r;
-    // If even the best (spotsNeeded) challengers can't reach myPts, clinched
     const bestChallengers = challengers.slice(0, spotsNeeded);
     if (
       bestChallengers.length < spotsNeeded ||
@@ -495,8 +657,6 @@ function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
     }
   }
 
-  // Elimination: a below-bubble team is eliminated if their maxPts
-  // can't reach the current pts of the team on the bubble (rank playoffTeams-1)
   const bubblePts =
     sortedStandings[Math.min(playoffTeams - 1, n - 1)]?.pts || 0;
   for (let r = playoffTeams; r < n; r++) {
@@ -506,6 +666,51 @@ function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
   }
 
   return { clinched, eliminated };
+}
+
+//Strenth of Schedule function
+function computeSOS(teamCode, allTeams, rsGamesVs, playedGames, standingsMap) {
+  if (!rsGamesVs || allTeams.length === 0) return { sos: null, opponents: [] };
+
+  // Count how many times each opponent pair has already played
+  const playedCounts = {};
+  playedGames.forEach((g) => {
+    if (g.score_home == null) return; // skip unplayed if any exist
+    const key = [g.home, g.away].sort().join('::');
+    playedCounts[key] = (playedCounts[key] || 0) + 1;
+  });
+
+  // Find opponents with remaining games
+  const opponentCounts = {};
+  allTeams.forEach((opp) => {
+    if (opp === teamCode) return;
+    const key = [teamCode, opp].sort().join('::');
+    const played = playedCounts[key] || 0;
+    const remaining = rsGamesVs - played;
+    if (remaining > 0) {
+      opponentCounts[opp] = remaining;
+    }
+  });
+
+  const opponentCodes = Object.keys(opponentCounts);
+  if (opponentCodes.length === 0) return { sos: null, opponents: [] };
+
+  // Weight SOS by number of remaining games against each opponent
+  let totalGames = 0;
+  let weightedSum = 0;
+  const opponents = opponentCodes
+    .map((code) => standingsMap[code])
+    .filter(Boolean)
+    .map((opp) => ({ ...opp, remainingGames: opponentCounts[opp.team] }))
+    .sort((a, b) => b.pts_pct - a.pts_pct);
+
+  opponents.forEach((opp) => {
+    weightedSum += opp.pts_pct * opp.remainingGames;
+    totalGames += opp.remainingGames;
+  });
+
+  const sos = totalGames > 0 ? weightedSum / totalGames : null;
+  return { sos, opponents };
 }
 
 export default function Standings() {
@@ -527,10 +732,14 @@ export default function Standings() {
   });
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
+  const [sosInfo, setSosInfo] = useState(null);
 
   // TeamDrawer state
   const [drawerPrimary, setDrawerPrimary] = useState(null);
   const [drawerCompare, setDrawerCompare] = useState(null);
+
+  // Games
+  const [allGames, setAllGames] = useState([]);
 
   // JS-driven breakpoint detection
   const [isMobileLandscape, setIsMobileLandscape] = useState(
@@ -630,31 +839,37 @@ export default function Standings() {
     if (seasons.length === 0) return;
     (async () => {
       setLoading(true);
-      const [{ data: gamesData, error }, { data: teamsData }] =
-        await Promise.all([
-          supabase
-            .from('games')
-            .select(
-              'id, home, away, score_home, score_away, ot, coach_home, coach_away'
-            )
-            .eq('lg', selectedSeason)
-            .ilike('mode', 'season')
-            .not('score_home', 'is', null)
-            .order('id', { ascending: true }),
-          supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
-          supabase
-            .from('games')
-            .select('home')
-            .eq('lg', selectedSeason)
-            .ilike('mode', 'season'),
-        ]);
+      const [
+        { data: gamesData, error },
+        { data: teamsData },
+        { data: allGamesData },
+      ] = await Promise.all([
+        supabase
+          .from('games')
+          .select(
+            'id, home, away, score_home, score_away, ot, coach_home, coach_away'
+          )
+          .eq('lg', selectedSeason)
+          .ilike('mode', 'season')
+          .not('score_home', 'is', null)
+          .order('id', { ascending: true }),
+        supabase.from('teams').select('abr, coach').eq('lg', selectedSeason),
+        supabase
+          .from('games')
+          .select('id, home, away, score_home, score_away')
+          .eq('lg', selectedSeason)
+          .ilike('mode', 'season')
+          .order('id', { ascending: true }),
+      ]);
       if (error) console.error('Error fetching games:', error);
       setRawGames(gamesData || []);
+      setAllGames(allGamesData || []);
       setSeasonTeams(teamsData || []);
+
       const numTeams = (teamsData || []).length;
       const seasonMeta = seasons.find((s) => s.lg === selectedSeason);
       const rsVs = seasonMeta?.rs_games_vs ?? null;
-      const gamesPerTeam =
+      let gamesPerTeam =
         rsVs != null && numTeams > 0 ? (numTeams - 1) * rsVs : null;
       setTotalGamesPerTeam(gamesPerTeam);
       setLoading(false);
@@ -734,13 +949,43 @@ export default function Standings() {
     });
   }, [rawGames, seasonTeams, totalGamesPerTeam]);
 
+  const standingsMap = useMemo(() => {
+    const map = {};
+    computedStandings.forEach((s) => {
+      map[s.team] = s;
+    });
+    return map;
+  }, [computedStandings]);
+
+  const sosData = useMemo(() => {
+    const allTeamCodes = computedStandings.map((s) => s.team);
+    const map = {};
+    computedStandings.forEach((s) => {
+      map[s.team] = computeSOS(
+        s.team,
+        allTeamCodes,
+        rsGamesVs, // already in state
+        rawGames, // completed games only
+        standingsMap
+      );
+    });
+    return map;
+  }, [computedStandings, rsGamesVs, rawGames, standingsMap]);
+
+  const computedStandingsWithSOS = useMemo(() => {
+    return computedStandings.map((s) => ({
+      ...s,
+      sos: sosData[s.team]?.sos ?? null,
+    }));
+  }, [computedStandings, sosData]);
+
   const defaultSorted = useMemo(
     () =>
-      sortWithTiebreakers(computedStandings, rawGames).map((s, idx) => ({
+      sortWithTiebreakers(computedStandingsWithSOS, rawGames).map((s, idx) => ({
         ...s,
         _sortRank: idx + 1,
       })),
-    [computedStandings, rawGames]
+    [computedStandingsWithSOS, rawGames]
   );
 
   const sortedStandings = useMemo(() => {
@@ -836,6 +1081,8 @@ export default function Standings() {
   const handleRowMouseEnter = useCallback(
     (e, team, pts) => {
       if (window.matchMedia('(hover: none)').matches) return;
+      if (isMobileLandscape || isMobilePortrait) return;
+
       const tiedTeams = sortedStandings.filter(
         (s) => Number(s.pts) === Number(pts)
       );
@@ -861,7 +1108,7 @@ export default function Standings() {
         },
       });
     },
-    [sortedStandings, totalGamesPerTeam]
+    [sortedStandings, totalGamesPerTeam, isMobileLandscape, isMobilePortrait]
   );
 
   const handleRowMouseLeave = useCallback(() => {
@@ -993,6 +1240,7 @@ export default function Standings() {
       key: 'maxPts',
       width: '5px',
     },
+    ...(!isMobilePortrait ? [{ label: 'SOS', key: 'sos', width: '10px' }] : []),
   ];
 
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
@@ -1155,6 +1403,10 @@ export default function Standings() {
               document.body
             )}
 
+          {sosInfo &&
+            sosInfo.anchorRect &&
+            createPortal(<SOSTooltip sosInfo={sosInfo} />, document.body)}
+
           <div
             className={`table-container ${compactView ? 'compact' : ''}`}
             ref={tableContainerRef}
@@ -1244,19 +1496,6 @@ export default function Standings() {
                                   setDrawerCompare(s.team);
                                 }
                               }}
-                              onMouseEnter={
-                                isTied
-                                  ? (e) =>
-                                      handleRowMouseEnter(
-                                        e,
-                                        s.team,
-                                        Number(s.pts)
-                                      )
-                                  : undefined
-                              }
-                              onMouseLeave={
-                                isTied ? handleRowMouseLeave : undefined
-                              }
                             >
                               <td className="rank-cell">
                                 <span className="rank-badge">{idx + 1}</span>
@@ -1344,6 +1583,19 @@ export default function Standings() {
                                 className={`stat-cell pts-cell ${
                                   activeSortKey === 'pts' ? 'sorted-cell' : ''
                                 } ${isTied ? 'tied-pts' : ''}`}
+                                onMouseEnter={
+                                  isTied
+                                    ? (e) =>
+                                        handleRowMouseEnter(
+                                          e,
+                                          s.team,
+                                          Number(s.pts)
+                                        )
+                                    : undefined
+                                }
+                                onMouseLeave={
+                                  isTied ? handleRowMouseLeave : undefined
+                                }
                               >
                                 {s.pts}
                               </td>
@@ -1455,6 +1707,49 @@ export default function Standings() {
                               >
                                 {s.maxPts ?? '—'}
                               </td>
+                              {!isMobilePortrait &&
+                                (() => {
+                                  const sd = sosData[s.team];
+                                  const val = sd?.sos;
+                                  return (
+                                    <td
+                                      className={`stat-cell sos-cell ${
+                                        activeSortKey === 'sos'
+                                          ? 'sorted-cell'
+                                          : ''
+                                      } ${val != null ? 'sos-hoverable' : ''}`}
+                                      onMouseEnter={(e) => {
+                                        if (
+                                          window.matchMedia('(hover: none)')
+                                            .matches
+                                        )
+                                          return;
+                                        if (
+                                          isMobileLandscape ||
+                                          isMobilePortrait
+                                        )
+                                          return; // add this
+                                        if (!sd || val == null) return;
+                                        //   return;
+                                        const r =
+                                          e.currentTarget.getBoundingClientRect();
+                                        setSosInfo({
+                                          team: s.team,
+                                          data: sd,
+                                          anchorRect: {
+                                            top: r.top,
+                                            right: r.right,
+                                            left: r.left,
+                                            height: r.height,
+                                          },
+                                        });
+                                      }}
+                                      onMouseLeave={() => setSosInfo(null)}
+                                    >
+                                      {val != null ? val.toFixed(3) : '—'}
+                                    </td>
+                                  );
+                                })()}
                             </tr>
                             {playoffTeams && idx === playoffTeams - 1 && (
                               <tr className="playoff-cutoff-row">
@@ -1512,6 +1807,7 @@ export default function Standings() {
           showCoach={showCoach}
           gfPerG={gfPerG}
           gaPerG={gaPerG}
+          sosData={sosData}
         />
       )}
 
@@ -1589,6 +1885,23 @@ export default function Standings() {
         .tied-pts { position:relative; }
         .tied-pts::after { content:''; position:absolute; top:0; right:0; width:0; height:0; border-style:solid; border-width:0 9px 9px 0; border-color:transparent rgba(255,140,0,0.85) transparent transparent; filter:drop-shadow(0 0 3px rgba(255,140,0,0.7)); }
         .tied-row { cursor:default; }
+
+        .sos-hoverable { position: relative; }
+        .sos-hoverable::after {
+          content: '';
+          position: absolute;
+          top: 0;
+          right: 0;
+          width: 0;
+          height: 0;
+          border-style: solid;
+          border-width: 0 9px 9px 0;
+          border-color: transparent rgba(135,206,235,0.85) transparent transparent;
+          filter: drop-shadow(0 0 3px rgba(135,206,235,0.7));
+        }
+        .sos-cell { cursor: default; min-width: 52px; }
+        .sos-cell:hover { background: rgba(135,206,235,.12) !important; box-shadow: inset 0 0 10px rgba(135,206,235,.2) !important; }
+
         .row-banner-overlay { position:relative; -webkit-mask-image:linear-gradient(to right,rgba(0,0,0,.95) 0%,rgba(0,0,0,.9) 25%,rgba(0,0,0,.65) 50%,rgba(0,0,0,.25) 70%,rgba(0,0,0,.05) 85%,rgba(0,0,0,0) 100%); -webkit-mask-repeat:no-repeat; -webkit-mask-size:100% 100%; }
         .arcade-table tbody tr:hover { transform:translateZ(0) scale(1.01); }
         .arcade-table td.sorted-cell { background:rgba(255,140,0,.10)!important; box-shadow:inset 0 0 8px rgba(255,140,0,.25); }

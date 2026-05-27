@@ -627,6 +627,36 @@ function TiebreakerTooltip({
   );
 }
 
+//Cutline banner
+function ClinchBanner({ clinchNumber, playoffTeams }) {
+  if (clinchNumber == null || !playoffTeams) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16,
+      background: 'linear-gradient(135deg, rgba(0,30,60,.85) 0%, rgba(0,20,50,.95) 100%)',
+      border: '1px solid rgba(255,215,0,.35)', borderRadius: 8,
+      padding: '8px 20px', margin: '12px auto 0', maxWidth: 420,
+      boxShadow: '0 0 0 1px rgba(255,140,0,.1), 0 4px 24px rgba(0,0,0,.6)',
+    }}>
+      <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem',
+        color: 'rgba(255,215,0,.65)', letterSpacing: 2, whiteSpace: 'nowrap' }}>
+        🏒 PLAYOFF CUT LINE
+      </div>
+      <div style={{ width: 1, height: 24, background: 'rgba(255,215,0,.2)', flexShrink: 0 }} />
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: '2.2rem',
+          color: '#FFD700', lineHeight: 1, textShadow: '0 0 12px rgba(255,215,0,.6)' }}>
+          {clinchNumber}
+        </div>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.45rem',
+          color: 'rgba(255,215,0,.5)', letterSpacing: 1, paddingBottom: 4 }}>
+          PTS
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
   const clinched = new Set();
   const eliminated = new Set();
@@ -1056,6 +1086,8 @@ export default function Standings() {
     });
   }, [defaultSorted, sortConfig]);
 
+  
+
   const isProjectedBracket =
     playoffGames.length === 0 && (playoffTeams ?? 0) > 0;
   const effectivePlayoffGames = isProjectedBracket
@@ -1066,6 +1098,26 @@ export default function Standings() {
     () => computeClinchElim(defaultSorted, playoffTeams, totalGamesPerTeam),
     [defaultSorted, playoffTeams, totalGamesPerTeam]
   );
+
+  //Cutline useMemo
+  const clinchNumber = useMemo(() => {
+    if (!playoffTeams || defaultSorted.length <= playoffTeams) return null;
+  
+    const insiders = defaultSorted.slice(0, playoffTeams);
+    const minInsiderGP = Math.min(...insiders.map((t) => t.gp || 0));
+  
+    const outsiders = defaultSorted.slice(playoffTeams).filter(
+      (t) => !eliminated.has(t.team) && (t.gp || 0) >= minInsiderGP
+    );
+  
+    if (outsiders.length === 0) return null;
+  
+    const highestMaxPts = Math.max(
+      ...outsiders.map((t) => t.maxPts ?? t.pts)
+    );
+  
+    return highestMaxPts + 1;
+  }, [defaultSorted, playoffTeams, eliminated]);
 
   const tiedPtsSet = useMemo(() => {
     const ptsCounts = {};
@@ -1332,86 +1384,88 @@ export default function Standings() {
       </div>
 
       {computedStandings.length > 0 && (
-        <div
-          style={{
-            position: 'relative',
-            display: 'flex',
-            justifyContent: 'center',
-            marginBottom: '2rem',
-            marginTop: '1rem',
-          }}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          marginBottom: '2rem',
+          marginTop: '1rem',
+        }}>
+    <div style={{ position: 'relative', display: 'flex', justifyContent: 'center', width: '100%' }}>
+      <div className="view-tabs">
+      <button
+        className={`tab-button ${activeView === 'overall' ? 'active' : ''}`}
+        onClick={() => setActiveView('overall')}
+      >
+        <span className="tab-icon">⚡</span>
+        <span className="tab-text">OVERALL</span>
+      </button>
+      {availableViews.conference && (
+        <button
+          className={`tab-button ${activeView === 'conference' ? 'active' : ''}`}
+          onClick={() => setActiveView('conference')}
         >
-          <div className="view-tabs">
-            <button
-              className={`tab-button ${
-                activeView === 'overall' ? 'active' : ''
-              }`}
-              onClick={() => setActiveView('overall')}
-            >
-              <span className="tab-icon">⚡</span>
-              <span className="tab-text">OVERALL</span>
-            </button>
-            {availableViews.conference && (
-              <button
-                className={`tab-button ${
-                  activeView === 'conference' ? 'active' : ''
-                }`}
-                onClick={() => setActiveView('conference')}
-              >
-                <span className="tab-icon">🏆</span>
-                <span className="tab-text">CONFERENCE</span>
-              </button>
-            )}
-            {availableViews.division && (
-              <button
-                className={`tab-button ${
-                  activeView === 'division' ? 'active' : ''
-                }`}
-                onClick={() => setActiveView('division')}
-              >
-                <span className="tab-icon">🎯</span>
-                <span className="tab-text">DIVISION</span>
-              </button>
-            )}
-            {availableViews.playoffs && (
-              <button
-                className={`tab-button playoffs-tab ${
-                  activeView === 'playoffs' ? 'active' : ''
-                }`}
-                onClick={() => setActiveView('playoffs')}
-              >
-                <span className="tab-icon">🏅</span>
-                <span className="tab-text">PLAYOFFS</span>
-              </button>
-            )}
-          </div>
-          <div
-            style={{
-              position: 'absolute',
-              right: '8px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              display: 'flex',
-              gap: '8px',
-            }}
-          >
-            <button
-              className={`compact-toggle ${compactView ? 'active' : ''}`}
-              onClick={() => setCompactView((v) => !v)}
-              title="Compact View"
-            >
-              ⊞
-            </button>
-            <button
-              className="compact-toggle"
-              onClick={() => setFullScreenOpen(true)}
-              title="Full Screen View"
-            >
-              ⛶
-            </button>
-          </div>
-        </div>
+          <span className="tab-icon">🏆</span>
+          <span className="tab-text">CONFERENCE</span>
+        </button>
       )}
+      {availableViews.division && (
+        <button
+          className={`tab-button ${activeView === 'division' ? 'active' : ''}`}
+          onClick={() => setActiveView('division')}
+        >
+          <span className="tab-icon">🎯</span>
+          <span className="tab-text">DIVISION</span>
+        </button>
+      )}
+      {availableViews.playoffs && (
+        <button
+          className={`tab-button playoffs-tab ${activeView === 'playoffs' ? 'active' : ''}`}
+          onClick={() => setActiveView('playoffs')}
+        >
+          <span className="tab-icon">🏅</span>
+          <span className="tab-text">PLAYOFFS</span>
+        </button>
+      )}
+    </div>
+    <div
+      style={{
+        position: 'absolute',
+        right: '8px',
+        top: '50%',
+        transform: 'translateY(-50%)',
+        display: 'flex',
+        gap: '8px',
+      }}
+    >
+      <button
+        className={`compact-toggle ${compactView ? 'active' : ''}`}
+        onClick={() => setCompactView((v) => !v)}
+        title="Compact View"
+      >
+        ⊞
+      </button>
+      <button
+        className="compact-toggle"
+        onClick={() => setFullScreenOpen(true)}
+        title="Full Screen View"
+      >
+        ⛶
+      </button>
+    </div>
+  </div>
+  {computedStandings.length > 0 &&
+  !isMobilePortrait &&
+  activeView === 'overall' && (
+    <ClinchBanner
+      clinchNumber={clinchNumber}
+      playoffTeams={playoffTeams}
+    />
+)}
+</div>
+  
+)}
+
 
       {loading ? (
         <div className="loading-screen">

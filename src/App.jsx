@@ -21,7 +21,7 @@ import StreamOverlayMatchupIcey from './overlays/StreamOverlayMatchupIcey';
 import PodcastOverlay from './overlays/PodcastOverlay';
 import PodcastCtrl from './overlays/PodcastCtrl';
 import PowerRankings from './pages/PowerRankings';
-import GettingStarted from './pages/GettingStarted';
+import GettingStarted from './pages/getting-started';
 
 const OVERLAY_PATHS = [
   '/overlay-standings',

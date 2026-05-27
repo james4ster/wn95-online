@@ -1824,7 +1824,7 @@ function AdvancedStatsTable({ rows, mgrMeta }) {
       </div>
 
       {/* Table */}
-      <table ref={tableRef} className="sp-table">
+      <table ref={tableRef} className="sp-table" style={{ minWidth: 'unset' }}>
           <thead>
             {/* Super-header row for periods tab only */}
             {effectiveSection === 'periods' && (() => {
@@ -1853,7 +1853,7 @@ function AdvancedStatsTable({ rows, mgrMeta }) {
             </tr>
             {/* Column header row */}
             <tr>
-              <th className="sp-th sticky-col" style={{ position: 'sticky', left: 0, zIndex: 13, background: '#07071a', minWidth: 200, cursor: 'default', textAlign: 'left' }}>
+            <th className="sp-th sticky-col" style={{ position: 'sticky', left: 0, zIndex: 13, background: '#07071a', width: 180, minWidth: 180, cursor: 'default', textAlign: 'left' }}>
                 COACH
               </th>
               {cols.map(col => {
@@ -1866,7 +1866,7 @@ function AdvancedStatsTable({ rows, mgrMeta }) {
                     style={{
                       background: active ? 'rgba(255,180,0,0.18)' : g.headerBg,
                       borderLeft: first ? g.borderLeft : 'none',
-                      minWidth: col.key.startsWith('game_') ? 70 : ['so_given','so_received','largest_comeback_for','largest_comeback_against','sf_w','sf_l','sf_pct','of_w','of_l','of_pct','po_w','po_l','po_pct'].includes(col.key) ? 110 : col.key.length <= 2 ? 65 : 90,
+                      minWidth: col.key.startsWith('game_') ? 55 : ['so_given','so_received','largest_comeback_for','largest_comeback_against'].includes(col.key) ? 75 : col.key.endsWith('_w') || col.key.endsWith('_l') || col.key.endsWith('_t') || ['sf_w','sf_l','sf_pct','of_w','of_l','of_pct','po_w','po_l','po_pct'].includes(col.key) ? 58 : col.key.length <= 2 ? 52 : 68,
                     }}
                     onClick={() => handleSort(col.key)}
                   >
@@ -1884,7 +1884,7 @@ function AdvancedStatsTable({ rows, mgrMeta }) {
               return (
                 <tr key={row.normKey} className={`sp-row ${idx % 2 === 0 ? 'sp-even' : 'sp-odd'}`}>
                   {/* Sticky name cell */}
-                  <td className="sp-td sticky-col sticky-td" style={{ position: 'sticky', left: 0, zIndex: 2, background: idx % 2 === 0 ? '#07071e' : '#050510' }}>
+                  <td className="sp-td sticky-col sticky-td" style={{ position: 'sticky', left: 0, zIndex: 2, width: 180, minWidth: 180, maxWidth: 180, background: idx % 2 === 0 ? '#07071e' : '#050510' }}>
                     <div className="td-mgr">
                       {meta?.avatar_url
                         ? <img src={meta.avatar_url} alt="" className="td-avatar" onError={e => (e.currentTarget.style.display = 'none')} />

@@ -1362,6 +1362,564 @@ function buildTeamStats(rows) {
   });
 }
 
+// ─── Advanced stats aggregation ──────────────────────────────────────────
+function buildAdvancedStats(games) {
+  // Helper: compute max deficit faced by homeTeam and awayTeam during a game
+  // Returns { homeMaxDef, awayMaxDef } — the largest goal deficit each team faced at any point
+  const computeMaxDeficits = (goalSeq, homeTeam, awayTeam) => {
+    if (!goalSeq || !goalSeq.length) return { homeMaxDef: 0, awayMaxDef: 0 };
+    let hScore = 0, aScore = 0;
+    let homeMaxDef = 0, awayMaxDef = 0;
+    for (const goal of goalSeq) {
+      if (goal.period > 3) continue; // ignore OT for deficit calc
+      if (goal.g_team === homeTeam) hScore++;
+      else if (goal.g_team === awayTeam) aScore++;
+      const homeDef = aScore - hScore;
+      const awayDef = hScore - aScore;
+      if (homeDef > homeMaxDef) homeMaxDef = homeDef;
+      if (awayDef > awayMaxDef) awayMaxDef = awayDef;
+    }
+    return { homeMaxDef, awayMaxDef };
+  };
+
+    const m = new Map();
+
+  const getSlot = (normKey, displayName) => {
+    if (!normKey) return null;
+    if (!m.has(normKey))
+      m.set(normKey, {
+        normKey,
+        _displayName: displayName || normKey,
+        sf_w: 0, sf_l: 0, sf_t: 0, sf_otl: 0,
+        of_w: 0, of_l: 0, of_t: 0, of_otl: 0,
+        one_goal_w: 0, one_goal_l: 0,
+        two_goal_w: 0, two_goal_l: 0,
+        three_goal_w: 0, three_goal_l: 0,
+        blowout_w: 0, blowout_l: 0,
+        ot_w: 0, ot_l: 0,
+        tied_after_1_w: 0, tied_after_1_l: 0, tied_after_1_t: 0,
+        tied_after_2_w: 0, tied_after_2_l: 0, tied_after_2_t: 0,
+        lead_after_1_w: 0, lead_after_1_l: 0,
+        trail_after_1_w: 0, trail_after_1_l: 0,
+        lead_after_2_w: 0, lead_after_2_l: 0,
+        trail_after_2_w: 0, trail_after_2_l: 0,
+        largest_win: 0, largest_loss: 0,
+        largest_comeback_for: 0, largest_comeback_against: 0,
+        so_given: 0, so_received: 0,
+        _win_gf: 0, _win_gp: 0, _loss_gf: 0, _loss_gp: 0,
+        _win_margin_sum: 0, _loss_margin_sum: 0,
+        most_gf_game: 0, most_ga_game: 0,
+        po_gp: 0, po_w: 0, po_l: 0, po_t: 0,
+        po_by_game: {},
+        _results: [],
+      });
+    return m.get(normKey);
+  };
+
+  const sorted = [...games].sort((a, b) => (a.id || 0) - (b.id || 0));
+
+  for (const g of sorted) {
+    const hCoach = (g.coach_home || '').trim();
+    const aCoach = (g.coach_away || '').trim();
+    if (!hCoach || !aCoach) continue;
+
+    const h = getSlot(norm(hCoach), hCoach);
+    const a = getSlot(norm(aCoach), aCoach);
+    if (!h || !a) continue;
+    if (!h._displayName) h._displayName = hCoach;
+    if (!a._displayName) a._displayName = aCoach;
+
+    const sh = Number(g.score_home || 0);
+    const sa = Number(g.score_away || 0);
+    const ot = !!g.ot;
+    const isPlayoff = !!g._isPlayoff || PLAYOFF_VALS.has((g.mode || '').trim().toUpperCase());
+    const gameNum = g.game_number != null ? Number(g.game_number) : null;
+    if (isPlayoff) console.log('gameNum raw:', g.game_number, '→', gameNum, 'round:', g.round);
+
+
+    const h1 = Number(g.home_1p_g ?? -1);
+    const a1 = Number(g.away_1p_g ?? -1);
+    const h2 = Number(g.home_2p_g ?? -1);
+    const a2 = Number(g.away_2p_g ?? -1);
+    const has1p = h1 >= 0 && a1 >= 0;
+    const has2p = h2 >= 0 && a2 >= 0;
+
+    const homeWon = sh > sa;
+    const awayWon = sa > sh;
+    const tied = sh === sa;
+
+    const applyResult = (rec, myScore, oppScore, isHome) => {
+      const won = myScore > oppScore;
+      const lost = oppScore > myScore;
+      const tie = myScore === oppScore;
+      const mg = Math.abs(myScore - oppScore);
+
+      if (ot && won) rec.ot_w++;
+      if (ot && lost) rec.ot_l++;
+      if (mg === 1 && won) rec.one_goal_w++;
+      if (mg === 1 && lost) rec.one_goal_l++;
+      if (mg === 2 && won) rec.two_goal_w++;
+      if (mg === 2 && lost) rec.two_goal_l++;
+      if (mg === 3 && won) rec.three_goal_w++;
+      if (mg === 3 && lost) rec.three_goal_l++;
+      if (mg >= 4 && won) rec.blowout_w++;
+      if (mg >= 4 && lost) rec.blowout_l++;
+      if (won) rec.largest_win = Math.max(rec.largest_win, mg);
+      if (lost) rec.largest_loss = Math.max(rec.largest_loss, mg);
+      if (won) { rec._win_gf += myScore; rec._win_gp++; rec._win_margin_sum += mg; }
+      if (lost) { rec._loss_gf += myScore; rec._loss_gp++; rec._loss_margin_sum += mg; }
+      rec.most_gf_game = Math.max(rec.most_gf_game, myScore);
+      rec.most_ga_game = Math.max(rec.most_ga_game, oppScore);
+      if (oppScore === 0 && !tie) rec.so_given++;
+      if (myScore === 0 && !tie) rec.so_received++;
+
+      if (has1p) {
+        const my1 = isHome ? h1 : a1;
+        const op1 = isHome ? a1 : h1;
+        if (my1 === op1) {
+          if (won) rec.tied_after_1_w++; else if (lost) rec.tied_after_1_l++; else rec.tied_after_1_t++;
+        } else if (my1 > op1) {
+          if (won) rec.lead_after_1_w++; else rec.lead_after_1_l++;
+        } else {
+          if (won) rec.trail_after_1_w++; else rec.trail_after_1_l++;
+        }
+      }
+      if (has1p && has2p) {
+        const my2 = isHome ? h1 + h2 : a1 + a2;
+        const op2 = isHome ? a1 + a2 : h1 + h2;
+        if (my2 === op2) {
+          if (won) rec.tied_after_2_w++; else if (lost) rec.tied_after_2_l++; else rec.tied_after_2_t++;
+        } else if (my2 > op2) {
+          if (won) rec.lead_after_2_w++; else rec.lead_after_2_l++;
+        } else {
+          if (won) rec.trail_after_2_w++; else rec.trail_after_2_l++;
+        }
+      }
+
+      if (isPlayoff && gameNum) {
+        console.log('storing po_by_game', rec.normKey, 'gameNum:', gameNum, typeof gameNum);
+
+        if (!rec.po_by_game[gameNum]) rec.po_by_game[gameNum] = { w: 0, l: 0 };
+        if (won) rec.po_by_game[gameNum].w++;
+        if (lost) rec.po_by_game[gameNum].l++;
+      }
+      if (isPlayoff) {
+        rec.po_gp++;
+        if (won) rec.po_w++;
+        if (lost) rec.po_l++;
+        if (tie) rec.po_t++;
+      }
+    };
+
+    applyResult(h, sh, sa, true);
+    applyResult(a, sa, sh, false);
+
+    // Scored first (requires period 1 data)
+    if (has1p) {
+      const applyFirst = (rec, res, scoredFirst) => {
+        const won = res === 'W' || res === 'OTW';
+        const lost = res === 'L' || res === 'OTL';
+        if (scoredFirst) {
+          if (won) rec.sf_w++; else if (lost) rec.sf_l++; else rec.sf_t++;
+          if (res === 'OTL') rec.sf_otl++;
+        } else {
+          if (won) rec.of_w++; else if (lost) rec.of_l++; else rec.of_t++;
+          if (res === 'OTL') rec.of_otl++;
+        }
+      };
+      if (h1 > 0 && a1 === 0) {
+        applyFirst(h, deriveResult(sh, sa, ot, 'home'), true);
+        applyFirst(a, deriveResult(sh, sa, ot, 'away'), false);
+      } else if (a1 > 0 && h1 === 0) {
+        applyFirst(h, deriveResult(sh, sa, ot, 'home'), false);
+        applyFirst(a, deriveResult(sh, sa, ot, 'away'), true);
+      }
+    }
+
+    // Comebacks — goal-by-goal max deficit tracking
+    if (g._goalSeq) {
+      const homeTeam = (g.home || '').toUpperCase();
+      const awayTeam = (g.away || '').toUpperCase();
+      const { homeMaxDef, awayMaxDef } = computeMaxDeficits(g._goalSeq, homeTeam, awayTeam);
+      if (homeMaxDef > 0 && homeWon) {
+        h.largest_comeback_for = Math.max(h.largest_comeback_for, homeMaxDef);
+        a.largest_comeback_against = Math.max(a.largest_comeback_against, homeMaxDef);
+      }
+      if (awayMaxDef > 0 && awayWon) {
+        a.largest_comeback_for = Math.max(a.largest_comeback_for, awayMaxDef);
+        h.largest_comeback_against = Math.max(h.largest_comeback_against, awayMaxDef);
+      }
+    }
+
+    h._results.push(homeWon ? 'W' : tied ? 'T' : 'L');
+    a._results.push(awayWon ? 'W' : tied ? 'T' : 'L');
+  }
+
+  const longestStreak = (results, target) => {
+    let max = 0, cur = 0;
+    for (const r of results) { if (r === target) { cur++; max = Math.max(max, cur); } else cur = 0; }
+    return max;
+  };
+  const currentStreak = (results) => {
+    if (!results.length) return '–';
+    const last = results[results.length - 1];
+    let count = 0;
+    for (let i = results.length - 1; i >= 0; i--) { if (results[i] === last) count++; else break; }
+    return `${last}${count}`;
+  };
+
+  return Array.from(m.values()).map(({
+    _results, _win_gf, _win_gp, _loss_gf, _loss_gp, _win_margin_sum, _loss_margin_sum, ...s
+  }) => ({
+    ...s,
+    longest_w_streak: longestStreak(_results, 'W'),
+    longest_l_streak: longestStreak(_results, 'L'),
+    current_streak: currentStreak(_results),
+    avg_gf_in_wins:   _win_gp  > 0 ? +(_win_gf  / _win_gp).toFixed(2)  : null,
+    avg_gf_in_losses: _loss_gp > 0 ? +(_loss_gf / _loss_gp).toFixed(2) : null,
+    avg_win_margin:   _win_gp  > 0 ? +(_win_margin_sum  / _win_gp).toFixed(2)  : null,
+    avg_loss_margin:  _loss_gp > 0 ? +(_loss_margin_sum / _loss_gp).toFixed(2) : null,
+  }));
+}
+
+// ─── Advanced Stats Table component ──────────────────────────────────────
+function AdvancedStatsTable({ rows, mgrMeta }) {
+  const GAME_NUMS = [1, 2, 3, 4, 5, 6, 7];
+  const [activeSection, setActiveSection] = useState('margins');
+  const [sortCol, setSortCol] = useState(null);
+  const [sortDir, setSortDir] = useState('desc');
+  const tableRef = useRef(null);
+  const [nameColW, setNameColW] = useState(200);
+
+  useEffect(() => {
+    if (!tableRef.current) return;
+    const ths = tableRef.current.querySelectorAll('thead tr:last-child th');
+    if (ths.length >= 1) setNameColW(ths[0].getBoundingClientRect().width);
+  }, [rows, activeSection]);
+
+  const handleSort = (key) => {
+    if (sortCol === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortCol(key); setSortDir('desc'); }
+  };
+
+  const SECTIONS = [
+    { key: 'margins',   label: '📐 MARGINS' },
+    { key: 'streaks',   label: '🔥 STREAKS' },
+    { key: 'scoring',   label: '🎯 SCORING' },
+    { key: 'shutouts',  label: '🚫 SHUTOUTS' },
+    { key: 'playoffs',  label: '🏅 PLAYOFFS' },
+    { key: 'scored1st', label: '⚡ SCORED FIRST', requiresP1: true },
+    { key: 'periods',   label: '⏱ PERIODS',       requiresP1: true },
+    { key: 'comebacks', label: '🔄 COMEBACKS',     requiresP1: true },
+  ];
+
+  const hasPeriodData = rows.some(r =>
+    r.tied_after_1_w > 0 || r.lead_after_1_w > 0 || r.trail_after_1_w > 0 ||
+    r.sf_w > 0 || r.sf_l > 0 || r.largest_comeback_for > 0
+  );
+  const visibleSections = SECTIONS.filter(s => !s.requiresP1 || hasPeriodData);
+  const effectiveSection = visibleSections.find(s => s.key === activeSection)
+    ? activeSection : visibleSections[0]?.key;
+
+  const SECTION_COLS = {
+    margins: [
+      { key: 'one_goal_w',       label: 'W',           group: 'close',    sortVal: r => r.one_goal_w },
+      { key: 'one_goal_l',       label: 'L',           group: 'close',    sortVal: r => r.one_goal_l },
+      { key: 'one_goal_pct',     label: 'W%',          group: 'close',    sortVal: r => { const g = r.one_goal_w + r.one_goal_l; return g ? r.one_goal_w / g : 0; } },
+      { key: 'two_goal_w',       label: 'W',           group: 'margin2',  sortVal: r => r.two_goal_w },
+      { key: 'two_goal_l',       label: 'L',           group: 'margin2',  sortVal: r => r.two_goal_l },
+      { key: 'two_goal_pct',     label: 'W%',          group: 'margin2',  sortVal: r => { const g = r.two_goal_w + r.two_goal_l; return g ? r.two_goal_w / g : 0; } },
+      { key: 'three_goal_w',     label: 'W',           group: 'margin3',  sortVal: r => r.three_goal_w },
+      { key: 'three_goal_l',     label: 'L',           group: 'margin3',  sortVal: r => r.three_goal_l },
+      { key: 'three_goal_pct',   label: 'W%',          group: 'margin3',  sortVal: r => { const g = r.three_goal_w + r.three_goal_l; return g ? r.three_goal_w / g : 0; } },
+      { key: 'blowout_w',        label: 'W',           group: 'blowout',  sortVal: r => r.blowout_w },
+      { key: 'blowout_l',        label: 'L',           group: 'blowout',  sortVal: r => r.blowout_l },
+      { key: 'blowout_pct',      label: 'W%',          group: 'blowout',  sortVal: r => { const g = r.blowout_w + r.blowout_l; return g ? r.blowout_w / g : 0; } },
+      { key: 'ot_w',             label: 'W',           group: 'ot',       sortVal: r => r.ot_w },
+      { key: 'ot_l',             label: 'L',           group: 'ot',       sortVal: r => r.ot_l },
+      { key: 'ot_pct',           label: 'W%',          group: 'ot',       sortVal: r => { const g = r.ot_w + r.ot_l; return g ? r.ot_w / g : 0; } },
+      { key: 'largest_win',      label: '🔺 WIN',        group: 'size',     sortVal: r => r.largest_win },
+      { key: 'largest_loss',     label: '🔺 LOSS',       group: 'size',     sortVal: r => r.largest_loss },
+      { key: 'avg_win_margin',   label: 'AVG W',          group: 'size',     sortVal: r => r.avg_win_margin },
+      { key: 'avg_loss_margin',  label: 'AVG L',          group: 'size',     sortVal: r => r.avg_loss_margin },
+    ],
+    streaks: [
+      { key: 'current_streak',   label: 'CURRENT',   group: 'streak',  sortVal: r => { const s = r.current_streak || ''; const n = parseInt(s.slice(1)) || 0; return s.startsWith('W') ? n : s.startsWith('L') ? -n : 0; } },
+      { key: 'longest_w_streak', label: '🔺 W',      group: 'streak',  sortVal: r => r.longest_w_streak },
+      { key: 'longest_l_streak', label: '🔺 L',      group: 'streak',  sortVal: r => r.longest_l_streak },
+    ],
+    scoring: [
+      { key: 'avg_gf_in_wins',   label: 'AVG GF (W)',  group: 'scoring',  sortVal: r => r.avg_gf_in_wins },
+      { key: 'avg_gf_in_losses', label: 'AVG GF (L)',  group: 'scoring',  sortVal: r => r.avg_gf_in_losses },
+      { key: 'avg_win_margin',   label: 'AVG W',   group: 'scoring',  sortVal: r => r.avg_win_margin },
+      { key: 'avg_loss_margin',  label: 'AVG L',   group: 'scoring',  sortVal: r => r.avg_loss_margin },
+      { key: 'most_gf_game',     label: '🔺 GF',    group: 'peaks',    sortVal: r => r.most_gf_game },
+      { key: 'most_ga_game',     label: '🔺 GA',    group: 'peaks',    sortVal: r => r.most_ga_game },
+     // { key: 'largest_win',      label: '🔺 WIN',     group: 'peaks',    sortVal: r => r.largest_win },
+     // { key: 'largest_loss',     label: '🔺 LOSS',    group: 'peaks',    sortVal: r => r.largest_loss },
+    ],
+    shutouts: [
+      { key: 'so_given',    label: 'SO FOR',     group: 'shutout', sortVal: r => r.so_given },
+      { key: 'so_received', label: 'SO AGAINST', group: 'shutout', sortVal: r => r.so_received },
+    ],
+    playoffs: [
+      { key: 'po_w',   label: 'W',   group: 'overall', sortVal: r => r.po_w },
+      { key: 'po_l',   label: 'L',   group: 'overall', sortVal: r => r.po_l },
+      { key: 'po_pct', label: 'W%',  group: 'overall', sortVal: r => { const g = r.po_w + r.po_l; return g ? r.po_w / g : 0; } },
+      ...GAME_NUMS.map(n => ({ key: `game_${n}`, label: `G${n}`, group: 'bygame', sortVal: r => r.po_by_game[n]?.w || 0 })),
+    ],
+    scored1st: [
+      { key: 'sf_w',   label: 'W',   group: 'first', sortVal: r => r.sf_w },
+      { key: 'sf_l',   label: 'L',   group: 'first', sortVal: r => r.sf_l },
+      { key: 'sf_pct', label: 'W%',  group: 'first', sortVal: r => { const g = r.sf_w + r.sf_l; return g ? r.sf_w / g : 0; } },
+      { key: 'of_w',   label: 'W',   group: 'trail', sortVal: r => r.of_w },
+      { key: 'of_l',   label: 'L',   group: 'trail', sortVal: r => r.of_l },
+      { key: 'of_pct', label: 'W%',  group: 'trail', sortVal: r => { const g = r.of_w + r.of_l; return g ? r.of_w / g : 0; } },
+    ],
+    periods: [
+      { key: 'tied_after_1_w',  label: 'W',  group: 'period1', sortVal: r => r.tied_after_1_w },
+      { key: 'tied_after_1_l',  label: 'L',  group: 'period1', sortVal: r => r.tied_after_1_l },
+      { key: 'lead_after_1_w',  label: 'W',  group: 'lead1',   sortVal: r => r.lead_after_1_w },
+      { key: 'lead_after_1_l',  label: 'L',  group: 'lead1',   sortVal: r => r.lead_after_1_l },
+      { key: 'trail_after_1_w', label: 'W',  group: 'trail1',  sortVal: r => r.trail_after_1_w },
+      { key: 'trail_after_1_l', label: 'L',  group: 'trail1',  sortVal: r => r.trail_after_1_l },
+      { key: 'tied_after_2_w',  label: 'W',  group: 'period2', sortVal: r => r.tied_after_2_w },
+      { key: 'tied_after_2_l',  label: 'L',  group: 'period2', sortVal: r => r.tied_after_2_l },
+      { key: 'lead_after_2_w',  label: 'W',  group: 'lead2',   sortVal: r => r.lead_after_2_w },
+      { key: 'lead_after_2_l',  label: 'L',  group: 'lead2',   sortVal: r => r.lead_after_2_l },
+      { key: 'trail_after_2_w', label: 'W',  group: 'trail2',  sortVal: r => r.trail_after_2_w },
+      { key: 'trail_after_2_l', label: 'L',  group: 'trail2',  sortVal: r => r.trail_after_2_l },
+    ],
+    comebacks: [
+      { key: 'largest_comeback_for',     label: 'FOR',     group: 'comeback', sortVal: r => r.largest_comeback_for },
+      { key: 'largest_comeback_against', label: 'AGAINST', group: 'comeback', sortVal: r => r.largest_comeback_against },
+    ],
+  };
+
+  // Group definitions for Advanced tab
+  const ADV_GROUPS = {
+    close:    { label: '1-GOAL',        headerBg: 'rgba(80,165,255,.11)',  cellBg: 'rgba(60,140,255,.065)',  groupBg: 'rgba(100,175,255,.2)',  groupText: 'rgba(145,215,255,.95)', borderLeft: '3px solid rgba(100,170,255,.6)' },
+    margin2:  { label: '2-GOAL',        headerBg: 'rgba(170,110,255,.11)', cellBg: 'rgba(150,90,240,.065)',  groupBg: 'rgba(180,120,255,.2)',  groupText: 'rgba(205,165,255,.95)', borderLeft: '3px solid rgba(175,115,255,.6)' },
+    margin3:  { label: '3-GOAL',        headerBg: 'rgba(0,210,160,.10)',   cellBg: 'rgba(0,185,140,.055)',   groupBg: 'rgba(0,210,160,.18)',   groupText: 'rgba(100,240,200,.9)',  borderLeft: '3px solid rgba(0,210,160,.5)' },
+    blowout:  { label: '4+',            headerBg: 'rgba(255,80,80,.10)',   cellBg: 'rgba(220,60,60,.055)',   groupBg: 'rgba(255,80,80,.18)',   groupText: 'rgba(255,150,150,.9)',  borderLeft: '3px solid rgba(255,80,80,.5)' },
+    ot:       { label: 'OVERTIME',      headerBg: 'rgba(0,210,160,.10)',   cellBg: 'rgba(0,185,140,.055)',   groupBg: 'rgba(0,210,160,.18)',   groupText: 'rgba(100,240,200,.9)',  borderLeft: '3px solid rgba(0,210,160,.5)' },
+    size:     { label: 'SCORING',       headerBg: 'rgba(255,140,0,.11)',   cellBg: 'rgba(255,120,0,.065)',   groupBg: 'rgba(255,140,0,.2)',    groupText: 'rgba(255,175,75,.95)',  borderLeft: '3px solid rgba(255,140,0,.6)' },
+    streak:   { label: 'STREAKS',       headerBg: 'rgba(255,215,0,.09)',   cellBg: 'rgba(230,195,0,.05)',    groupBg: 'rgba(255,215,0,.17)',   groupText: 'rgba(255,220,60,.95)',  borderLeft: '3px solid rgba(255,215,0,.5)' },
+    scoring:  { label: 'AVG SCORING',   headerBg: 'rgba(255,140,0,.11)',   cellBg: 'rgba(255,120,0,.065)',   groupBg: 'rgba(255,140,0,.2)',    groupText: 'rgba(255,175,75,.95)',  borderLeft: '3px solid rgba(255,140,0,.6)' },
+    peaks:    { label: 'SINGLE GAME',   headerBg: 'rgba(255,215,0,.09)',   cellBg: 'rgba(230,195,0,.05)',    groupBg: 'rgba(255,215,0,.17)',   groupText: 'rgba(255,220,60,.95)',  borderLeft: '3px solid rgba(255,215,0,.5)' },
+    shutout:  { label: 'SHUTOUTS',      headerBg: 'rgba(255,60,120,.10)',  cellBg: 'rgba(220,40,100,.055)',  groupBg: 'rgba(255,60,120,.18)',  groupText: 'rgba(255,140,180,.9)',  borderLeft: '3px solid rgba(255,60,120,.5)' },
+    overall:  { label: 'PLAYOFFS',      headerBg: 'rgba(160,170,255,.09)', cellBg: 'rgba(100,110,200,.055)', groupBg: 'rgba(160,170,255,.17)', groupText: 'rgba(185,195,255,.9)',  borderLeft: '3px solid rgba(140,150,255,.5)' },
+    bygame:   { label: 'BY GAME #',     headerBg: 'rgba(255,140,0,.11)',   cellBg: 'rgba(255,120,0,.065)',   groupBg: 'rgba(255,140,0,.2)',    groupText: 'rgba(255,175,75,.95)',  borderLeft: '3px solid rgba(255,140,0,.6)' },
+    first:    { label: 'SCORED FIRST',  headerBg: 'rgba(0,210,160,.10)',   cellBg: 'rgba(0,185,140,.055)',   groupBg: 'rgba(0,210,160,.18)',   groupText: 'rgba(100,240,200,.9)',  borderLeft: '3px solid rgba(0,210,160,.5)' },
+    trail:    { label: 'TRAILED FIRST', headerBg: 'rgba(255,80,80,.10)',   cellBg: 'rgba(220,60,60,.055)',   groupBg: 'rgba(255,80,80,.18)',   groupText: 'rgba(255,150,150,.9)',  borderLeft: '3px solid rgba(255,80,80,.5)' },
+    period1:  { label: 'TIED',          headerBg: 'rgba(80,165,255,.11)',  cellBg: 'rgba(60,140,255,.065)',  groupBg: 'rgba(100,175,255,.2)',  groupText: 'rgba(145,215,255,.95)', borderLeft: '3px solid rgba(100,170,255,.6)' },
+    lead1:    { label: 'LEADING',       headerBg: 'rgba(0,210,160,.10)',   cellBg: 'rgba(0,185,140,.055)',   groupBg: 'rgba(0,210,160,.18)',   groupText: 'rgba(100,240,200,.9)',  borderLeft: '3px solid rgba(0,210,160,.5)' },
+    trail1:   { label: 'TRAILING',      headerBg: 'rgba(255,80,80,.10)',   cellBg: 'rgba(220,60,60,.055)',   groupBg: 'rgba(255,80,80,.18)',   groupText: 'rgba(255,150,150,.9)',  borderLeft: '3px solid rgba(255,80,80,.5)' },
+    period2:  { label: 'TIED',          headerBg: 'rgba(80,165,255,.11)',  cellBg: 'rgba(60,140,255,.065)',  groupBg: 'rgba(100,175,255,.2)',  groupText: 'rgba(145,215,255,.95)', borderLeft: '3px solid rgba(100,170,255,.6)' },
+    lead2:    { label: 'LEADING',       headerBg: 'rgba(0,210,160,.10)',   cellBg: 'rgba(0,185,140,.055)',   groupBg: 'rgba(0,210,160,.18)',   groupText: 'rgba(100,240,200,.9)',  borderLeft: '3px solid rgba(0,210,160,.5)' },
+    trail2:   { label: 'TRAILING',      headerBg: 'rgba(255,80,80,.10)',   cellBg: 'rgba(220,60,60,.055)',   groupBg: 'rgba(255,80,80,.18)',   groupText: 'rgba(255,150,150,.9)',  borderLeft: '3px solid rgba(255,80,80,.5)' },
+    comeback: { label: 'COMEBACKS',     headerBg: 'rgba(255,215,0,.09)',   cellBg: 'rgba(230,195,0,.05)',    groupBg: 'rgba(255,215,0,.17)',   groupText: 'rgba(255,220,60,.95)',  borderLeft: '3px solid rgba(255,215,0,.5)' },
+  };
+
+  const cols = SECTION_COLS[effectiveSection] || [];
+
+  // Build group spans for header row
+  const groupSpans = useMemo(() => {
+    const out = [];
+    let cur = null, span = 0;
+    for (const c of cols) {
+      if (c.group !== cur) { if (cur !== null) out.push({ group: cur, span }); cur = c.group; span = 1; }
+      else span++;
+    }
+    if (cur !== null) out.push({ group: cur, span });
+    return out;
+  }, [cols]);
+
+  const isFirstInGroup = useMemo(() => {
+    const s = new Set();
+    let prev = null;
+    for (const c of cols) { if (c.group !== prev) { s.add(c.key); prev = c.group; } }
+    return s;
+  }, [cols]);
+
+  const sortedRows = useMemo(() => {
+    if (!sortCol) return rows;
+    const col = cols.find(c => c.key === sortCol);
+    if (!col) return rows;
+    return [...rows].sort((a, b) => {
+      const av = col.sortVal(a) ?? 0;
+      const bv = col.sortVal(b) ?? 0;
+      return sortDir === 'desc' ? bv - av : av - bv;
+    });
+  }, [rows, sortCol, sortDir, effectiveSection]);
+
+  const renderCell = (row, col) => {
+    // Percentage cells
+    if (['one_goal_pct','two_goal_pct','three_goal_pct','blowout_pct','ot_pct','po_pct','sf_pct','of_pct'].includes(col.key)) {
+      const v = col.sortVal(row);
+      if (!v) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+      const color = v >= 0.6 ? '#00DD55' : v <= 0.4 ? '#FF5555' : 'rgba(255,255,255,.75)';
+      return <span className="td-val" style={{ color }}>{(v * 100).toFixed(1)}%</span>;
+    }
+    if (col.key === 'current_streak') {
+      const s = row.current_streak || '—';
+      const color = s.startsWith('W') ? '#00DD55' : s.startsWith('L') ? '#FF5555' : '#87CEEB';
+      return <span className="td-val" style={{ color, textShadow: `0 0 8px ${color}44` }}>{s}</span>;
+    }
+    if (col.key === 'avg_win_margin' || col.key === 'avg_gf_in_wins') {
+      const v = row[col.key];
+      if (!v) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+      return <span className="td-val" style={{ color: '#00DD88' }}>{v}</span>;
+    }
+    if (col.key === 'avg_loss_margin' || col.key === 'avg_gf_in_losses') {
+      const v = row[col.key];
+      if (!v) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+      return <span className="td-val" style={{ color: '#FF7777' }}>{v}</span>;
+    }
+    if (col.key === 'largest_win' || col.key === 'most_gf_game' || col.key === 'so_given' || col.key === 'largest_comeback_for') {
+      const v = col.sortVal(row);
+      if (!v) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+      return <span className="td-val" style={{ color: '#FFD700', textShadow: '0 0 8px rgba(255,215,0,.4)' }}>{v}{col.key === 'largest_win' || col.key === 'largest_comeback_for' ? ' G' : ''}</span>;
+    }
+    if (col.key === 'largest_loss' || col.key === 'most_ga_game' || col.key === 'so_received' || col.key === 'largest_comeback_against') {
+      const v = col.sortVal(row);
+      if (!v) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+      return <span className="td-val" style={{ color: '#FF7777', textShadow: '0 0 8px rgba(255,100,100,.3)' }}>{v}{col.key === 'largest_loss' || col.key === 'largest_comeback_against' ? ' G' : ''}</span>;
+    }
+    if (col.key.startsWith('game_')) {
+      const [, n] = col.key.split('_');
+      const pg = row.po_by_game[Number(n)];
+      if (!pg || (!pg.w && !pg.l)) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+      return (
+        <span className="td-val" style={{ whiteSpace: 'nowrap' }}>
+          <span style={{ color: 'rgba(255,255,255,.75)' }}>{pg.w}</span>
+          <span style={{ color: 'rgba(255,255,255,.3)' }}>-</span>
+          <span style={{ color: 'rgba(255,255,255,.75)' }}>{pg.l}</span>
+        </span>
+      );
+    }
+    // Default
+    const v = col.sortVal(row);
+    if (!v && v !== 0) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+    if (v === 0) return <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+    const isUniform = col.group === 'overall';
+    const isLoss = !isUniform && (col.key.endsWith('_l') || col.key === 'longest_l_streak' || col.key === 'most_ga_game');
+    return <span className="td-val" style={{ color: isUniform ? 'rgba(255,255,255,.82)' : isLoss ? '#FF7777' : '#87CEEB' }}>{v}</span>;
+  };
+
+  return (
+    <div>
+      {/* Sub-tab selector */}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '1rem 2rem 1.5rem', marginBottom: 0 }}>
+        {visibleSections.map(s => (
+          <button
+            key={s.key}
+            onClick={() => { setActiveSection(s.key); setSortCol(null); }}
+            className={effectiveSection === s.key ? 'sp-tab on' : 'sp-tab'}
+            style={{ borderRadius: 6, fontSize: 11, padding: '.45rem .9rem' }}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Table */}
+      <table ref={tableRef} className="sp-table">
+          <thead>
+            {/* Super-header row for periods tab only */}
+            {effectiveSection === 'periods' && (() => {
+              const p1Count = cols.filter(c => ['period1','lead1','trail1'].includes(c.group)).length;
+              const p2Count = cols.filter(c => ['period2','lead2','trail2'].includes(c.group)).length;
+              return (
+                <tr>
+                  <th className="sp-gh sticky-gh" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#07071a', minWidth: 200 }} />
+                  {p1Count > 0 && <th colSpan={p1Count} className="sp-gh" style={{ background: 'rgba(100,175,255,.25)', color: 'rgba(145,215,255,.95)', borderLeft: '3px solid rgba(100,170,255,.6)', letterSpacing: 4 }}>AFTER PERIOD 1</th>}
+                  {p2Count > 0 && <th colSpan={p2Count} className="sp-gh" style={{ background: 'rgba(180,120,255,.25)', color: 'rgba(205,165,255,.95)', borderLeft: '3px solid rgba(175,115,255,.6)', letterSpacing: 4 }}>AFTER PERIOD 2</th>}
+                </tr>
+              );
+            })()}
+            {/* Group header row */}
+            <tr>
+              <th className="sp-gh sticky-gh" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#07071a', minWidth: 200 }} />
+              {groupSpans.map(({ group, span }, i) => {
+                const g = ADV_GROUPS[group] || {};
+                return (
+                  <th key={i} colSpan={span} className="sp-gh"
+                    style={{ background: g.groupBg, color: g.groupText, borderLeft: g.borderLeft }}>
+                    {g.label}
+                  </th>
+                );
+              })}
+            </tr>
+            {/* Column header row */}
+            <tr>
+              <th className="sp-th sticky-col" style={{ position: 'sticky', left: 0, zIndex: 13, background: '#07071a', minWidth: 200, cursor: 'default', textAlign: 'left' }}>
+                COACH
+              </th>
+              {cols.map(col => {
+                const g = ADV_GROUPS[col.group] || {};
+                const active = sortCol === col.key;
+                const first = isFirstInGroup.has(col.key);
+                return (
+                  <th key={col.key}
+                    className={`sp-th sortable${active ? ' active' : ''}`}
+                    style={{
+                      background: active ? 'rgba(255,180,0,0.18)' : g.headerBg,
+                      borderLeft: first ? g.borderLeft : 'none',
+                      minWidth: col.key.startsWith('game_') ? 70 : ['so_given','so_received','largest_comeback_for','largest_comeback_against','sf_w','sf_l','sf_pct','of_w','of_l','of_pct','po_w','po_l','po_pct'].includes(col.key) ? 110 : col.key.length <= 2 ? 65 : 90,
+                    }}
+                    onClick={() => handleSort(col.key)}
+                  >
+                    {col.label}
+                    <span className="sort-icon">{active ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}</span>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {sortedRows.map((row, idx) => {
+              const meta = mgrMeta.get(row.normKey);
+              const displayName = meta?.displayName || row._displayName || row.normKey;
+              return (
+                <tr key={row.normKey} className={`sp-row ${idx % 2 === 0 ? 'sp-even' : 'sp-odd'}`}>
+                  {/* Sticky name cell */}
+                  <td className="sp-td sticky-col sticky-td" style={{ position: 'sticky', left: 0, zIndex: 2, background: idx % 2 === 0 ? '#07071e' : '#050510' }}>
+                    <div className="td-mgr">
+                      {meta?.avatar_url
+                        ? <img src={meta.avatar_url} alt="" className="td-avatar" onError={e => (e.currentTarget.style.display = 'none')} />
+                        : <div className="td-avatar-fb">{displayName.replace(/\s+/g, '').slice(0, 2).toUpperCase()}</div>
+                      }
+                      <div className="td-mgr-names">
+                        <span className="td-mgrname">{displayName}</span>
+                      </div>
+                    </div>
+                  </td>
+                  {cols.map(col => {
+                    const g = ADV_GROUPS[col.group] || {};
+                    const first = isFirstInGroup.has(col.key);
+                    const active = sortCol === col.key;
+                    return (
+                      <td key={col.key} className={`sp-td${active ? ' sorted' : ''}`}
+                        style={{
+                          textAlign: 'center',
+                          background: active ? 'rgba(255,215,0,.05)' : g.cellBg,
+                          borderLeft: first ? g.borderLeft : 'none',
+                        }}>
+                        {renderCell(row, col)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+  );
+}
+
+
 // ─── Manager stats aggregation ────────────────────────────────────────────
 function buildManagerStats(games, champMap) {
   const m = new Map();
@@ -2356,7 +2914,7 @@ export default function Stats() {
       supabase
         .from('playoff_games')
         .select(
-          'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score, ot_flag'
+          'id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score'
         )
         .not('team_a_score', 'is', null),
       supabase
@@ -2367,7 +2925,50 @@ export default function Stats() {
         .select('abr,lg,manager_id')
         .not('manager_id', 'is', null)
         .order('lg', { ascending: false }),
-    ]).then(([gamesRes, playoffRes, managersRes, teamsRes]) => {
+        supabase
+        .from('game_raw_scoring')
+        .select('game_id, playoff_game_id, period, g_team, goal_num'),
+    ]).then(([gamesRes, playoffRes, managersRes, teamsRes, scoringRes]) => {
+      
+      // Build period goal counts keyed by game
+      // reg: game_id, po: playoff_game_id
+      // Need home/away team per game to split goals by side
+      const regHomeMap = new Map(); // game_id → { home, away }
+      for (const g of gamesRes.data || []) {
+        regHomeMap.set(g.id, { home: (g.home||'').toUpperCase(), away: (g.away||'').toUpperCase() });
+      }
+      const poHomeMap = new Map(); // playoff_game_id → { home, away }
+      for (const g of playoffRes.data || []) {
+        poHomeMap.set(g.id, { home: (g.team_code_a||'').toUpperCase(), away: (g.team_code_b||'').toUpperCase() });
+      }
+
+      const periodGoals = new Map(); // key: 's-{id}' or 'po-{id}' → { p1h,p1a,p2h,p2a }
+      for (const r of scoringRes.data || []) {
+        const isReg = r.game_id != null;
+        const key = isReg ? `s-${r.game_id}` : `po-${r.playoff_game_id}`;
+        const sides = isReg ? regHomeMap.get(r.game_id) : poHomeMap.get(r.playoff_game_id);
+        if (!sides) continue;
+        if (!periodGoals.has(key)) periodGoals.set(key, { p1h:0,p1a:0,p2h:0,p2a:0 });
+        const pg = periodGoals.get(key);
+        const team = (r.g_team||'').toUpperCase();
+        const isHome = team === sides.home;
+        if (r.period === 1) { if (isHome) pg.p1h++; else pg.p1a++; }
+        if (r.period === 2) { if (isHome) pg.p2h++; else pg.p2a++; }
+      }
+
+      // Build goal sequence map for comeback calculation
+      // key: 's-{game_id}' or 'po-{playoff_game_id}' → array of {g_team, period} sorted by goal_num
+      const goalSeqMap = new Map();
+      for (const r of scoringRes.data || []) {
+        const key = r.game_id != null ? `s-${r.game_id}` : `po-${r.playoff_game_id}`;
+        if (!goalSeqMap.has(key)) goalSeqMap.set(key, []);
+        goalSeqMap.get(key).push({ g_team: (r.g_team||'').toUpperCase(), period: r.period, goal_num: r.goal_num });
+      }
+      // Sort each game's goals by goal_num
+      for (const [, goals] of goalSeqMap) {
+        goals.sort((a, b) => (a.goal_num || 0) - (b.goal_num || 0));
+      } 
+
       const seasonRows = gamesRes.data || [];
 
       // Build manager_id → coach_name lookup
@@ -2391,23 +2992,39 @@ export default function Stats() {
         (playoffRes.data || []).map((g) => g.lg).filter(Boolean)
       );
 
+       
+
       // Normalize playoff rows from playoff_games
-      const playoffRows = (playoffRes.data || []).map((g) => ({
-        id: g.id,
-        lg: g.lg,
-        mode: 'playoff',
-        home: g.team_code_a,
-        away: g.team_code_b,
-        coach_home: teamCoachMap.get(g.team_code_a?.trim().toUpperCase()) || '',
-        coach_away: teamCoachMap.get(g.team_code_b?.trim().toUpperCase()) || '',
-        score_home: g.team_a_score,
-        score_away: g.team_b_score,
-        ot: g.ot_flag === 1 ? 1 : 0,
-        _isPlayoff: true,
-        round: g.round,
-        series_number: g.series_number,
-        game_number: g.game_number,
-      }));
+      const playoffRows = (playoffRes.data || []).map((g) => {
+        const pg = periodGoals.get(`po-${g.id}`) || {};
+        return {
+          id: g.id,
+          lg: g.lg,
+          mode: 'playoff',
+          home: g.team_code_a,
+          away: g.team_code_b,
+          coach_home: teamCoachMap.get(g.team_code_a?.trim().toUpperCase()) || '',
+          coach_away: teamCoachMap.get(g.team_code_b?.trim().toUpperCase()) || '',
+          score_home: g.team_a_score,
+          score_away: g.team_b_score,
+          ot: 0,
+          _isPlayoff: true,
+          round: g.round,
+          series_number: g.series_number,
+          game_number: g.game_number,
+          home_1p_g: pg.p1h || 0,
+          away_1p_g: pg.p1a || 0,
+          home_2p_g: pg.p2h || 0,
+          away_2p_g: pg.p2a || 0,
+          _goalSeq: goalSeqMap.get(`po-${g.id}`) || null,
+        };
+      });
+
+      console.log('playoffRows sample:', playoffRows.slice(0, 3).map(r => ({
+        lg: r.lg, home: r.home, away: r.away,
+        coach_home: r.coach_home, coach_away: r.coach_away,
+        game_number: r.game_number
+      })));
 
       // Strip playoff rows from games table for seasons covered by playoff_games
       const filteredSeasonRows = seasonRows.filter((g) => {
@@ -2418,7 +3035,20 @@ export default function Stats() {
         return true;
       });
 
-      const allRows = [...filteredSeasonRows, ...playoffRows];
+      const enrichedSeasonRows = filteredSeasonRows.map((g) => {
+        const pg = periodGoals.get(`s-${g.id}`) || {};
+        return {
+          ...g,
+          home_1p_g: pg.p1h ?? null,
+          away_1p_g: pg.p1a ?? null,
+          home_2p_g: pg.p2h ?? null,
+          away_2p_g: pg.p2a ?? null,
+          _goalSeq: goalSeqMap.get(`s-${g.id}`) || null,
+        };
+      });
+
+      const allRows = [...enrichedSeasonRows, ...playoffRows];
+
       setAllGames(allRows);
       setManagers(managersRes.data || []);
       setModeValues([
@@ -2835,6 +3465,11 @@ export default function Stats() {
     return buildPlayerStats(playerStatsData, playerTeamGPMap);
   }, [playerStatsData, playerTeamGPMap]);
 
+  const advancedRows = useMemo(() => {
+    if (!filteredGames.length) return [];
+    return buildAdvancedStats(filteredGames);
+  }, [filteredGames]);
+
   const sortedPlayerRows = useMemo(() => {
     return [...playerRows].sort((a, b) => {
       let av = a[playerSortKey],
@@ -2892,6 +3527,12 @@ export default function Stats() {
             onClick={() => setTab('players')}
           >
             👤 PLAYERS
+          </button>
+          <button
+            className={`sp-tab ${tab === 'advanced' ? 'on' : ''}`}
+            onClick={() => setTab('advanced')}
+          >
+            🔬 ADVANCED
           </button>
         </div>
         {((tab === 'managers' && sortedManagerRows.length > 0) ||
@@ -3246,6 +3887,22 @@ export default function Stats() {
               isTeam={false}
               hasStickyCols={true}
             />
+          )}
+        </div>
+      ) : tab === 'advanced' ? (
+        <div className="sp-table-outer">
+          {loading ? (
+            <div className="sp-state">
+              <div className="sp-spinner" />
+              <span className="sp-state-txt">CRUNCHING NUMBERS…</span>
+            </div>
+          ) : advancedRows.length === 0 ? (
+            <div className="sp-state">
+              <span style={{ fontSize: 44, opacity: 0.18 }}>🔬</span>
+              <span className="sp-state-txt">NO DATA FOUND</span>
+            </div>
+          ) : (
+            <AdvancedStatsTable rows={advancedRows} mgrMeta={mgrMeta} />
           )}
         </div>
       ) : (

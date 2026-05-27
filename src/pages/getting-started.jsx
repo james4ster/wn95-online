@@ -1,0 +1,1002 @@
+import React, { useState } from 'react';
+
+const sections = [
+  {
+    id: 'overview',
+    icon: '🗺️',
+    label: 'OVERVIEW',
+    color: '#FFB347',
+  },
+  {
+    id: 'retroarch',
+    icon: '🕹️',
+    label: 'RETROARCH SETUP',
+    color: '#87CEEB',
+  },
+  {
+    id: 'netplay',
+    icon: '🌐',
+    label: 'NETPLAY & FIREWALL',
+    color: '#87CEEB',
+  },
+  {
+    id: 'rom',
+    icon: '💾',
+    label: 'ROM & TESTING',
+    color: '#87CEEB',
+  },
+  {
+    id: 'twitch',
+    icon: '📡',
+    label: 'STREAMING (TWITCH)',
+    color: '#9146FF',
+  } /*,
+  {
+    id: 'leagues',
+    icon: '🏆',
+    label: 'OTHER LEAGUES',
+    color: '#FFD700',
+  } */,
+];
+
+const stepData = {
+  overview: {
+    title: 'OVERVIEW',
+    subtitle: 'Getting started is easy',
+    description: 'Start here to get the lay of the land. The following is an overview of what each tab is for...',
+    steps: [
+      {
+        num: '01',
+        heading: 'RetroArch Setup',
+        body: (
+          <>
+            RetroArch is the emulator that runs NHL '95. We'll walk you through
+            downloading our preconfigured build and getting it running — no
+            tinkering required out of the box.
+          </>
+        ),
+      },
+      {
+        num: '02',
+        heading: 'Netplay & Firewall',
+        body: (
+          <>
+            <p>Netplay is a part of Retroarch and used to connect players together.</p>
+            <p>To play online, your router needs to have a port opened for RetroArch.
+            We'll cover exactly which port to forward and how to verify your
+            connection is ready for netplay.</p>
+            <p>Retroarch must be allowed through your Firewall</p>
+          </>
+        ),
+      },
+      {
+        num: '03',
+        heading: 'ROM & Testing',
+        body: (
+          <>
+           <p>ROM = The game file;  What you load to launch NHL 95</p>
+           <p>This tab explains how to get the NHL 95 ROM, how to launch it in RetroArch, and how to test it.</p>
+          </>
+        ),
+      },
+      {
+        num: '04',
+        heading: 'Streaming (Twitch)',
+        body: (
+          <>
+            This tab is completely optional but encouraged if you decide to join the league — if you want to broadcast your games to
+            Twitch, this tab shows a basic setup guide to stream your games live.
+          </>
+        ),
+      },
+    ],
+  },
+  retroarch: {
+    title: 'RETROARCH SETUP',
+    subtitle: 'Get up and running with version 1.17',
+    sections: [
+      {
+        id: 'downloads',
+        label: '⬇️ STEP 1 — GET THE FILES',
+        steps: [
+          {
+            num: '01',
+            heading: 'Download RetroArch',
+            body: (
+              <>
+                <p>Download the preconfigured RetroArch v1.17 build below. This build
+                is pre-configured for NHL '95 netplay — no tweaking required out of the box.</p>
+                <a href="https://github.com/james4ster/wn95-online/releases/download/retroarch-1.17-Winx64/RetroArch-1.17-Win64.zip" className="guide-link" download>
+                  💾 Download RetroArch v1.17 (Win64) →
+                </a>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Extract & Save',
+            body: (
+              <>
+                Extract the downloaded zip file and save the folder somewhere easy to access.
+              </>
+            ),
+          },
+          {
+            num: '03',
+            heading: 'Create Shortcut',
+            body: (
+              <>
+                <p>Open the unzipped folder and find the retroarch.exe application file.</p>
+                <img
+                    src="/assets/screenshots/guide/RA-exe.png"
+                    alt="RetroArch file"
+                    className="guide-screenshot"
+                  />        
+                <p><b>Create a shortcut to this file, and place it on your Desktop or Taskbar;
+                   The shortcut will be how you'll launch RA going forward</b></p> 
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'configuration',
+        label: '⚙️ STEP 2 — CONFIGURE',
+        steps: [
+          {
+            num: '01',
+            heading: 'Launch Retroarch',
+            body: (
+              
+                <>
+                <p>Open Retroarch using the shortcut</p>
+                <img
+                    src="/assets/screenshots/guide/RA-main-screen.png"
+                    alt="RetroArch Main Menu"
+                    className="guide-screenshot"
+                  />     
+                <p><i>Since you're using the preconfigured build, most settings are already dialed in.</i></p>
+                </>
+              
+            ),
+          },
+
+          {
+            num: '02',
+            heading: 'Navigation Controls',
+            body: (
+              
+                <>
+                <p>Move Selection - Arrows on keyboard </p>
+                <p>Select - ENTER key </p>
+                <p>Back - Backspace key </p>
+                <p>Exit RetroArch - ESC key</p>
+                </>
+              
+            ),
+          },
+
+          {
+            num: '03',
+            heading: 'Controller Configuration',
+            body: (
+              <>
+                <p>RetroArch contains many common controller configuration files, so there is a very good chance your controller
+                  will work "out of the box". </p>
+                <p>If you see a message that says "controller not configured", you will need to configure it manually. Follow the instructions
+                  put together from the NHL 94 community:{' '}
+                  <a href="https://nhl94online.com/html/controller.php" target="_blank" rel="noopener noreferrer" className="guide-link">
+                    Controller Configuration Guide →
+                  </a>
+                </p>
+                <br></br>
+                <h5>If you are new to emulator games and need to purchase a controller there are 2 popular options:</h5>
+
+                <p>
+                   
+                    <a href="https://amzn.to/4oNhQ8a" target="_blank" rel="noopener noreferrer" className="guide-link">
+                      Retrobit Genesis Controller →
+                    </a>{' '}
+                    — cheaper option, works fine, won't last as long as the next option. Suggest buying 2 at a time. Doesn't always require controller configuration.
+                  </p>
+                  <p>
+                   
+                    <a href="https://amzn.to/47EvSlv" target="_blank" rel="noopener noreferrer" className="guide-link">
+                      8bitDo M30 Controller →
+                    </a>{' '}
+                    — more expensive but lasts much longer than Retrobit. Controller configuration is more complicated and usually requires someone to share a picture of the setup. Comes with a wire even though not shown on Amazon, but some use wireless. Note that newer versions of 8bitDo may not work — multiple cases reported.
+                  </p>
+              </>
+            ),
+          },          
+
+          {
+            num: '04',
+            heading: 'Setup User Name',
+            body: (
+              
+                <>
+                <p>In RetroArch, go to Settings ~ User. Set a User Name. This is how opponents will find you.</p>
+                <img
+                    src="/assets/screenshots/guide/RA-set-user-name.png"
+                    alt="RetroArch User Menu"
+                    className="guide-screenshot"
+                  />  
+
+                <p><i>This only needs to be done once. Spaces are allowed, but do not use any special characters (like an underscore). 
+                  Once you set it, please exit RetroArch and restart it so it saves your name.</i></p>
+                </>
+              
+            ),
+          },
+
+          /* This will be new Section */
+          {
+            num: '02',
+            heading: 'Port Forwarding',
+            body: (
+              <>
+                <p>Port forwarding is done within your home router — outside of RetroArch itself.
+                Each ISP has slightly different menus but the process is the same for everyone.</p>
+                <p>Google <em>"how to port forward [your router model]"</em> for step-by-step instructions,
+                or drop a message in <span className="channel-tag">#help</span> on Discord and someone will get you sorted.</p>
+              </>
+            ),
+          },
+        ],
+      },
+    ],
+  },
+  netplay: {
+    title: 'NETPLAY & FIREWALL',
+    subtitle: 'Connect with opponents online',
+    steps: [
+      {
+        num: '01',
+        heading: 'What is Netplay?',
+        body: 'Netplay is the built-in online component of RetroArch that lets two players connect and play head-to-head over the internet. One player hosts the session, the other joins. It\'s the backbone of all WN95 league games.',
+      },
+      {
+        num: '02',
+        heading: 'Netplay Setup Guide',
+        body: (
+          <>
+            The NHL94 forum has a detailed walkthrough on configuring Netplay for
+            RetroArch. Despite the length of the guide, the actual setup is
+            pretty painless once you've done it once.{' '}
+            <a
+              href="https://forum.nhl94.com/index.php?/topic/18461-how-to-netplay-over-retroarch/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="guide-link"
+            >
+              Netplay Over RetroArch Guide →
+            </a>
+          </>
+        ),
+      },
+      {
+        num: '03',
+        heading: 'Windows Firewall',
+        body: (
+          <>
+            You'll need to allow <strong>RetroArch.exe</strong> through your
+            Windows Firewall so incoming connections can reach you when you
+            host. The easiest way to find these steps is to Google{' '}
+            <em>"allow an app through Windows firewall"</em>. Takes about 60
+            seconds. This is the most common stumbling block for new players —
+            if games aren't connecting, this is usually why.
+          </>
+        ),
+      },
+      {
+        num: '04',
+        heading: 'Pro Tip',
+        body: (
+          <>
+            The RetroArch and Netplay setup looks more complicated than it
+            actually is. Most players are up and running within 20 minutes. If
+            you're running into connection issues, the{' '}
+            <span className="channel-tag">#help</span> channel on Discord is
+            active and experienced players check it regularly.
+          </>
+        ),
+      },
+    ],
+  },
+  rom: {
+    title: 'ROM & TESTING',
+    subtitle: 'Get your game file and verify your connection',
+    steps: [
+      {
+        num: '01',
+        heading: 'Download the ROM',
+        body: (
+          <>
+            Download the league ROM from the link below. This is the game file
+            that RetroArch will load. Both players must be running the same ROM
+            for Netplay to work.{' '}
+            <span className="placeholder-badge">
+              ⚠ ROM LINK COMING SOON
+            </span>
+          </>
+        ),
+      },
+      {
+        num: '02',
+        heading: 'Test Your Connection',
+        body: (
+          <>
+            It's easy to find someone to run a test game with in the{' '}
+            <span className="channel-tag">#exis</span> channel. Exis (i.e. Exhibitions) is the
+            perfect place to confirm new players can
+            host and join a host without issues.  Exis can also be used to play games for fun at any time.  Just type #exis in the 
+            channel to let people know you want to play.
+          </>
+        ),
+      },
+      {
+        num: '03',
+        heading: 'Joining A League',
+        body: (
+          <>
+            Once you've tested successfully, feel free to reach out to Segathon and/or UltraMagnus directly
+            to ask about joining a league.  Everyone in the Discord is incredibly cool, and if you're already playing
+            exis you've probably already figured that out....   
+            <span className="placeholder-badge">
+              📝 MORE DETAILS COMING SOON
+            </span>
+          </>
+        ),
+      },
+    ],
+  },
+  twitch: {
+    title: 'STREAMING ON TWITCH',
+    subtitle: 'Broadcast your WN95 games live',
+    steps: [
+      {
+        num: '01',
+        heading: 'Create a Twitch Account',
+        body: (
+          <>
+            If you don't already have one, head to{' '}
+            <a
+              href="https://twitch.tv"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="guide-link"
+            >
+              twitch.tv →
+            </a>{' '}
+            and create a free account. Your channel name will be how other
+            players and viewers find your stream.{' '}
+            <span className="placeholder-badge">
+              📝 DETAILED STEPS COMING SOON
+            </span>
+          </>
+        ),
+      },
+      {
+        num: '02',
+        heading: 'Download OBS Studio',
+        body: (
+          <>
+            OBS (Open Broadcaster Software) is the standard free tool for
+            streaming. Download it at{' '}
+            <a
+              href="https://obsproject.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="guide-link"
+            >
+              obsproject.com →
+            </a>
+            . It's free, powerful, and what most WN95 streamers use.{' '}
+            <span className="placeholder-badge">
+              📝 OBS CONFIG GUIDE COMING SOON
+            </span>
+          </>
+        ),
+      },
+      {
+        num: '03',
+        heading: 'Connect OBS to Twitch',
+        body: (
+          <>
+            In OBS, go to <strong>Settings → Stream</strong>, select Twitch as
+            the service, and connect your account. You can use the built-in
+            Twitch integration or paste your stream key manually from your
+            Twitch dashboard.{' '}
+            <span className="placeholder-badge">
+              📝 DETAILED STEPS COMING SOON
+            </span>
+          </>
+        ),
+      },
+      {
+        num: '04',
+        heading: 'Capture RetroArch',
+        body: (
+          <>
+            In OBS, add a <strong>Game Capture</strong> source and select
+            RetroArch as the target application. This captures the game window
+            cleanly. You can also add a microphone for commentary and a webcam
+            if you want to show your reaction.{' '}
+            <span className="placeholder-badge">
+              📝 OVERLAY SETUP COMING SOON
+            </span>
+          </>
+        ),
+      },
+    ],
+  },
+  leagues: {
+    title: 'OTHER LEAGUES',
+    subtitle: 'More WN95 communities to explore',
+    leagues: [
+      {
+        code: 'W LEAGUE',
+        description: 'Description coming soon — check back for details on the W League format, schedule, and how to join.',
+        discord: 'https://discord.gg/xHKErSWN',
+        color: '#87CEEB',
+      },
+     /* {
+        code: 'PURE LEAGUE',
+        description: 'Description coming soon — check back for details on the Pure League format, schedule, and how to join.',
+        discord: 'https://discord.gg/v5sZxjdX',
+        color: '#FFD700',
+      }, */
+    ],
+  },
+};
+
+export default function GettingStarted() {
+  const [activeSection, setActiveSection] = useState('overview');
+
+  const current = stepData[activeSection];
+
+  return (
+    <div className="gs-page">
+
+      {/* ── PAGE HEADER ── */}
+      <div className="gs-header">
+        <div className="gs-header-inner">
+          <h1 className="gs-title">GETTING STARTED</h1>
+          <p className="gs-subtitle">
+            Everything you need play NHL 95, join the league and play your first game.
+          </p>
+        </div>
+      </div>
+
+      {/* ── SECTION TABS ── */}
+      <div className="gs-tabs-wrap">
+        <div className="gs-tabs">
+          {sections.map((s) => (
+            <button
+              key={s.id}
+              className={`gs-tab ${activeSection === s.id ? 'active' : ''}`}
+              onClick={() => setActiveSection(s.id)}
+              style={{ '--tab-color': s.color }}
+            >
+              <span className="tab-icon">{s.icon}</span>
+              <span className="tab-label">{s.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── CONTENT AREA ── */}
+      <div className="gs-content">
+        <div className="gs-section-header">
+          <h2 className="gs-section-title">{current.title}</h2>
+          <p className="gs-section-subtitle">{current.subtitle}</p>
+        </div>
+
+        {/* ── PAGE DESCRIPTION ── */}      
+        {current.description && (
+          <p className="gs-description">{current.description}</p>
+        )}
+
+        {/* Steps layout */}
+        {current.steps && (
+          <div className="gs-steps">
+            {current.steps.map((step) => (
+              <div className="gs-step" key={step.num}>
+                <div className="step-num">{step.num}</div>
+                <div className="step-body">
+                  <h3 className="step-heading">{step.heading}</h3>
+                  <p className="step-text">{step.body}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Sections layout  */}
+        {current.sections && (
+          <div className="gs-sections">
+            {current.sections.map((section) => (
+              <div className="gs-subsection" key={section.id}>
+                <div className="gs-subsection-header">
+                  <span className="gs-subsection-label">{section.label}</span>
+                </div>
+                <div className="gs-steps">
+                  {section.steps.map((step) => (
+                    <div className="gs-step" key={step.num + step.heading}>
+                      <div className="step-num">{step.num}</div>
+                      <div className="step-body">
+                        <h3 className="step-heading">{step.heading}</h3>
+                        <div className="step-text">{step.body}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Leagues layout */}
+        {current.leagues && (
+          <div className="gs-leagues">
+            {current.leagues.map((league) => (
+              <div
+                className="league-card"
+                key={league.code}
+                style={{ '--lc-color': league.color }}
+              >
+                <div className="lc-header">
+                  <div className="lc-code">{league.code}</div>
+                  <a
+                    href={league.discord}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="lc-discord-btn"
+                  >
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="lc-discord-icon">
+                      <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.01.043.027.056a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+                    </svg>
+                    JOIN DISCORD
+                  </a>
+                </div>
+                <p className="lc-description">{league.description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Help callout */}
+        <div className="gs-help-callout">
+          <span className="help-icon">💬</span>
+          <div className="help-text">
+            <strong>Need help?</strong> The{' '}
+            <span className="channel-tag">#help</span> channel on our Discord
+            is the fastest way to get unstuck. Experienced players check it
+            regularly.
+          </div>
+          <a
+            href="https://discord.gg/QxRDBgz3"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="help-discord-btn"
+          >
+            OPEN DISCORD →
+          </a>
+        </div>
+      </div>
+
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Barlow+Condensed:wght@400;600;700&display=swap');
+
+        .gs-page {
+          min-height: 100vh;
+          background: linear-gradient(180deg, #0d0d1a 0%, #07070f 100%);
+          color: #e8e8f0;
+          font-family: 'Barlow Condensed', sans-serif;
+        }
+
+        /* ── HEADER ── */
+        .gs-header {
+          background: linear-gradient(180deg, #1a1a2e 0%, #0d0d1a 100%);
+          border-bottom: 3px solid #FF8C00;
+          box-shadow: 0 4px 30px rgba(255,140,0,0.3);
+          padding: 3.5rem 0 2.5rem;
+        }
+
+        .gs-header-inner {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 0 2rem;
+        }
+
+        .gs-header-eyebrow {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.55rem;
+          color: #FF8C00;
+          letter-spacing: 4px;
+          margin-bottom: 1rem;
+          text-shadow: 0 0 10px rgba(255,140,0,0.6);
+        }
+
+        .gs-title {
+          font-family: 'Press Start 2P', monospace;
+          font-size: clamp(1.4rem, 3vw, 2.2rem);
+          color: #FFD700;
+          letter-spacing: 4px;
+          margin: 0 0 1rem 0;
+          text-shadow: 0 0 20px rgba(255,215,0,0.4), 0 0 40px rgba(255,140,0,0.2);
+        }
+
+        .gs-subtitle {
+          font-size: 1.25rem;
+          color: #87CEEB;
+          font-weight: 400;
+          letter-spacing: 1px;
+          margin: 0;
+          opacity: 0.85;
+        }
+
+        /* ── TABS ── */
+        .gs-tabs-wrap {
+          background: #0a0a18;
+          border-bottom: 1px solid rgba(255,140,0,0.2);
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+        .gs-tabs-wrap::-webkit-scrollbar { display: none; }
+
+        .gs-tabs {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 0 2rem;
+          display: flex;
+          gap: 0;
+        }
+
+        .gs-tab {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 1rem 1.4rem;
+          background: transparent;
+          border: none;
+          border-bottom: 3px solid transparent;
+          cursor: pointer;
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.5rem;
+          color: rgba(135,206,235,0.5);
+          letter-spacing: 1.5px;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .gs-tab:hover {
+          color: var(--tab-color, #87CEEB);
+          background: rgba(135,206,235,0.05);
+        }
+
+        .gs-tab.active {
+          color: var(--tab-color, #87CEEB);
+          border-bottom-color: var(--tab-color, #87CEEB);
+          background: rgba(135,206,235,0.06);
+          text-shadow: 0 0 12px var(--tab-color, #87CEEB);
+        }
+
+        .tab-icon { font-size: 1rem; }
+
+        /* ── CONTENT ── */
+        .gs-content {
+          max-width: 1100px;
+          margin: 0 auto;
+          padding: 3rem 2rem 4rem;
+        }
+
+        .gs-section-header {
+          margin-bottom: 2.5rem;
+          padding-bottom: 1.5rem;
+          border-bottom: 1px solid rgba(255,140,0,0.15);
+        }
+
+        .gs-section-title {
+          font-family: 'Press Start 2P', monospace;
+          font-size: clamp(0.85rem, 2vw, 1.1rem);
+          color: #FFD700;
+          letter-spacing: 3px;
+          margin: 0 0 0.75rem 0;
+          text-shadow: 0 0 15px rgba(255,215,0,0.3);
+        }
+
+        .gs-section-subtitle {
+          font-size: 1.1rem;
+          color: #87CEEB;
+          opacity: 0.75;
+          margin: 0;
+          letter-spacing: 0.5px;
+        }
+
+        .gs-description {
+          font-size: 1.1rem;
+          line-height: 1.75;
+          color: #a0a0bc;
+          margin: 0 0 2.5rem 0;
+          letter-spacing: 0.3px;
+          font-style: italic;
+        }
+
+        .gs-subsection {
+          margin-bottom: 3rem;
+        }
+        
+        .gs-subsection-header {
+          margin-bottom: 1.5rem;
+          padding: 0.75rem 1.25rem;
+          background: rgba(135, 206, 235, 0.06);
+          border-left: 3px solid #87CEEB;
+          border-radius: 0 6px 6px 0;
+        }
+        
+        .gs-subsection-label {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.6rem;
+          color: #87CEEB;
+          letter-spacing: 2px;
+          text-shadow: 0 0 10px rgba(135, 206, 235, 0.5);
+        }
+
+        .guide-screenshot {
+          display: block;
+          width: 100%;
+          max-width: 700px;
+          border: 1px solid rgba(135, 206, 235, 0.2);
+          border-radius: 6px;
+          margin: 1rem 0;
+          box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ── STEPS ── */
+        .gs-steps {
+          display: flex;
+          flex-direction: column;
+          gap: 0;
+        }
+
+        .gs-step {
+          display: flex;
+          gap: 2rem;
+          padding: 2rem 0;
+          border-bottom: 1px solid rgba(255,255,255,0.05);
+          position: relative;
+        }
+
+        .gs-step::before {
+          content: '';
+          position: absolute;
+          left: 2.6rem;
+          top: 0;
+          bottom: 0;
+          width: 1px;
+          background: linear-gradient(180deg, rgba(135,206,235,0.0), rgba(135,206,235,0.15), rgba(135,206,235,0.0));
+        }
+
+        .step-num {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 1.4rem;
+          color: rgba(135,206,235,0.2);
+          min-width: 3.2rem;
+          padding-top: 0.2rem;
+          flex-shrink: 0;
+          line-height: 1;
+          letter-spacing: -1px;
+        }
+
+        .step-body {
+          flex: 1;
+        }
+
+        .step-heading {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.65rem;
+          color: #87CEEB;
+          letter-spacing: 2px;
+          margin: 0 0 0.9rem 0;
+        }
+
+        .step-text {
+          font-size: 1.05rem;
+          line-height: 1.75;
+          color: #c8c8dc;
+          margin: 0;
+          font-weight: 400;
+          letter-spacing: 0.3px;
+        }
+
+        /* ── LEAGUES ── */
+        .gs-leagues {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+          gap: 1.5rem;
+          margin-bottom: 2rem;
+        }
+
+        .league-card {
+          background: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%);
+          border: 1px solid rgba(255,255,255,0.08);
+          border-top: 3px solid var(--lc-color, #87CEEB);
+          border-radius: 10px;
+          padding: 1.75rem;
+          transition: all 0.25s ease;
+        }
+
+        .league-card:hover {
+          border-color: var(--lc-color, #87CEEB);
+          box-shadow: 0 0 24px rgba(135,206,235,0.1);
+          transform: translateY(-2px);
+        }
+
+        .lc-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 1.25rem;
+          gap: 1rem;
+        }
+
+        .lc-code {
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.7rem;
+          color: var(--lc-color, #87CEEB);
+          letter-spacing: 2px;
+          text-shadow: 0 0 10px var(--lc-color, #87CEEB);
+        }
+
+        .lc-discord-btn {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          padding: 0.45rem 0.9rem;
+          background: rgba(88,101,242,0.12);
+          border: 1px solid rgba(114,137,218,0.4);
+          border-radius: 6px;
+          color: rgba(114,137,218,0.9);
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.42rem;
+          letter-spacing: 1px;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+        }
+
+        .lc-discord-btn:hover {
+          background: rgba(88,101,242,0.28);
+          border-color: rgba(114,137,218,0.8);
+          color: #fff;
+          box-shadow: 0 0 12px rgba(88,101,242,0.4);
+        }
+
+        .lc-discord-icon {
+          width: 14px;
+          height: 14px;
+          flex-shrink: 0;
+        }
+
+        .lc-description {
+          font-size: 1rem;
+          line-height: 1.7;
+          color: #a0a0bc;
+          margin: 0;
+          font-style: italic;
+        }
+
+        /* ── HELP CALLOUT ── */
+        .gs-help-callout {
+          display: flex;
+          align-items: center;
+          gap: 1.25rem;
+          margin-top: 3rem;
+          padding: 1.5rem 1.75rem;
+          background: rgba(255,140,0,0.05);
+          border: 1px solid rgba(255,140,0,0.25);
+          border-left: 4px solid #FF8C00;
+          border-radius: 8px;
+          flex-wrap: wrap;
+        }
+
+        .help-icon {
+          font-size: 1.5rem;
+          flex-shrink: 0;
+        }
+
+        .help-text {
+          flex: 1;
+          font-size: 1rem;
+          line-height: 1.6;
+          color: #c8c8dc;
+          min-width: 200px;
+        }
+
+        .help-text strong {
+          color: #FF8C00;
+          font-weight: 700;
+        }
+
+        .help-discord-btn {
+          display: inline-block;
+          padding: 0.6rem 1.25rem;
+          background: rgba(88,101,242,0.15);
+          border: 1px solid rgba(114,137,218,0.5);
+          border-radius: 6px;
+          color: rgba(114,137,218,0.9);
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.5rem;
+          letter-spacing: 1px;
+          text-decoration: none;
+          transition: all 0.2s ease;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        .help-discord-btn:hover {
+          background: rgba(88,101,242,0.3);
+          border-color: rgba(114,137,218,0.9);
+          color: #fff;
+          box-shadow: 0 0 16px rgba(88,101,242,0.4);
+        }
+
+        /* ── INLINE HELPERS ── */
+        .guide-link {
+          color: #87CEEB;
+          text-decoration: none;
+          border-bottom: 1px solid rgba(135,206,235,0.35);
+          transition: all 0.2s ease;
+          padding-bottom: 1px;
+        }
+
+        .guide-link:hover {
+          color: #FFD700;
+          border-bottom-color: #FFD700;
+          text-shadow: 0 0 8px rgba(255,215,0,0.4);
+        }
+
+        .channel-tag {
+          display: inline-block;
+          padding: 0.1em 0.5em;
+          background: rgba(135,206,235,0.1);
+          border: 1px solid rgba(135,206,235,0.25);
+          border-radius: 4px;
+          color: #87CEEB;
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.55em;
+          letter-spacing: 1px;
+          vertical-align: middle;
+        }
+
+        .placeholder-badge {
+          display: inline-block;
+          padding: 0.15em 0.7em;
+          background: rgba(255,140,0,0.1);
+          border: 1px dashed rgba(255,140,0,0.4);
+          border-radius: 4px;
+          color: #FF8C00;
+          font-size: 0.85em;
+          letter-spacing: 0.5px;
+          font-style: normal;
+        }
+
+        /* ── MOBILE ── */
+        @media (max-width: 768px) {
+          .gs-header { padding: 2rem 0 1.5rem; }
+          .gs-title { font-size: 1rem; }
+          .gs-content { padding: 2rem 1rem 3rem; }
+          .gs-step { gap: 1rem; }
+          .step-num { font-size: 1rem; min-width: 2.2rem; }
+          .gs-tabs { padding: 0 0.75rem; }
+          .gs-tab { padding: 0.85rem 0.85rem; }
+          .tab-label { display: none; }
+          .tab-icon { font-size: 1.2rem; }
+          .gs-help-callout { flex-direction: column; align-items: flex-start; }
+        }
+      `}</style>
+    </div>
+  );
+}

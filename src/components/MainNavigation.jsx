@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from './LeagueContext';
 
 export default function MainNavigation() {
-  const location = useLocation();
-  const isHome = location.pathname === '/';
   const [leagues, setLeagues] = useState([]);
   const [showLeagueDropdown, setShowLeagueDropdown] = useState(false);
   const { selectedLeague, setSelectedLeague } = useLeague();
@@ -44,7 +42,6 @@ export default function MainNavigation() {
   return (
     <nav className="main-navigation">
       <div className="nav-container">
-
         {/* LEFT — LOGO */}
         <Link to="/" className="nav-logo">
           <img
@@ -71,16 +68,25 @@ export default function MainNavigation() {
             <span className="link-label">PLAYERS</span>
           </Link>
 
+          {/* LEAGUE DROPDOWN */}
           <div className="nav-dropdown" ref={dropdownRef}>
             <button
-              className={`nav-link dropdown-trigger ${selectedLeague ? 'league-active' : ''}`}
+              className={`nav-link dropdown-trigger ${
+                selectedLeague ? 'league-active' : ''
+              }`}
               onClick={() => setShowLeagueDropdown(!showLeagueDropdown)}
             >
               <span className="nav-icon">🏆</span>
               <span className="link-label">
-                {currentLeague ? currentLeague.league_name || currentLeague.league_code : 'LEAGUES'}
+                {currentLeague
+                  ? currentLeague.league_name || currentLeague.league_code
+                  : 'LEAGUES'}
               </span>
-              <span className={`dropdown-arrow ${showLeagueDropdown ? 'open' : ''}`}>▼</span>
+              <span
+                className={`dropdown-arrow ${showLeagueDropdown ? 'open' : ''}`}
+              >
+                ▼
+              </span>
             </button>
 
             {showLeagueDropdown && (
@@ -89,13 +95,19 @@ export default function MainNavigation() {
                 {leagues.map((league) => (
                   <button
                     key={league.league_code}
-                    className={`league-option ${selectedLeague === league.league_code ? 'selected' : ''}`}
+                    className={`league-option ${
+                      selectedLeague === league.league_code ? 'selected' : ''
+                    }`}
                     onClick={() => handleLeagueSelect(league.league_code)}
                   >
                     <div className="league-option-inner">
-                      <span className="league-opt-code">{league.league_code}</span>
+                      <span className="league-opt-code">
+                        {league.league_code}
+                      </span>
                       {league.league_name && (
-                        <span className="league-opt-name">{league.league_name}</span>
+                        <span className="league-opt-name">
+                          {league.league_name}
+                        </span>
                       )}
                     </div>
                     {selectedLeague === league.league_code && (
@@ -108,26 +120,35 @@ export default function MainNavigation() {
           </div>
         </div>
 
-        {/* RIGHT — DISCORD (home page only) */}
+        {/* RIGHT — GUIDE + DISCORD */}
         <div className="nav-right">
-          {isHome && (
-            <a
-              href="https://discord.gg/QxRDBgz3"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="discord-btn"
-            >
-              <div className="discord-btn-inner">
-                <svg className="discord-icon" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.01.043.027.056a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
-                </svg>
-                <span className="discord-label">DISCORD</span>
-                <span className="discord-live-dot"></span>
-              </div>
-            </a>
-          )}
-        </div>
+          {/* GUIDE BUTTON — sits just left of Discord */}
+          <Link to="/getting-started" className="guide-btn">
+            <div className="guide-btn-inner">
+              <span className="guide-icon">📖</span>
+              <span className="guide-label">GUIDES</span>
+            </div>
+          </Link>
 
+          <a
+            href="https://discord.gg/QxRDBgz3"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="discord-btn"
+          >
+            <div className="discord-btn-inner">
+              <svg
+                className="discord-icon"
+                viewBox="0 0 24 24"
+                fill="currentColor"
+              >
+                <path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057c.001.022.01.043.027.056a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z" />
+              </svg>
+              <span className="discord-label">DISCORD</span>
+              <span className="discord-live-dot"></span>
+            </div>
+          </a>
+        </div>
       </div>
 
       <style>{`
@@ -151,6 +172,7 @@ export default function MainNavigation() {
           height: 72px;
         }
 
+        /* ── LOGO ── */
         .nav-logo {
           text-decoration: none;
           display: flex;
@@ -180,6 +202,7 @@ export default function MainNavigation() {
           text-shadow: 0 0 10px #FFD700, 0 0 20px #FF8C00;
         }
 
+        /* ── CENTER ── */
         .nav-center {
           display: flex;
           gap: 0.75rem;
@@ -187,12 +210,15 @@ export default function MainNavigation() {
           justify-content: center;
         }
 
+        /* ── RIGHT — Guide + Discord, right-aligned ── */
         .nav-right {
           display: flex;
           align-items: center;
           justify-content: flex-end;
+          gap: 0.6rem;
         }
 
+        /* ── Shared nav link styles ── */
         .nav-link {
           display: flex;
           align-items: center;
@@ -240,6 +266,7 @@ export default function MainNavigation() {
         .nav-icon { font-size: 1rem; }
         .link-label { position: relative; z-index: 1; }
 
+        /* ── LEAGUE DROPDOWN ── */
         .nav-dropdown { position: relative; }
         .dropdown-trigger { background: rgba(255,140,0,0.05); }
 
@@ -267,7 +294,6 @@ export default function MainNavigation() {
           max-height: 440px;
           overflow-y: auto;
           animation: dropdown-appear 0.2s ease;
-          z-index: 1001;
         }
 
         @keyframes dropdown-appear {
@@ -345,6 +371,58 @@ export default function MainNavigation() {
 
         .league-option.selected .league-opt-code { color: #FFD700; }
 
+        /* ── GUIDE BUTTON ── */
+        .guide-btn {
+          display: inline-flex;
+          align-items: center;
+          text-decoration: none;
+        }
+
+        .guide-btn-inner {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.55rem 1rem;
+          background: rgba(255,215,0,0.07);
+          border: 1px solid rgba(255,215,0,0.35);
+          border-radius: 8px;
+          color: rgba(255,215,0,0.8);
+          font-family: 'Press Start 2P', monospace;
+          font-size: 0.58rem;
+          letter-spacing: 1px;
+          transition: all 0.3s ease;
+          overflow: hidden;
+          position: relative;
+          box-shadow: 0 0 8px rgba(255,215,0,0.1);
+        }
+
+        .guide-btn-inner::before {
+          content: '';
+          position: absolute;
+          top: 0; left: -100%;
+          width: 100%; height: 100%;
+          background: linear-gradient(90deg, transparent, rgba(255,215,0,0.1), transparent);
+          transition: left 0.5s ease;
+        }
+
+        .guide-btn:hover .guide-btn-inner::before { left: 100%; }
+
+        .guide-btn:hover .guide-btn-inner {
+          background: rgba(255,215,0,0.16);
+          border-color: rgba(255,215,0,0.8);
+          color: #FFD700;
+          transform: translateY(-1px);
+          box-shadow: 0 0 18px rgba(255,215,0,0.35);
+        }
+
+        .guide-icon {
+          font-size: 0.9rem;
+          flex-shrink: 0;
+        }
+
+        .guide-label { position: relative; z-index: 1; }
+
+        /* ── DISCORD BUTTON ── */
         .discord-btn {
           display: inline-flex;
           align-items: center;
@@ -396,6 +474,7 @@ export default function MainNavigation() {
         }
 
         .discord-btn:hover .discord-icon { opacity: 1; }
+
         .discord-label { position: relative; z-index: 1; }
 
         .discord-live-dot {
@@ -413,6 +492,7 @@ export default function MainNavigation() {
           50%       { opacity: 0.4; }
         }
 
+        /* ── MOBILE ── */
         @media (max-width: 1100px) {
           .nav-container {
             display: flex;
@@ -421,7 +501,6 @@ export default function MainNavigation() {
           }
           .nav-center { flex: 1; justify-content: center; }
         }
-
         @media (max-width: 768px) {
           .nav-container { padding: 0 8px; height: 60px; }
           .nav-center { gap: 0.4rem; }
@@ -429,10 +508,14 @@ export default function MainNavigation() {
           .link-label { display: none; }
           .nav-icon { font-size: 1.1rem; }
           .discord-label { display: none; }
+          .guide-label { display: none; }
           .discord-btn-inner { padding: 0.5rem 0.75rem; }
-          .discord-live-dot { display: none; }
+          .guide-btn-inner { padding: 0.5rem 0.75rem; }
           .league-dropdown-menu { min-width: 230px; }
-          .main-navigation { position: sticky; top: 0; z-index: 1000; }
+          .main-navigation {
+            position: static;
+            top: auto;
+          }
         }
       `}</style>
     </nav>

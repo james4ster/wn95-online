@@ -131,7 +131,7 @@ function BoxScoreTab({ skaters, goalies, awayTeam, homeTeam }) {
             return (
               <div key={g.id ?? i} className={`mod-goalie-row mod-goalie-${side}`}>
                 <div className="mod-goalie-name-wrap">
-                  <span className="mod-goalie-pos-badge">G</span>
+                  
                   <span className="mod-goalie-name">{g.player_name}</span>
                   {isShutout && <span className="mod-goalie-so-badge">SO</span>}
                 </div>
@@ -572,7 +572,7 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-hero-code{font-family:'Press Start 2P',monospace;font-size:.9rem;letter-spacing:3px;font-weight:bold;}
         .mod-hero-code-away{color:#87CEEB;text-shadow:0 0 18px rgba(135,206,235,.65);}
         .mod-hero-code-home{color:#FF8C00;text-shadow:0 0 18px rgba(255,140,0,.65);}
-        .mod-hero-tag{font-family:'Press Start 2P',monospace;font-size:.38rem;padding:.2rem .42rem;border-radius:4px;letter-spacing:1.5px;}
+        .mod-hero-tag{font-family:'Press Start 2P',monospace;font-size:.65rem;padding:.2rem .42rem;border-radius:4px;letter-spacing:1.5px;}
         .mod-hero-tag-win {color:#00CC55;border:1px solid rgba(0,204,85,.5);background:rgba(0,204,85,.1);}
         .mod-hero-tag-loss{color:rgba(255,255,255,.28);border:1px solid rgba(255,255,255,.1);}
         .mod-hero-center{display:flex;flex-direction:column;align-items:center;gap:.5rem;}
@@ -603,7 +603,7 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-tab-btn{
           flex:1;
           padding:.9rem .5rem .75rem;
-          font-family:'Press Start 2P',monospace;font-size:.48rem;
+          font-family:'Press Start 2P',monospace;font-size:.65rem;
           letter-spacing:1.5px;
           color:rgba(255,255,255,.55);
           background:rgba(255,255,255,.03);
@@ -672,11 +672,11 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-bs-hdr-away{color:#87CEEB;background:rgba(135,206,235,.055);border-bottom-color:rgba(135,206,235,.28);text-shadow:0 0 12px rgba(135,206,235,.5);}
         .mod-bs-hdr-home{color:#FF8C00;background:rgba(255,140,0,.055);border-bottom-color:rgba(255,140,0,.28);text-shadow:0 0 12px rgba(255,140,0,.5);}
         .mod-bs-team-name{flex:1;}
-        .mod-bs-loc-tag{font-size:.3rem;color:rgba(255,255,255,.28);letter-spacing:1px;}
+        .mod-bs-loc-tag{font-size:.65rem;color:rgba(255,255,255,.28);letter-spacing:1px;}
         .mod-bs-table-scroll{overflow-x:auto;}
         .mod-bs-table{width:100%;border-collapse:collapse;}
         .mod-bs-th{
-          font-family:'Press Start 2P',monospace;font-size:.36rem;
+          font-family:'Press Start 2P',monospace;font-size:.65rem;
           color:rgba(255,255,255,.32);padding:.42rem .45rem;text-align:center;
           border-bottom:1px solid rgba(255,255,255,.07);
           letter-spacing:.8px;white-space:nowrap;
@@ -700,18 +700,17 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-bs-pim{color:rgba(255,80,80,.75);}
         .mod-bs-pim-light{color:rgba(255,80,80,.6);}
         .mod-goalie-section{border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.22);}
-        .mod-goalie-section-lbl{font-family:'Press Start 2P',monospace;font-size:.36rem;letter-spacing:2px;color:rgba(255,255,255,.28);padding:.6rem 1.25rem .3rem;}
+        .mod-goalie-section-lbl{font-family:'Press Start 2P',monospace;font-size:.65rem;letter-spacing:2px;color:rgba(255,255,255,.28);padding:.6rem 1.25rem .3rem;}
         .mod-goalie-row{display:flex;align-items:center;justify-content:space-between;padding:.72rem 1.25rem;border-top:1px solid rgba(255,255,255,.04);}
         .mod-goalie-away{border-left:3px solid rgba(135,206,235,.4);}
         .mod-goalie-home{border-left:3px solid rgba(255,140,0,.4);}
         .mod-goalie-name-wrap{display:flex;align-items:center;gap:.5rem;}
-        .mod-goalie-pos-badge{font-family:'Press Start 2P',monospace;font-size:.3rem;color:rgba(255,255,255,.28);background:rgba(255,255,255,.08);padding:.1rem .28rem;border-radius:3px;}
         .mod-goalie-name{font-family:'VT323',monospace;font-size:1.45rem;color:rgba(255,255,255,.82);}
         .mod-goalie-so-badge{font-family:'Press Start 2P',monospace;font-size:.3rem;color:#FFD700;border:1px solid rgba(255,215,0,.5);background:rgba(255,215,0,.1);padding:.1rem .25rem;border-radius:3px;letter-spacing:1px;}
         .mod-goalie-stats-row{display:flex;gap:1.1rem;align-items:flex-end;}
         .mod-goalie-stat{display:flex;flex-direction:column;align-items:center;gap:.1rem;}
         .mod-goalie-stat-val{font-family:'VT323',monospace;font-size:1.7rem;line-height:1;color:rgba(255,255,255,.82);}
-        .mod-goalie-stat-lbl{font-family:'Press Start 2P',monospace;font-size:.3rem;color:rgba(255,255,255,.28);letter-spacing:.8px;}
+        .mod-goalie-stat-lbl{font-family:'Press Start 2P',monospace;font-size:.65rem;color:rgba(255,255,255,.28);letter-spacing:.8px;}
         .mod-goalie-svpct{font-size:1.5rem;}
         .mod-goalie-hot{color:#00CC55;text-shadow:0 0 12px rgba(0,204,85,.5);}
 
@@ -719,7 +718,7 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-tab-content{min-height:200px;}
         .mod-period-grid-wrap{padding:.7rem 1.4rem .6rem;overflow-x:auto;border-bottom:1px solid rgba(255,255,255,.06);}
         .mod-pt{border-collapse:collapse;width:100%;}
-        .mod-pt-th{font-family:'Press Start 2P',monospace;font-size:.4rem;color:rgba(255,255,255,.38);padding:.2rem .55rem;text-align:center;letter-spacing:1px;}
+        .mod-pt-th{font-family:'Press Start 2P',monospace;font-size:.65rem;color:rgba(255,255,255,.38);padding:.2rem .55rem;text-align:center;letter-spacing:1px;}
         .mod-pt-team-col{text-align:left;min-width:130px;}
         .mod-pt-p-col{min-width:50px;}
         .mod-pt-tot-col{color:rgba(255,215,0,.6);}
@@ -729,20 +728,20 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-pt-code{font-family:'Press Start 2P',monospace;font-size:.7rem;font-weight:bold;letter-spacing:2px;}
         .mod-pt-away-code{color:#87CEEB;text-shadow:0 0 8px rgba(135,206,235,.5);}
         .mod-pt-home-code{color:#FF8C00;text-shadow:0 0 8px rgba(255,140,0,.5);}
-        .mod-pt-loc{font-family:'Press Start 2P',monospace;font-size:.28rem;color:rgba(255,255,255,.28);}
+        .mod-pt-loc{font-family:'Press Start 2P',monospace;font-size:.65rem;color:rgba(255,255,255,.28);}
         .mod-pt-cell{font-family:'VT323',monospace;font-size:1.9rem;line-height:1;text-align:center;color:rgba(255,255,255,.82);padding:.1rem .4rem;}
         .mod-pt-tot{font-size:2.3rem;font-weight:bold;}
         .mod-pt-away-tot{color:#87CEEB;text-shadow:0 0 12px rgba(135,206,235,.5);}
         .mod-pt-home-tot{color:#FF8C00;text-shadow:0 0 12px rgba(255,140,0,.5);}
         .mod-pt-sog-row td{border-bottom:1px solid rgba(255,255,255,.04);padding:.04rem .55rem .16rem;}
-        .mod-pt-sog-lbl{font-family:'Press Start 2P',monospace;font-size:.34rem;color:rgba(255,255,255,.28);letter-spacing:1px;}
+        .mod-pt-sog-lbl{font-family:'Press Start 2P',monospace;font-size:.65rem;color:rgba(255,255,255,.28);letter-spacing:1px;}
         .mod-pt-sog{font-family:'VT323',monospace;font-size:1.15rem;color:rgba(255,255,255,.28);text-align:center;}
         .mod-pt-sog-tot{color:rgba(255,255,255,.38);}
         .mod-pt-spacer td{height:6px;}
 
         .mod-per-divider{display:flex;align-items:center;gap:.7rem;padding:.35rem 1.4rem .25rem;}
         .mod-per-line{flex:1;height:1px;background:rgba(255,255,255,.08);}
-        .mod-per-label{font-family:'Press Start 2P',monospace;font-size:.46rem;color:rgba(255,255,255,.38);letter-spacing:2px;white-space:nowrap;}
+        .mod-per-label{font-family:'Press Start 2P',monospace;font-size:.65rem;color:rgba(255,255,255,.38);letter-spacing:2px;white-space:nowrap;}
 
         /* Goal rows */
         .mod-goal-row{
@@ -831,8 +830,8 @@ export default function GameOverviewModal({ game, onClose }) {
         }
 
         .mod-goal-assists{font-family:'VT323',monospace;font-size:1.05rem;color:rgba(255,255,255,.42);display:flex;flex-wrap:wrap;gap:.15rem;}
-        .mod-goal-a-lbl{color:rgba(255,255,255,.25);font-size:1rem;}
-        .mod-goal-a-name{color:rgba(255,255,255,.68);}
+        .mod-goal-a-lbl{color:rgba(255,255,255,.525);font-size:1.1rem;}
+        .mod-goal-a-name{color:rgba(255,255,255,.68);font-size:1.1rem;}
         .mod-goal-sep{color:rgba(255,255,255,.2);}
         .mod-goal-unassisted{color:rgba(255,255,255,.25);font-style:italic;}
 
@@ -867,7 +866,7 @@ export default function GameOverviewModal({ game, onClose }) {
         .mod-sb-fh{background:rgba(255,140,0,.38);border-radius:0 3px 3px 0;}
         .mod-sb-bright.mod-sb-fa{background:#87CEEB;}
         .mod-sb-bright.mod-sb-fh{background:#FF8C00;}
-        .mod-sb-lbl{font-family:'Press Start 2P',monospace;font-size:.37rem;letter-spacing:.5px;color:rgba(255,255,255,.48);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .mod-sb-lbl{font-family:'Press Start 2P',monospace;font-size:.65rem;letter-spacing:.5px;color:rgba(255,255,255,.48);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
         /* ══ RESPONSIVE ═══════════════════════════════════════ */
         @media(max-width:640px){
@@ -875,7 +874,7 @@ export default function GameOverviewModal({ game, onClose }) {
           .mod-hero-inner{padding:1.5rem 1rem 1.2rem;gap:1rem;}
           .mod-hero-snum{font-size:4rem;}
           .mod-hero-code{font-size:.7rem;}
-          .mod-tab-btn{font-size:.38rem;padding:.7rem .25rem .6rem;}
+          .mod-tab-btn{font-size:.65rem;padding:.7rem .25rem .6rem;}
           .mod-tab-icon{font-size:.7rem;}
           .mod-goal-row{grid-template-columns:58px 44px 1fr auto;gap:.4rem;padding:.38rem 1rem;}
           .mod-bs-th-player{min-width:100px;}

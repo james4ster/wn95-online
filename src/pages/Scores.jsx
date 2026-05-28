@@ -109,16 +109,7 @@ function GameCard({ game, selectedTeam, index, onOpenModal, streak, isAll }) {
           {game.home === selectedTeam && <StreakBadge streak={streak} />}
         </div>
 
-        {/* Overview button */}
-        <div className="gc-actions">
-  <button
-    className="gc-overview-btn"
-    onClick={() => onOpenModal(game)}
-    title="Game Overview"
-  >
-    OVERVIEW
-  </button>
-</div>
+        
       </div>
     </div>
   );
@@ -377,32 +368,7 @@ export default function Scores() {
         .gc-dash { font-family:'VT323',monospace; font-size:2.2rem; color:rgba(255,255,255,.12); display:block; }
         .gc-ot   { display:inline-block; font-family:'Press Start 2P',monospace; font-size:.38rem; color:#FF8C00; border:1px solid rgba(255,140,0,.55); border-radius:4px; padding:.16rem .3rem; background:rgba(255,140,0,.12); }
 
-        /* Overview button */
-        .gc-overview-btn {
-          font-family:'Press Start 2P',monospace; font-size:.36rem;
-          letter-spacing:1.5px; color:rgba(135,206,235,.6);
-          background:rgba(135,206,235,.06);
-          border:1px solid rgba(135,206,235,.2);
-          border-radius:5px; padding:.38rem .65rem;
-          cursor:pointer; transition:all .15s;
-          white-space:nowrap; flex-shrink:0;
-          width: 100%;
-          text-align: center;
-          grid-column: 5;
-  justify-self: end;
-        }
-        .gc-overview-btn:hover {
-          color:#87CEEB; background:rgba(135,206,235,.15);
-          border-color:rgba(135,206,235,.5);
-          box-shadow:0 0 10px rgba(135,206,235,.2);
-        }
-        /* Align Overview btn */
-        .gc-actions {
-          display: flex;
-  justify-content: center;
-  align-items: center;
-          width: 100%;
-        }
+       
 
         /* ════════════════════════════════════════════════════════════════════
            PAGE STATES

@@ -657,43 +657,26 @@ function ClinchBanner({ clinchNumber, playoffTeams }) {
   );
 }
 
-function computeClinchElim(sortedStandings, playoffTeams, totalGamesPerTeam) {
+function computeClinchElim(sortedStandings, playoffTeams) {
   const clinched = new Set();
   const eliminated = new Set();
-  if (!playoffTeams || playoffTeams <= 0 || sortedStandings.length === 0)
+  if (!playoffTeams || sortedStandings.length <= playoffTeams)
     return { clinched, eliminated };
 
-  const effectiveTotal =
-    totalGamesPerTeam ?? Math.max(...sortedStandings.map((t) => t.gp || 0));
-  if (!effectiveTotal || effectiveTotal <= 0) return { clinched, eliminated };
-
-  const n = sortedStandings.length;
-  const maxPts = (t) =>
-    (t.pts || 0) + Math.max(0, effectiveTotal - (t.gp || 0)) * 2;
-
-  for (let r = 0; r < Math.min(playoffTeams, n); r++) {
-    const myPts = sortedStandings[r].pts || 0;
-    const challengers = sortedStandings
-      .slice(r + 1)
-      .map((t) => maxPts(t))
+  sortedStandings.forEach((t) => {
+    // Everyone except this team, sorted by their best possible finish
+    const others = sortedStandings
+      .filter(o => o.team !== t.team)
+      .map(o => o.maxPts ?? o.pts ?? 0)
       .sort((a, b) => b - a);
-    const spotsNeeded = playoffTeams - r;
-    const bestChallengers = challengers.slice(0, spotsNeeded);
-    if (
-      bestChallengers.length < spotsNeeded ||
-      bestChallengers[bestChallengers.length - 1] < myPts
-    ) {
-      clinched.add(sortedStandings[r].team);
-    }
-  }
 
-  const bubblePts =
-    sortedStandings[Math.min(playoffTeams - 1, n - 1)]?.pts || 0;
-  for (let r = playoffTeams; r < n; r++) {
-    if (maxPts(sortedStandings[r]) < bubblePts) {
-      eliminated.add(sortedStandings[r].team);
-    }
-  }
+    // The (playoffTeams)th best max pts among all other teams
+    // = the worst team that could still bump this team out
+    const displacerMaxPts = others[playoffTeams - 1] ?? 0;
+
+    if ((t.pts ?? 0) > displacerMaxPts) clinched.add(t.team);
+    if ((t.maxPts ?? 0) < displacerMaxPts) eliminated.add(t.team);
+  });
 
   return { clinched, eliminated };
 }
@@ -1095,13 +1078,39 @@ export default function Standings() {
     : playoffGames;
 
   //Cutline useMemo
-  const clinchNumber = useMemo(() => {
-    if (!playoffTeams || defaultSorted.length <= playoffTeams) return null;
+  const { clinched, eliminated, clinchNumber } = useMemo(() => {
+    const clinched = new Set();
+    const eliminated = new Set();
   
-    const bubbleOutsider = defaultSorted[playoffTeams]; // 17th place (index 16)
-    if (!bubbleOutsider) return null;
+    if (!playoffTeams || defaultSorted.length <= playoffTeams) {
+      return { clinched, eliminated, clinchNumber: null };
+    }
   
-    return (bubbleOutsider.maxPts ?? bubbleOutsider.pts) + 1;
+    // Sort everyone by maxPts descending to find the true bubble
+    const byMaxPts = [...defaultSorted]
+      .filter(t => t.maxPts != null)
+      .sort((a, b) => b.maxPts - a.maxPts);
+  
+    const seventeenth = byMaxPts[playoffTeams]; // 0-indexed, so index 16 = 17th
+    if (!seventeenth) return { clinched, eliminated, clinchNumber: null };
+  
+    const cutlineMaxPts = seventeenth.maxPts;
+    const clinchNumber = cutlineMaxPts + 1;
+  
+    // Clinch: current pts strictly greater than 17th's max pts
+    defaultSorted.forEach(t => {
+      if ((t.pts ?? 0) > cutlineMaxPts) clinched.add(t.team);
+    });
+  
+    // Elimination: your max pts less than 16th place's current pts
+    const lastInPts = defaultSorted[playoffTeams - 1]?.pts ?? 0;
+    defaultSorted.forEach((t, i) => {
+      if (i >= playoffTeams && (t.maxPts ?? 0) < lastInPts) {
+        eliminated.add(t.team);
+      }
+    });
+  
+    return { clinched, eliminated, clinchNumber };
   }, [defaultSorted, playoffTeams]);
 
   const tiedPtsSet = useMemo(() => {
@@ -1121,27 +1130,7 @@ export default function Standings() {
     return result;
   }, [sortedStandings, totalGamesPerTeam]);
 
-  const { clinched, eliminated } = useMemo(() => {
-    // Clinched = anyone whose current pts >= clinchNumber
-    const clinched = new Set(
-      defaultSorted
-        .filter((t) => clinchNumber != null && (t.pts || 0) >= clinchNumber)
-        .map((t) => t.team)
-    );
-  
-    // Eliminated = anyone whose maxPts < the bubble team's current pts
-    const bubblePts = defaultSorted[playoffTeams - 1]?.pts || 0;
-    const eliminated = new Set(
-      defaultSorted
-        .slice(playoffTeams)
-        .filter((t) => (t.maxPts ?? t.pts) < bubblePts)
-        .map((t) => t.team)
-    );
-  
-    return { clinched, eliminated };
-  }, [defaultSorted, playoffTeams, clinchNumber]);
-
-
+    
   useEffect(() => {
     if (computedStandings.length > 0 && window.innerWidth <= 932) {
       setTiebreakerInfo(null);

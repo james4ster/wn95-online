@@ -1094,30 +1094,15 @@ export default function Standings() {
     ? buildProjectedPlayoffGames(defaultSorted, playoffTeams)
     : playoffGames;
 
-  const { clinched, eliminated } = useMemo(
-    () => computeClinchElim(defaultSorted, playoffTeams, totalGamesPerTeam),
-    [defaultSorted, playoffTeams, totalGamesPerTeam]
-  );
-
   //Cutline useMemo
   const clinchNumber = useMemo(() => {
     if (!playoffTeams || defaultSorted.length <= playoffTeams) return null;
   
-    const insiders = defaultSorted.slice(0, playoffTeams);
-    const minInsiderGP = Math.min(...insiders.map((t) => t.gp || 0));
+    const bubbleOutsider = defaultSorted[playoffTeams]; // 17th place (index 16)
+    if (!bubbleOutsider) return null;
   
-    const outsiders = defaultSorted.slice(playoffTeams).filter(
-      (t) => !eliminated.has(t.team) && (t.gp || 0) >= minInsiderGP
-    );
-  
-    if (outsiders.length === 0) return null;
-  
-    const highestMaxPts = Math.max(
-      ...outsiders.map((t) => t.maxPts ?? t.pts)
-    );
-  
-    return highestMaxPts + 1;
-  }, [defaultSorted, playoffTeams, eliminated]);
+    return (bubbleOutsider.maxPts ?? bubbleOutsider.pts) + 1;
+  }, [defaultSorted, playoffTeams]);
 
   const tiedPtsSet = useMemo(() => {
     const ptsCounts = {};
@@ -1135,6 +1120,27 @@ export default function Standings() {
     });
     return result;
   }, [sortedStandings, totalGamesPerTeam]);
+
+  const { clinched, eliminated } = useMemo(() => {
+    // Clinched = anyone whose current pts >= clinchNumber
+    const clinched = new Set(
+      defaultSorted
+        .filter((t) => clinchNumber != null && (t.pts || 0) >= clinchNumber)
+        .map((t) => t.team)
+    );
+  
+    // Eliminated = anyone whose maxPts < the bubble team's current pts
+    const bubblePts = defaultSorted[playoffTeams - 1]?.pts || 0;
+    const eliminated = new Set(
+      defaultSorted
+        .slice(playoffTeams)
+        .filter((t) => (t.maxPts ?? t.pts) < bubblePts)
+        .map((t) => t.team)
+    );
+  
+    return { clinched, eliminated };
+  }, [defaultSorted, playoffTeams, clinchNumber]);
+
 
   useEffect(() => {
     if (computedStandings.length > 0 && window.innerWidth <= 932) {

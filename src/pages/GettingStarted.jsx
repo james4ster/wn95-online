@@ -442,6 +442,7 @@ const stepData = {
     title: 'STREAM OVERLAYS',
     subtitle: 'Add WN95HL live overlays to your stream',
     description: 'The WN95HL overlays are browser-based and work in both OBS and Streamlabs. Once set up it only takes a few seconds before each game to configure — pick your two teams and you\'re live.',
+    
     sections: [
       {
         id: 'obs-setup',
@@ -455,6 +456,7 @@ const stepData = {
                 <p>In OBS, look at the <strong>Scenes</strong> panel in the bottom-left. Click the <strong>+</strong> button and name it something like <em>WN95HL Game</em>.</p>
                 <p>This will be your dedicated scene for league games. You can switch back to your other scenes anytime.</p>
               </>
+              
             ),
           },
           {
@@ -486,7 +488,7 @@ const stepData = {
           },
           {
             num: '04',
-            heading: 'Add Your Game Capture',
+            heading: 'Add Your Game Capture (if you created a new scene)',
             body: (
               <>
                 <p>Click <strong>+</strong> in Sources again and choose <strong>Game Capture</strong>. Set it to capture <strong>RetroArch</strong>.</p>
@@ -515,7 +517,7 @@ const stepData = {
             heading: 'Create a New Scene',
             body: (
               <>
-                <p>In Streamlabs, find the <strong>Scenes</strong> panel and click <strong>+</strong> to add a new scene. Name it <em>WN95HL Game</em>.</p>
+                <p>In Streamlabs, find the <strong>Scenes</strong> panel and click <strong>+</strong> to add a new scene. Name it.</p>
               </>
             ),
           },
@@ -545,7 +547,7 @@ const stepData = {
           },
           {
             num: '04',
-            heading: 'Add Your Game Capture',
+            heading: 'Add Your Game Capture (if you created a new scene)',
             body: (
               <>
                 <p>Click <strong>+</strong> in Sources and choose <strong>Game Capture</strong>. Select <strong>RetroArch</strong> as the application.</p>
@@ -838,6 +840,19 @@ export default function GettingStarted() {
           <p className="gs-description">{current.description}</p>
         )}
 
+        {/* ONLY SHOW FOR STREAM OVERLAYS */}
+        {activeSection === 'overlays' && (
+          <div className="guide-callout-orange">
+            <div className="callout-title">🟧 SETUP NOTES</div>
+
+            <div className="callout-body">
+              • Setup is one-time only for OBS/Streamlabs<br />
+              • Begin with the OBS/StreamLabs one-time setup, however the URL (found in later step) is required to complete the setup.<br />
+              • Monitor and screen sizes vary, so resizing of the game capture screen and overlay may be required (also one-time task)
+            </div>
+          </div>
+        )}
+        
         {/* Steps layout */}
         {current.steps && (
           <div className="gs-steps">
@@ -1122,6 +1137,23 @@ export default function GettingStarted() {
         .callout-body {
           color: #EEF2F8;
           opacity: 0.95;
+        }
+
+        .guide-callout-orange {
+          margin-top: 14px;
+          margin-bottom: 50px;
+          padding: 14px 16px;
+          border-radius: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        
+          background: rgba(255, 140, 0, 0.08);
+          border: 1px solid rgba(255, 140, 0, 0.35);
+          border-left: 4px solid #FF8C00;
+        
+          color: #EEF2F8;
+          box-shadow: 0 0 18px rgba(255, 140, 0, 0.08);
         }
 
         /* ── GUIDE LIST ── */

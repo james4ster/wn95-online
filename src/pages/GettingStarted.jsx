@@ -574,11 +574,18 @@ const stepData = {
             body: (
               <>
                 <p>
-                  The regular season overlay displays live matchup info, standings,
-                  team stats, and head-to-head data for the current game. It pulls
-                  live data from the WN95HL database and updates automatically.
+                  The regular season overlay displays live head-to-head matchup info, standings, and player stats 
+                  current matchup. It pulls the live data from the WN95HL database when the button is pushed after team selection.
                 </p>
-            
+
+                <div className="guide-callout guide-callout-warning">
+                    <div className="callout-title">⚠ IMPORTANT</div>
+
+                    <div className="callout-body">
+                      Copy & paste the desired URL below into your OBS/StreamLabs browser source setting.
+                    </div>
+                  </div>
+          
                 <div className="overlay-url-list">
             
                   <div className="overlay-url-row">
@@ -643,7 +650,8 @@ const stepData = {
                   <li>Click <strong>APPLY</strong></li>
                   <li>Press <strong>~</strong> again to close the panel</li>
                 </ul>
-                <p><i>The overlay will load the matchup and begin polling for live updates automatically.</i></p>
+                <p><i>To change the teams/matchup going forward, simply right click on the browser source, select Interact, and push '~' to display the
+                  team selection panel again.</i></p>
               </>
             ),
           },
@@ -658,10 +666,29 @@ const stepData = {
             heading: 'What It Shows',
             body: (
               <>
-                <p>The playoff overlay shows the series score, win dots, seedings, skater stats, team series stats, and a scrolling ticker with game-by-game scores, team stats, and head-to-head history.</p>
-                <p>Overlay URL:{' '}
-                  <a href="/overlay-playoff" target="_blank" rel="noopener noreferrer" className="guide-link">
-                  wn95-online.vercel.app/overlay-playoff
+                <p>
+                  The playoff overlay shows the series score, win dots, seedings,
+                  skater stats, team series stats, and a scrolling ticker with
+                  game-by-game scores, team stats, and head-to-head history.
+                </p>
+          
+                <div className="guide-callout guide-callout-warning">
+                    <div className="callout-title">⚠ IMPORTANT</div>
+
+                    <div className="callout-body">
+                      Copy & paste the URL below into your OBS/StreamLabs browser source setting.
+                    </div>
+                  </div>
+          
+                <p>
+                  Control Panel:{' '}
+                  <a
+                    href="/overlay-playoff"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="guide-link"
+                  >
+                    wn95-online.vercel.app/overlay-playoff
                   </a>
                 </p>
               </>
@@ -672,15 +699,21 @@ const stepData = {
             heading: 'Configuring Before Each Game',
             body: (
               <>
-                <p>Same process as the regular season overlay:</p>
+                <p><i>Same process as the regular season overlay:</i></p>
                 <ul className="guide-list">
                   <li>Switch to your WN95HL Game scene</li>
                   <li>Press <strong>~</strong> to open the setup panel</li>
                   <li>Select the two teams in the series</li>
                   <li>Click <strong>APPLY</strong></li>
-                  <li>Press <strong>~</strong> to close</li>
                 </ul>
-                <p><i>The playoff overlay automatically finds the current series between the two teams and shows the correct round, series score, and game number. Series stats and the ticker populate as games are completed.</i></p>
+                
+                <div className="guide-callout guide-callout-warning">
+                    <div className="callout-title">⚠ IMPORTANT</div>
+
+                    <div className="callout-body">
+                      The team selection panel is only required at the beginning of the series. <br></br>The playoff overlay automatically refreshes (within 30 seconds) all the screen elements when a new state is posted.
+                    </div>
+                  </div>
               </>
             ),
           },
@@ -1060,6 +1093,35 @@ export default function GettingStarted() {
           border-radius: 6px;
           margin: 1rem 0;
           box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .guide-callout {
+          margin-top: 14px;
+          padding: 14px 16px;
+          border-radius: 10px;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          background: rgba(255,255,255,0.03);
+          border: 1px solid rgba(255,255,255,0.08);
+        }
+        
+        .guide-callout-warning {
+          background: rgba(255, 193, 7, 0.08);
+          border: 1px solid rgba(255, 193, 7, 0.35);
+          border-left: 4px solid #FFD700;
+          color: #EEF2F8;
+        }
+        
+        .callout-title {
+          font-weight: 800;
+          letter-spacing: 0.04em;
+          color: #FFD700;
+        }
+        
+        .callout-body {
+          color: #EEF2F8;
+          opacity: 0.95;
         }
 
         /* ── GUIDE LIST ── */

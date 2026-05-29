@@ -258,14 +258,20 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
     (h2h.seasonGames || []).forEach((g, i) => {
       items.push({ type: 'h2h-game-score', idx: i + 1, teamA, teamB, aScore: g.aScore, bScore: g.bScore, winner: g.winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
     });
-    if (h2h.seasonStatsA) items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.seasonStatsA });
+    if (h2h.seasonStatsA) {
+      items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.seasonStatsA });
+      items.push({ type: 'h2h-team-stats', team: teamB, stats: h2h.seasonStatsB });
+    }
   }
 
   // SECTION 3: ALL TIME H2H
   if (h2h && h2h.allTimeGP > 0) {
     items.push({ type: 'section-header', label: 'ALL TIME H2H' });
     items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.allTimeAW, bW: h2h.allTimeBW, ties: h2h.allTimeTies, gp: h2h.allTimeGP });
-    if (h2h.allTimeStatsA) items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.allTimeStatsA });
+    if (h2h.allTimeStatsA) {
+      items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.allTimeStatsA });
+      items.push({ type: 'h2h-team-stats', team: teamB, stats: h2h.allTimeStatsB });
+    }
   }
 
   return items;
@@ -429,8 +435,10 @@ export default function StreamOverlayPlayoff() {
       seasonGP: sAW + sBW + sTies, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
       seasonGames: seasonGameScores,
       seasonStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg),
+      seasonStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, lg),  // ADD
       allTimeGP: atAW + atBW + atTies, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
       allTimeStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null),
+      allTimeStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, null),  // ADD
     };
 
     const { aW, bW } = getSeriesScore(playoffGames, tA, tB);

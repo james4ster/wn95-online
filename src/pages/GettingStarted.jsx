@@ -440,7 +440,7 @@ const stepData = {
   },
   overlays: {
     title: 'STREAM OVERLAYS',
-    subtitle: 'Add the WN95HL live overlay to your stream',
+    subtitle: 'Add WN95HL live overlays to your stream',
     description: 'The WN95HL overlays are browser-based and work in both OBS and Streamlabs. Once set up it only takes a few seconds before each game to configure — pick your two teams and you\'re live.',
     sections: [
       {
@@ -463,7 +463,7 @@ const stepData = {
             body: (
               <>
                 <p>In the <strong>Sources</strong> panel, click <strong>+</strong> and choose <strong>Browser</strong>.</p>
-                <p>Name it <em>WN95HL Overlay</em> and click OK. In the properties window that opens:</p>
+                <p>Give it a name and click OK. In the properties window that opens:</p>
                 <ul className="guide-list">
                   <li>Paste the overlay URL into the <strong>URL</strong> field <span className="placeholder-badge">⚠ URL COMING SOON</span></li>
                   <li>Set <strong>Width</strong> to <strong>1920</strong></li>

@@ -1,7 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
-// ── Constants ──────────────────────────────────────────────────────────────
 const POLL_INTERVAL = 60000;
 
 const ROUND_LABELS = {
@@ -14,7 +13,6 @@ const ROUND_LABELS = {
 const norm  = s => (s || '').trim().toLowerCase();
 const svPct = (saves, sa) => (sa > 0 ? (saves / sa).toFixed(3).replace('0.', '.') : '—');
 
-// Format seconds to M:SS
 function secToMMSS(totalSec) {
   if (!totalSec && totalSec !== 0) return '0:00';
   const m = Math.floor(totalSec / 60);
@@ -22,35 +20,23 @@ function secToMMSS(totalSec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-// ── ATK parsing ────────────────────────────────────────────────────────────
+// "304:00" = raw seconds with :00 suffix → parts[0] > 59 means parts[0] IS the seconds value
 function parseTimeToSeconds(raw) {
   if (raw == null || raw === '') return 0;
   const str = String(raw).trim();
   if (!str) return 0;
   const parts = str.split(':').map(Number);
-  if (parts.length === 3) {
-    return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
-  }
-  if (parts.length === 2) {
-    if (parts[0] > 59) return parts[0];
-    return parts[0] * 60 + (parts[1] || 0);
-  }
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+  if (parts.length === 2) return parts[0] > 59 ? parts[0] : parts[0] * 60 + (parts[1] || 0);
   const n = parseInt(str, 10);
   return isNaN(n) ? 0 : n;
 }
 
-function timeStrToSec(t) {
-  return parseTimeToSeconds(t);
-}
-
-// "J Hemsky" style
 function fmtName(fullName) {
   if (!fullName) return '';
   const parts = fullName.trim().split(/\s+/);
   if (parts.length === 1) return parts[0];
-  const initial = parts[0][0].toUpperCase();
-  const last    = parts[parts.length - 1];
-  return `${initial} ${last}`;
+  return `${parts[0][0].toUpperCase()} ${parts[parts.length - 1]}`;
 }
 
 // ── Data helpers ───────────────────────────────────────────────────────────
@@ -90,8 +76,7 @@ function buildCumulativeSkaterStatsFromRaw(rawScoring, teamCode) {
 
 function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
   let gf = 0, ga = 0, sh = 0, sa = 0;
-  let brG = 0, brA = 0;
-  let oneG = 0, oneA = 0;
+  let brG = 0, brA = 0, oneG = 0, oneA = 0;
   let atkSec = 0, atkGames = 0;
   let ppg = 0, ppAmt = 0, shg = 0;
   let totalSaves = 0, totalSA = 0;
@@ -107,73 +92,46 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     const ts = (teamStats || []).find(t => t.playoff_game_id === pg.id);
     if (!ts) return;
     const isHome = ts.home === teamCode;
-
     const mySH = isHome ? (ts.home_shots || 0) : (ts.away_shots || 0);
     const mySA = isHome ? (ts.away_shots || 0) : (ts.home_shots || 0);
-    sh += mySH;
-    sa += mySA;
-
+    sh += mySH; sa += mySA;
     const gameRaw = (rawScoring || []).filter(r => r.playoff_game_id === pg.id);
     const gameGA  = gameRaw.filter(r => r.g_team !== teamCode).length;
-    totalSA    += mySA;
-    totalSaves += Math.max(0, mySA - gameGA);
-
-    brG += isHome ? (ts.home_break_goals    || 0) : (ts.away_break_goals    || 0);
+    totalSA += mySA; totalSaves += Math.max(0, mySA - gameGA);
+    brG += isHome ? (ts.home_break_goals || 0) : (ts.away_break_goals || 0);
     brA += isHome ? (ts.home_break_attempts || 0) : (ts.away_break_attempts || 0);
-
-    oneG += isHome ? (ts.home_one_timer_goals    || ts.home_onetimer_goals    || 0)
-                   : (ts.away_one_timer_goals    || ts.away_onetimer_goals    || 0);
+    oneG += isHome ? (ts.home_one_timer_goals || ts.home_onetimer_goals || 0)
+                   : (ts.away_one_timer_goals || ts.away_onetimer_goals || 0);
     oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
                    : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
-
     const atkRaw = isHome ? ts.home_attack : ts.away_attack;
     if (atkRaw != null && atkRaw !== '') {
-        const sec = (() => {
-            const parts = String(atkRaw).trim().split(':').map(Number);
-            if (parts.length === 3) return parts[0] * 60 + parts[1];
-            if (parts.length === 2) return parts[0] > 59 ? parts[0] : parts[0] * 60 + parts[1];
-            return parseInt(atkRaw, 10) || 0;
-          })();
+      const sec = parseTimeToSeconds(atkRaw);
       if (sec > 0) { atkSec += sec; atkGames++; }
     }
-
-    ppg    += isHome ? (ts.home_pp_g   || 0) : (ts.away_pp_g   || 0);
-    ppAmt  += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
-    shg    += isHome ? (ts.home_shg    || ts.home_sh_goals || 0)
-                     : (ts.away_shg    || ts.away_sh_goals || 0);
+    ppg   += isHome ? (ts.home_pp_g || 0) : (ts.away_pp_g || 0);
+    ppAmt += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
+    shg   += isHome ? (ts.home_shg || ts.home_sh_goals || 0) : (ts.away_shg || ts.away_sh_goals || 0);
   });
 
-  const gamesPlayed  = playoffGames.filter(g => g.team_a_score != null).length;
-  const atkAvg       = atkGames > 0 ? secToMMSS(Math.round(atkSec / atkGames)) : '—';
-  const brPct        = brA > 0 ? `${((brG / brA) * 100).toFixed(0)}%` : '—';
-  const onePct       = oneA > 0 ? `${((oneG / oneA) * 100).toFixed(0)}%` : '—';
-  const ppPct        = ppAmt > 0 ? `${((ppg / ppAmt) * 100).toFixed(0)}%` : '—';
-  const seriesSvPct  = totalSA > 0 ? svPct(totalSaves, totalSA) : '—';
-
+  const gamesPlayed = playoffGames.filter(g => g.team_a_score != null).length;
   return {
     gf, ga, sh, sa, gamesPlayed,
-    brG, brA, brPct,
-    oneG, oneA, onePct,
-    atkAvg,
-    ppg, ppAmt, ppPct,
-    shg,
-    seriesSvPct, totalSaves, totalSA,
+    brG, brA, brPct: brA > 0 ? `${((brG/brA)*100).toFixed(0)}%` : '—',
+    oneG, oneA, onePct: oneA > 0 ? `${((oneG/oneA)*100).toFixed(0)}%` : '—',
+    atkAvg: atkGames > 0 ? secToMMSS(Math.round(atkSec / atkGames)) : '—',
+    ppg, ppAmt, ppPct: ppAmt > 0 ? `${((ppg/ppAmt)*100).toFixed(0)}%` : '—',
+    shg, seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
+    totalSaves, totalSA,
   };
 }
 
-// ── Aggregate team stats from regular-season games ─────────────────────────
-// Builds a stats block matching the series stats shape, but sourced from
-// regular-season `games` + `game_stats_team` rows for a specific pair of coaches.
-// If `filterLg` is provided, only that season's games are included (season H2H).
-// Otherwise all seasons are included (all-time H2H).
 function buildH2HTeamStats(rsGames, rsTeamStats, coachA, coachB, teamA, teamB, filterLg) {
   let gf = 0, ga = 0, sh = 0, sa = 0;
-  let brG = 0, brA = 0;
-  let oneG = 0, oneA = 0;
+  let brG = 0, brA = 0, oneG = 0, oneA = 0;
   let atkSec = 0, atkGames = 0;
   let ppg = 0, ppAmt = 0, shg = 0;
-  let totalSaves = 0, totalSA = 0;
-  let gp = 0;
+  let totalSaves = 0, totalSA = 0, gp = 0;
 
   (rsGames || []).forEach(g => {
     const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
@@ -181,84 +139,56 @@ function buildH2HTeamStats(rsGames, rsTeamStats, coachA, coachB, teamA, teamB, f
     if (filterLg && g.lg !== filterLg) return;
     if (g.score_home == null || g.score_away == null) return;
     gp++;
-
-    const hIsA  = h === coachA; // home team corresponds to teamA?
-    const myGF  = hIsA ? Number(g.score_home) : Number(g.score_away);
-    const myGA  = hIsA ? Number(g.score_away) : Number(g.score_home);
-    gf += myGF;
-    ga += myGA;
-
+    const hIsA = h === coachA;
+    const myGF = hIsA ? Number(g.score_home) : Number(g.score_away);
+    const myGA = hIsA ? Number(g.score_away) : Number(g.score_home);
+    gf += myGF; ga += myGA;
     const ts = (rsTeamStats || []).find(t => t.game_id === g.id);
     if (!ts) return;
-
-    const isHome = hIsA; // same orientation
-    const mySH   = isHome ? (ts.home_shots || 0) : (ts.away_shots || 0);
-    const mySA   = isHome ? (ts.away_shots || 0) : (ts.home_shots || 0);
-    sh += mySH;
-    sa += mySA;
-
-    totalSA    += mySA;
-    totalSaves += Math.max(0, mySA - myGA);
-
-    brG += isHome ? (ts.home_break_goals    || 0) : (ts.away_break_goals    || 0);
+    const isHome = hIsA;
+    const mySH = isHome ? (ts.home_shots || 0) : (ts.away_shots || 0);
+    const mySA = isHome ? (ts.away_shots || 0) : (ts.home_shots || 0);
+    sh += mySH; sa += mySA;
+    totalSA += mySA; totalSaves += Math.max(0, mySA - myGA);
+    brG += isHome ? (ts.home_break_goals || 0) : (ts.away_break_goals || 0);
     brA += isHome ? (ts.home_break_attempts || 0) : (ts.away_break_attempts || 0);
-
-    oneG += isHome ? (ts.home_one_timer_goals    || ts.home_onetimer_goals    || 0)
-                   : (ts.away_one_timer_goals    || ts.away_onetimer_goals    || 0);
+    oneG += isHome ? (ts.home_one_timer_goals || ts.home_onetimer_goals || 0)
+                   : (ts.away_one_timer_goals || ts.away_onetimer_goals || 0);
     oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
                    : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
-
     const atkRaw = isHome ? ts.home_attack : ts.away_attack;
     if (atkRaw != null && atkRaw !== '') {
-      const parts = String(atkRaw).trim().split(':').map(Number);
-      const sec   = parts.length === 2
-        ? (parts[0] > 59 ? parts[0] : parts[0] * 60 + parts[1])
-        : parseInt(atkRaw, 10) || 0;
+      const sec = parseTimeToSeconds(atkRaw);
       if (sec > 0) { atkSec += sec; atkGames++; }
     }
-
-    ppg   += isHome ? (ts.home_pp_g   || 0) : (ts.away_pp_g   || 0);
+    ppg   += isHome ? (ts.home_pp_g || 0) : (ts.away_pp_g || 0);
     ppAmt += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
-    shg   += isHome ? (ts.home_shg    || ts.home_sh_goals || 0)
-                    : (ts.away_shg    || ts.away_sh_goals || 0);
+    shg   += isHome ? (ts.home_shg || ts.home_sh_goals || 0) : (ts.away_shg || ts.away_sh_goals || 0);
   });
-
-  const atkAvg      = atkGames > 0 ? secToMMSS(Math.round(atkSec / atkGames)) : '—';
-  const brPct       = brA > 0 ? `${((brG / brA) * 100).toFixed(0)}%` : '—';
-  const onePct      = oneA > 0 ? `${((oneG / oneA) * 100).toFixed(0)}%` : '—';
-  const ppPct       = ppAmt > 0 ? `${((ppg / ppAmt) * 100).toFixed(0)}%` : '—';
-  const seriesSvPct = totalSA > 0 ? svPct(totalSaves, totalSA) : '—';
 
   return {
     gp, gf, ga, sh, sa,
-    brG, brA, brPct,
-    oneG, oneA, onePct,
-    atkAvg,
-    ppg, ppAmt, ppPct,
-    shg,
-    seriesSvPct, totalSaves, totalSA,
+    brG, brA, brPct: brA > 0 ? `${((brG/brA)*100).toFixed(0)}%` : '—',
+    oneG, oneA, onePct: oneA > 0 ? `${((oneG/oneA)*100).toFixed(0)}%` : '—',
+    atkAvg: atkGames > 0 ? secToMMSS(Math.round(atkSec / atkGames)) : '—',
+    ppg, ppAmt, ppPct: ppAmt > 0 ? `${((ppg/ppAmt)*100).toFixed(0)}%` : '—',
+    shg, seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
+    totalSaves, totalSA,
     gfpg: gp > 0 ? (gf / gp).toFixed(2) : '—',
     gapg: gp > 0 ? (ga / gp).toFixed(2) : '—',
   };
 }
 
-// ── Scroll item builder ────────────────────────────────────────────────────
-// Three sections:
-//   1. PLAYOFF SERIES  — game scores + per-game team stats (only when ≥2 games complete)
-//   2. SEASON H2H      — current-season record + per-game scores + aggregate stats
-//   3. ALL TIME H2H    — all-time record + aggregate stats
+// FIX 1: changed completed.length >= 2 → >= 1 so Game 1 shows in ticker immediately
 function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h) {
   const completed = (playoffGames || []).filter(
     g => g.team_a_score != null && g.team_b_score != null
   );
   const items = [];
 
-  // ── SECTION 1: PLAYOFF SERIES ──────────────────────────────────────────
-  // Only show once at least 2 games are complete (series is underway)
+  // SECTION 1: PLAYOFF SERIES — show as soon as Game 1 is complete
   if (completed.length >= 1) {
     items.push({ type: 'section-header', label: 'PLAYOFF SERIES' });
-
-    // Game scores
     items.push({ type: 'scores-sub-header' });
     completed.forEach(g => {
       const gid      = g.id;
@@ -277,8 +207,7 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
       const topGoals  = sortedScorers[0]?.[1] || 0;
       const gLeaders  = topGoals > 0
         ? sortedScorers.filter(([, cnt]) => cnt === topGoals)
-            .map(([name, cnt]) => `${fmtName(name)}${cnt > 1 ? ` (${cnt})` : ''}`)
-            .join(', ')
+            .map(([name, cnt]) => `${fmtName(name)}${cnt > 1 ? ` (${cnt})` : ''}`).join(', ')
         : '—';
 
       const ptMap = {};
@@ -290,18 +219,12 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
       const sortedPts  = Object.entries(ptMap).sort((a, b) => b[1] - a[1]);
       const topPts     = sortedPts[0]?.[1] || 0;
       const ptsLeaders = topPts > 0
-        ? sortedPts.filter(([, c]) => c === topPts)
-            .map(([name, c]) => `${fmtName(name)} ${c}`).join(', ')
+        ? sortedPts.filter(([, c]) => c === topPts).map(([name, c]) => `${fmtName(name)} ${c}`).join(', ')
         : '—';
 
-      items.push({
-        type: 'game-score',
-        gameNum: g.game_number, aScore, bScore, teamA, teamB, winner,
-        ptsLeaders, gLeaders,
-      });
+      items.push({ type: 'game-score', gameNum: g.game_number, aScore, bScore, teamA, teamB, winner, ptsLeaders, gLeaders });
     });
 
-    // Per-game team stats
     if ((teamStats || []).length > 0) {
       items.push({ type: 'teamstats-sub-header' });
       completed.forEach(g => {
@@ -328,67 +251,26 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
     }
   }
 
-  // ── SECTION 2: SEASON H2H ─────────────────────────────────────────────
+  // SECTION 2: SEASON H2H
   if (h2h && h2h.seasonGP > 0) {
     items.push({ type: 'section-header', label: 'SEASON H2H' });
-
-    // Record
-    items.push({
-      type: 'h2h-record',
-      teamA, teamB,
-      aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, gp: h2h.seasonGP,
-    });
-
-    // Per-game scores from this season
+    items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, gp: h2h.seasonGP });
     (h2h.seasonGames || []).forEach((g, i) => {
-      items.push({
-        type: 'h2h-game-score',
-        idx: i + 1,
-        teamA, teamB,
-        aScore: g.aScore, bScore: g.bScore,
-        winner: g.winner,
-        ot: g.ot,
-      });
+      items.push({ type: 'h2h-game-score', idx: i + 1, teamA, teamB, aScore: g.aScore, bScore: g.bScore, winner: g.winner, ot: g.ot });
     });
-
-    // Season aggregate stats for teamA
-    if (h2h.seasonStatsA) {
-      items.push({
-        type: 'h2h-team-stats',
-        team: teamA,
-        stats: h2h.seasonStatsA,
-        label: 'SEASON STATS',
-      });
-    }
+    if (h2h.seasonStatsA) items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.seasonStatsA });
   }
 
-  // ── SECTION 3: ALL TIME H2H ───────────────────────────────────────────
+  // SECTION 3: ALL TIME H2H
   if (h2h && h2h.allTimeGP > 0) {
     items.push({ type: 'section-header', label: 'ALL TIME H2H' });
-
-    // Record
-    items.push({
-      type: 'h2h-record',
-      teamA, teamB,
-      aW: h2h.allTimeAW, bW: h2h.allTimeBW, ties: h2h.allTimeTies, gp: h2h.allTimeGP,
-    });
-
-    // All-time aggregate stats for teamA
-    if (h2h.allTimeStatsA) {
-      items.push({
-        type: 'h2h-team-stats',
-        team: teamA,
-        stats: h2h.allTimeStatsA,
-        label: 'ALL TIME STATS',
-      });
-    }
+    items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.allTimeAW, bW: h2h.allTimeBW, ties: h2h.allTimeTies, gp: h2h.allTimeGP });
+    if (h2h.allTimeStatsA) items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.allTimeStatsA });
   }
 
   return items;
 }
 
-// ── Auto-scale hook ────────────────────────────────────────────────────────
-// Keeps the 1280×720 canvas scaled to fit whatever window OBS renders into.
 function useOverlayScale(baseW = 1280, baseH = 720) {
   const [scale, setScale] = useState(1);
   useEffect(() => {
@@ -458,8 +340,9 @@ export default function StreamOverlayPlayoff() {
     if (!tA || !tB || !lg || tA === tB) return;
     setLoading(true);
 
+    // FIX 2: use production playoff_games table (not _test)
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games_test').select('*')   // TEST VERSION TABLE
+      .from('playoff_games_test').select('*')
       .ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 
@@ -495,37 +378,27 @@ export default function StreamOverlayPlayoff() {
       teamStats  = ts || [];
     }
 
-    // ── H2H data ────────────────────────────────────────────────────────
     const { data: teamRows } = await supabase.from('teams').select('abr,coach').eq('lg', lg);
     const coachA = norm((teamRows || []).find(t => t.abr === tA)?.coach || tA);
     const coachB = norm((teamRows || []).find(t => t.abr === tB)?.coach || tB);
 
-    // Fetch all regular-season completed games for these two coaches (all seasons)
     const { data: allRsGames } = await supabase
       .from('games')
       .select('id,lg,score_home,score_away,ot,coach_home,coach_away')
-      .ilike('lg', 'W%')
-      .ilike('mode', 'season')
-      .not('score_home', 'is', null);
+      .ilike('lg', 'W%').ilike('mode', 'season').not('score_home', 'is', null);
 
-    // Filter to just matchups between these two coaches
     const h2hGames = (allRsGames || []).filter(g => {
       const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
       return (h === coachA && a === coachB) || (h === coachB && a === coachA);
     });
 
-    // Fetch team stats for those games (for shot/ATK/PP etc.)
     const h2hGameIds = h2hGames.map(g => g.id).filter(Boolean);
     let rsTeamStats = [];
     if (h2hGameIds.length > 0) {
-      const { data: rts } = await supabase
-        .from('game_stats_team')
-        .select('*')
-        .in('game_id', h2hGameIds);
+      const { data: rts } = await supabase.from('game_stats_team').select('*').in('game_id', h2hGameIds);
       rsTeamStats = rts || [];
     }
 
-    // ── All-time record ─────────────────────────────────────────────────
     let atAW = 0, atBW = 0, atTies = 0;
     h2hGames.forEach(g => {
       const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
@@ -536,9 +409,7 @@ export default function StreamOverlayPlayoff() {
       else if (gfA > gaA) atAW++;
       else atBW++;
     });
-    const allTimeGP = atAW + atBW + atTies;
 
-    // ── Season record + per-game scores ────────────────────────────────
     const seasonGames = h2hGames.filter(g => g.lg === lg);
     let sAW = 0, sBW = 0, sTies = 0;
     const seasonGameScores = [];
@@ -546,39 +417,33 @@ export default function StreamOverlayPlayoff() {
       const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
       const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
       const hIsA = h === coachA;
-      const aScore = hIsA ? sh : sa;
-      const bScore = hIsA ? sa : sh;
+      const aScore = hIsA ? sh : sa, bScore = hIsA ? sa : sh;
       let winner = null;
       if (sh === sa) sTies++;
       else if (aScore > bScore) { sAW++; winner = tA; }
       else { sBW++; winner = tB; }
       seasonGameScores.push({ aScore, bScore, winner, ot: g.ot });
     });
-    const seasonGP = sAW + sBW + sTies;
-
-    // ── Team stats per section ──────────────────────────────────────────
-    const seasonStatsA  = buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg);
-    const allTimeStatsA = buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null);
 
     const h2h = {
-      seasonGP, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
+      seasonGP: sAW + sBW + sTies, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
       seasonGames: seasonGameScores,
-      seasonStatsA,
-      allTimeGP, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
-      allTimeStatsA,
+      seasonStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg),
+      allTimeGP: atAW + atBW + atTies, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
+      allTimeStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null),
     };
 
     const { aW, bW } = getSeriesScore(playoffGames, tA, tB);
     const leftTeam  = (seedA != null && seedB != null && seedA > seedB) ? tA : tB;
     const rightTeam = leftTeam === tA ? tB : tA;
-    const leftWins  = leftTeam === tA ? aW : bW;
-    const rightWins = rightTeam === tA ? aW : bW;
-    const leftSeed  = leftTeam === tA ? seedA : seedB;
-    const rightSeed = rightTeam === tA ? seedA : seedB;
 
     setData({
       teamA: tA, teamB: tB,
-      leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed,
+      leftTeam, rightTeam,
+      leftWins:  leftTeam === tA ? aW : bW,
+      rightWins: rightTeam === tA ? aW : bW,
+      leftSeed:  leftTeam === tA ? seedA : seedB,
+      rightSeed: rightTeam === tA ? seedA : seedB,
       winsNeeded, seriesLength, totalGames: completed.length,
       nextGameNum: Math.min(completed.length + 1, seriesLength),
       roundLabel: ROUND_LABELS[derivedRound] || `ROUND ${derivedRound}`,
@@ -636,12 +501,11 @@ function PlayoffLayout({ data, loading }) {
   const {
     leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed,
     roundLabel, nextGameNum, winsNeeded,
-    skaterStatsA, skaterStatsB,
-    teamSeriesStatsA, teamSeriesStatsB,
-    teamA, teamB, scrollItems, season,
+    skaterStatsA, skaterStatsB, teamSeriesStatsA, teamSeriesStatsB,
+    teamA, teamB, scrollItems,
   } = data;
 
-  const leftIsA      = leftTeam === teamA;
+  const leftIsA     = leftTeam === teamA;
   const leftSkaters  = leftIsA ? skaterStatsA : skaterStatsB;
   const rightSkaters = leftIsA ? skaterStatsB : skaterStatsA;
   const leftStats    = leftIsA ? teamSeriesStatsA : teamSeriesStatsB;
@@ -658,7 +522,6 @@ function PlayoffLayout({ data, loading }) {
 
   return (
     <>
-      {/* Top Bar */}
       <div className="po-topbar">
         <div className="po-topbar-left">
           <span className="po-round-label">{roundLabel}</span>
@@ -675,15 +538,10 @@ function PlayoffLayout({ data, loading }) {
         </div>
       </div>
 
-      {/* Series Hero Bar */}
-      <SeriesHero
-        leftTeam={leftTeam} rightTeam={rightTeam}
+      <SeriesHero leftTeam={leftTeam} rightTeam={rightTeam}
         leftWins={leftWins} rightWins={rightWins}
-        leftSeed={leftSeed} rightSeed={rightSeed}
-        winsNeeded={winsNeeded}
-      />
+        leftSeed={leftSeed} rightSeed={rightSeed} winsNeeded={winsNeeded} />
 
-      {/* Side Panels */}
       <div className="po-side-left">
         <SidePanel team={leftTeam} skaters={leftSkaters} teamStats={leftStats} />
       </div>
@@ -691,13 +549,11 @@ function PlayoffLayout({ data, loading }) {
         <SidePanel team={rightTeam} skaters={rightSkaters} teamStats={rightStats} />
       </div>
 
-      {/* Bottom Scroller */}
       <BottomScroller items={scrollItems} />
     </>
   );
 }
 
-// ── Series Hero Bar ────────────────────────────────────────────────────────
 function SeriesHero({ leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed, winsNeeded }) {
   return (
     <div className="po-series-bar">
@@ -708,9 +564,7 @@ function SeriesHero({ leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightS
           onError={e => e.target.style.display='none'} />
         <div className="po-hero-seed">{leftSeed != null ? `#${leftSeed}` : ''}</div>
       </div>
-      <div className="po-hero-divider">
-        <div className="po-hero-divider-line" />
-      </div>
+      <div className="po-hero-divider"><div className="po-hero-divider-line" /></div>
       <div className="po-hero-half right">
         <div className="po-hero-seed">{rightSeed != null ? `#${rightSeed}` : ''}</div>
         <img src={`/assets/teamLogos/${rightTeam}.png`} className="po-hero-logo" alt={rightTeam}
@@ -722,7 +576,6 @@ function SeriesHero({ leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightS
   );
 }
 
-// ── Series Dots ────────────────────────────────────────────────────────────
 function SeriesDots({ wins, winsNeeded, side }) {
   return (
     <div className={`po-dots po-dots-${side}`}>
@@ -733,11 +586,10 @@ function SeriesDots({ wins, winsNeeded, side }) {
   );
 }
 
-// ── Side Panel ─────────────────────────────────────────────────────────────
-const SKATER_ROWS     = 8;
-const SKATER_ROW_H    = 28;
-const SKATER_HEAD_H   = 22;
-const SKATER_FIXED_H  = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H;
+const SKATER_ROWS    = 8;
+const SKATER_ROW_H   = 28;
+const SKATER_HEAD_H  = 22;
+const SKATER_FIXED_H = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H;
 
 function SidePanel({ team, skaters, teamStats }) {
   const gp = teamStats?.gamesPlayed || 0;
@@ -748,7 +600,6 @@ function SidePanel({ team, skaters, teamStats }) {
           onError={e => e.target.style.display='none'} />
         <span className="po-side-code">{team}</span>
       </div>
-
       <div style={{ minHeight: `${SKATER_FIXED_H}px` }}>
         {skaters.length === 0 ? (
           <div className="po-no-data">SERIES UPCOMING</div>
@@ -778,7 +629,6 @@ function SidePanel({ team, skaters, teamStats }) {
           </>
         )}
       </div>
-
       {gp > 0 && teamStats && (
         <>
           <div className="po-side-divider" />
@@ -787,8 +637,7 @@ function SidePanel({ team, skaters, teamStats }) {
             <StatRow label="GF"  value={teamStats.gf}  sub={`${(teamStats.gf/gp).toFixed(1)}/gm`}  accent="gold" />
             <StatRow label="GA"  value={teamStats.ga}  sub={`${(teamStats.ga/gp).toFixed(1)}/gm`}  accent="red" />
             <StatRow label="SV%" value={teamStats.seriesSvPct}
-              sub={teamStats.totalSA > 0 ? `${teamStats.totalSaves}/${teamStats.totalSA}` : null}
-              accent="green" />
+              sub={teamStats.totalSA > 0 ? `${teamStats.totalSaves}/${teamStats.totalSA}` : null} accent="green" />
             <StatRow label="SH"  value={teamStats.sh}  sub={`${(teamStats.sh/gp).toFixed(1)}/gm`} />
             <StatRow label="SA"  value={teamStats.sa}  sub={`${(teamStats.sa/gp).toFixed(1)}/gm`} />
             <StatRow label="BRK" value={`${teamStats.brG}/${teamStats.brA}`} sub={teamStats.brPct} />
@@ -801,9 +650,7 @@ function SidePanel({ team, skaters, teamStats }) {
             )}
             <StatRow label="ATK" value={teamStats.atkAvg} sub="avg/gm" />
             <StatRow label="PPG" value={`${teamStats.ppg}/${teamStats.ppAmt}`} sub={teamStats.ppPct} accent="blue" />
-            {teamStats.shg > 0 && (
-              <StatRow label="SHG" value={teamStats.shg} accent="green" />
-            )}
+            {teamStats.shg > 0 && <StatRow label="SHG" value={teamStats.shg} accent="green" />}
           </div>
         </>
       )}
@@ -812,30 +659,38 @@ function SidePanel({ team, skaters, teamStats }) {
 }
 
 function StatRow({ label, value, sub, accent }) {
-  const valClass = `po-stat-val${accent ? ` accent-${accent}` : ''}`;
   return (
     <div className="po-stat-row">
       <span className="po-stat-label">{label}</span>
-      <span className={valClass}>{value ?? '—'}</span>
+      <span className={`po-stat-val${accent ? ` accent-${accent}` : ''}`}>{value ?? '—'}</span>
       {sub && <span className="po-stat-sub">{sub}</span>}
     </div>
   );
 }
 
-// ── Bottom Scroller ────────────────────────────────────────────────────────
+// ── Bottom Scroller ─────────────────────────────────────────────────────────
+// FIX 3: reset posRef when items change so the loop never reads a stale half-width
 function BottomScroller({ items }) {
   const posRef   = useRef(0);
   const frameRef = useRef(null);
   const innerRef = useRef(null);
   const [x, setX] = useState(0);
+  const itemsKey = items.length; // stable key for length changes
+
+  // Reset scroll position whenever the item list grows (new game added)
+  useEffect(() => {
+    posRef.current = 0;
+  }, [itemsKey]);
 
   useEffect(() => {
     const SPEED = 0.8;
     const tick = () => {
       if (innerRef.current) {
         const half = innerRef.current.scrollWidth / 2;
-        posRef.current = (posRef.current + SPEED) % half;
-        setX(posRef.current);
+        if (half > 0) {
+          posRef.current = (posRef.current + SPEED) % half;
+          setX(posRef.current);
+        }
       }
       frameRef.current = requestAnimationFrame(tick);
     };
@@ -847,18 +702,12 @@ function BottomScroller({ items }) {
 
   const renderItem = (item, idx) => {
     switch (item.type) {
-
-      // ── Section dividers ──────────────────────────────────────────────
       case 'section-header':
         return <SectionHeader key={`sec-${idx}`} label={item.label} />;
-
-      // Sub-headers within sections (lighter treatment)
       case 'scores-sub-header':
         return <SubHeader key={`shdr-${idx}`} label="SCORES" />;
       case 'teamstats-sub-header':
         return <SubHeader key={`shdr-${idx}`} label="TEAM STATS" />;
-
-      // ── Playoff series items ──────────────────────────────────────────
       case 'game-score':
         return (
           <span key={idx} className="sc-item">
@@ -872,7 +721,6 @@ function BottomScroller({ items }) {
             <span className="sc-stat">G <span className="sc-val">{item.gLeaders}</span></span>
           </span>
         );
-
       case 'team-stats':
         return (
           <span key={idx} className="sc-item">
@@ -890,8 +738,6 @@ function BottomScroller({ items }) {
             <span className="sc-stat">FO <span className="sc-val">{item.fowA}/{item.fowB}</span></span>
           </span>
         );
-
-      // ── H2H shared items ─────────────────────────────────────────────
       case 'h2h-record':
         return (
           <span key={idx} className="sc-item">
@@ -906,7 +752,6 @@ function BottomScroller({ items }) {
             <span className="sc-muted">{item.gp} GP</span>
           </span>
         );
-
       case 'h2h-game-score':
         return (
           <span key={idx} className="sc-item">
@@ -917,7 +762,6 @@ function BottomScroller({ items }) {
             {item.ot && <span className="sc-muted sc-ot">OT</span>}
           </span>
         );
-
       case 'h2h-team-stats': {
         const s = item.stats;
         return (
@@ -928,34 +772,13 @@ function BottomScroller({ items }) {
             <span className="sc-stat">GA/G <span className="sc-val accent-red">{s.gapg}</span></span>
             <span className="sc-bullet">·</span>
             <span className="sc-stat">SV% <span className="sc-val accent-green">{s.seriesSvPct}</span></span>
-            {s.sh > 0 && (
-              <>
-                <span className="sc-bullet">·</span>
-                <span className="sc-stat">SH <span className="sc-val">{s.sh > 0 ? (s.sh / s.gp).toFixed(1) : '—'}</span></span>
-              </>
-            )}
-            {s.brA > 0 && (
-              <>
-                <span className="sc-bullet">·</span>
-                <span className="sc-stat">BRK <span className="sc-val">{s.brPct}</span></span>
-              </>
-            )}
-            {s.ppAmt > 0 && (
-              <>
-                <span className="sc-bullet">·</span>
-                <span className="sc-stat">PP <span className="sc-val accent-blue">{s.ppPct}</span></span>
-              </>
-            )}
-            {s.atkAvg !== '—' && (
-              <>
-                <span className="sc-bullet">·</span>
-                <span className="sc-stat">ATK <span className="sc-val">{s.atkAvg}</span></span>
-              </>
-            )}
+            {s.sh > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">SH <span className="sc-val">{(s.sh/s.gp).toFixed(1)}</span></span></>}
+            {s.brA > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">BRK <span className="sc-val">{s.brPct}</span></span></>}
+            {s.ppAmt > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">PP <span className="sc-val accent-blue">{s.ppPct}</span></span></>}
+            {s.atkAvg !== '—' && <><span className="sc-bullet">·</span><span className="sc-stat">ATK <span className="sc-val">{s.atkAvg}</span></span></>}
           </span>
         );
       }
-
       default: return null;
     }
   };
@@ -970,7 +793,6 @@ function BottomScroller({ items }) {
   );
 }
 
-// Section header — prominent, acts as a hard divider between the 3 zones
 function SectionHeader({ label }) {
   return (
     <span className="sc-section-hdr">
@@ -981,16 +803,12 @@ function SectionHeader({ label }) {
   );
 }
 
-// Sub-header — lighter label used within a section
 function SubHeader({ label }) {
   return (
-    <span className="sc-sub-hdr">
-      {label}
-    </span>
+    <span className="sc-sub-hdr">{label}</span>
   );
 }
 
-// ── Setup Panel ────────────────────────────────────────────────────────────
 function SetupPanel({ allTeams, pendingA, setPendingA, pendingB, setPendingB, onApply }) {
   return (
     <div className="sp-panel">
@@ -1067,7 +885,6 @@ function LoadingState() {
   );
 }
 
-// ── Styles ─────────────────────────────────────────────────────────────────
 function Styles() {
   return <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Barlow+Condensed:wght@400;600;700;800&display=swap');
@@ -1095,20 +912,14 @@ function Styles() {
       border-bottom: 2px solid rgba(255,215,0,.35);
       display: flex; align-items: center; padding: 0 14px;
       box-shadow: 0 2px 20px rgba(0,0,0,.6);
-      position: relative;
     }
     .po-topbar-left {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      padding-left: 4px;
+      flex: 1; display: flex; align-items: center; padding-left: 4px;
     }
     .po-topbar-center {
-      position: absolute;
-      left: 0; right: 0;
+      position: absolute; left: 0; right: 0;
       display: flex; align-items: center; justify-content: center;
-      height: 100%;
-      pointer-events: none;
+      height: 100%; pointer-events: none;
     }
     .po-topbar-right {
       flex: 1; display: flex; align-items: center;
@@ -1120,8 +931,7 @@ function Styles() {
     }
     .po-empty-logo {
       height: 80px; width: auto; object-fit: contain;
-      filter: drop-shadow(0 0 18px rgba(255,215,0,.35));
-      margin-bottom: .5rem;
+      filter: drop-shadow(0 0 18px rgba(255,215,0,.35)); margin-bottom: .5rem;
     }
     .po-round-label {
       font-family: 'Press Start 2P', monospace; font-size: .68rem;
@@ -1134,8 +944,7 @@ function Styles() {
     }
     .po-game-label {
       font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
-      font-size: 1.05rem; letter-spacing: 3px;
-      color: rgba(255,255,255,.65);
+      font-size: 1.05rem; letter-spacing: 3px; color: rgba(255,255,255,.65);
     }
     .po-series-status {
       font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
@@ -1158,45 +967,30 @@ function Styles() {
       box-shadow: 0 4px 24px rgba(0,0,0,.5);
     }
     .po-hero-half {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      padding: 0 16px;
+      flex: 1; display: flex; align-items: center; padding: 0 16px;
     }
-    .po-hero-half.left  { flex-direction: row; justify-content: space-between; }
+    .po-hero-half.left  { flex-direction: row;         justify-content: space-between; }
     .po-hero-half.right { flex-direction: row-reverse; justify-content: space-between; }
-    .po-hero-divider {
-      width: 2px; flex-shrink: 0;
-      display: flex; align-items: stretch;
-    }
+    .po-hero-divider { width: 2px; flex-shrink: 0; display: flex; align-items: stretch; }
     .po-hero-divider-line {
       width: 2px; flex: 1;
-      background: linear-gradient(
-        180deg,
-        transparent 0%,
-        rgba(255,215,0,.15) 15%,
-        rgba(255,215,0,.55) 40%,
-        rgba(255,255,255,.8) 50%,
-        rgba(255,215,0,.55) 60%,
-        rgba(255,215,0,.15) 85%,
-        transparent 100%
-      );
+      background: linear-gradient(180deg,
+        transparent 0%, rgba(255,215,0,.15) 15%, rgba(255,215,0,.55) 40%,
+        rgba(255,255,255,.8) 50%, rgba(255,215,0,.55) 60%,
+        rgba(255,215,0,.15) 85%, transparent 100%);
       box-shadow: 0 0 10px rgba(255,215,0,.45), 0 0 22px rgba(255,215,0,.15);
     }
     .po-hero-seed {
       font-family: 'Press Start 2P', monospace; font-size: 1rem;
-      color: #FFD700; letter-spacing: 1px;
-      background: rgba(255,215,0,.08);
-      border: 1px solid rgba(255,215,0,.35);
-      border-radius: 4px; padding: .22rem .5rem;
-      line-height: 1; white-space: nowrap;
+      color: #FFD700; background: rgba(255,215,0,.08);
+      border: 1px solid rgba(255,215,0,.35); border-radius: 4px;
+      padding: .22rem .5rem; line-height: 1; white-space: nowrap;
       text-shadow: 0 0 10px rgba(255,215,0,.6);
       flex-shrink: 0; min-width: 3rem; text-align: center;
     }
     .po-hero-logo {
       width: 74px; height: 74px; object-fit: contain;
-      filter: drop-shadow(0 0 12px rgba(255,215,0,.25));
-      flex-shrink: 0;
+      filter: drop-shadow(0 0 12px rgba(255,215,0,.25)); flex-shrink: 0;
     }
     .po-hero-wins {
       font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
@@ -1204,13 +998,8 @@ function Styles() {
       text-shadow: 0 0 28px rgba(255,215,0,.45), 0 2px 8px rgba(0,0,0,.9);
       flex-shrink: 0; min-width: 3.4rem; text-align: center;
     }
-    .po-dots {
-      display: flex; align-items: center; gap: 7px; flex-shrink: 0;
-    }
-    .po-dot {
-      width: 13px; height: 13px; border-radius: 50%;
-      transition: all .3s ease;
-    }
+    .po-dots { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    .po-dot { width: 13px; height: 13px; border-radius: 50%; transition: all .3s ease; }
     .po-dot.filled.left {
       background: radial-gradient(circle, #87CEEB, #4a9fc4);
       box-shadow: 0 0 9px rgba(135,206,235,.8), 0 0 18px rgba(135,206,235,.3);
@@ -1232,12 +1021,9 @@ function Styles() {
     .po-side-right { right: 0; border-right: none; border-radius: 0 0 0 6px; }
     .po-side-left::-webkit-scrollbar,
     .po-side-right::-webkit-scrollbar { width: 0; }
-
     .po-side-panel { display: flex; flex-direction: column; }
-
     .po-side-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: .45rem .55rem;
+      display: flex; align-items: center; gap: 8px; padding: .45rem .55rem;
       background: linear-gradient(90deg, rgba(255,140,0,.18), transparent);
       border-bottom: 1px solid rgba(255,215,0,.18);
       position: sticky; top: 0; z-index: 2;
@@ -1247,13 +1033,11 @@ function Styles() {
       filter: drop-shadow(0 0 4px rgba(255,215,0,.28));
     }
     .po-side-code {
-      font-family: 'Press Start 2P', monospace; font-size: .86rem;
-      color: #FFF; letter-spacing: 1px;
+      font-family: 'Press Start 2P', monospace; font-size: .86rem; color: #FFF; letter-spacing: 1px;
     }
     .po-section-label {
       font-family: 'Press Start 2P', monospace; font-size: .48rem;
-      color: #FF8C00; letter-spacing: 2px;
-      padding: .3rem .55rem .16rem;
+      color: #FF8C00; letter-spacing: 2px; padding: .3rem .55rem .16rem;
       background: rgba(255,140,0,.06);
       border-bottom: 1px solid rgba(255,140,0,.14);
       border-top: 1px solid rgba(255,255,255,.03);
@@ -1262,16 +1046,14 @@ function Styles() {
     .po-th {
       font-family: 'Press Start 2P', monospace; font-size: .40rem;
       color: rgba(255,255,255,.45); padding: .14rem .32rem;
-      text-align: center;
-      background: rgba(0,0,0,.2);
+      text-align: center; background: rgba(0,0,0,.2);
       border-bottom: 1px solid rgba(255,215,0,.06);
     }
     .po-th.al { text-align: left; }
     .po-tr-even { background: rgba(255,255,255,.017); }
     .po-td {
       font-family: 'VT323', monospace; font-size: 1.28rem;
-      color: #C8D8E8; padding: .08rem .32rem;
-      text-align: center; line-height: 1.25;
+      color: #C8D8E8; padding: .08rem .32rem; text-align: center; line-height: 1.25;
     }
     .po-td.al  { text-align: left; color: #EEF2F8; }
     .po-td.pts { color: #FFD700; font-size: 1.35rem; font-weight: 700; }
@@ -1281,24 +1063,16 @@ function Styles() {
       font-family: 'Press Start 2P', monospace; font-size: .42rem;
       color: rgba(255,255,255,.13); text-align: center; padding: 2rem .5rem;
     }
-
-    /* ── STATS SECTION ── */
     .po-side-divider {
       height: 1px;
       background: linear-gradient(90deg, transparent, rgba(255,215,0,.3), transparent);
       margin: .4rem .55rem;
     }
-    .po-stats-grid {
-      display: flex; flex-direction: column; gap: 0;
-      padding: .1rem 0 .5rem;
-    }
+    .po-stats-grid { display: flex; flex-direction: column; gap: 0; padding: .1rem 0 .5rem; }
     .po-stat-row {
-      display: grid;
-      grid-template-columns: 2.6rem 1fr auto;
-      align-items: center;
-      padding: .22rem .55rem;
-      border-bottom: 1px solid rgba(255,255,255,.04);
-      gap: .3rem;
+      display: grid; grid-template-columns: 2.6rem 1fr auto;
+      align-items: center; padding: .22rem .55rem;
+      border-bottom: 1px solid rgba(255,255,255,.04); gap: .3rem;
     }
     .po-stat-row:nth-child(even) { background: rgba(255,255,255,.017); }
     .po-stat-label {
@@ -1324,23 +1098,18 @@ function Styles() {
       background: linear-gradient(90deg,
         rgba(2,1,8,.99) 0%, rgba(6,3,18,.99) 15%,
         rgba(6,3,18,.99) 85%, rgba(2,1,8,.99) 100%);
-      border-top: 2px solid rgba(255,215,0,.28);
-      overflow: hidden;
+      border-top: 2px solid rgba(255,215,0,.28); overflow: hidden;
     }
     .po-scroller-inner {
       display: flex; align-items: center;
-      height: 100%; white-space: nowrap;
-      will-change: transform;
+      height: 100%; white-space: nowrap; will-change: transform;
     }
     .sc-item {
-      display: inline-flex; align-items: center; gap: 7px;
-      padding: 0 28px;
+      display: inline-flex; align-items: center; gap: 7px; padding: 0 28px;
       font-family: 'Barlow Condensed', sans-serif;
       font-size: 1rem; font-weight: 600; letter-spacing: .4px;
       border-right: 2px solid rgba(255,215,0,.08);
     }
-
-    /* Section header — full gold bar, prominent pause in the scroll */
     .sc-section-hdr {
       display: inline-flex; align-items: center; gap: 10px;
       padding: 0 24px; margin: 0 4px;
@@ -1353,8 +1122,6 @@ function Styles() {
       height: 100%;
     }
     .sc-hdr-chevron { color: rgba(255,215,0,.5); font-size: .6rem; }
-
-    /* Sub-header — smaller, dim, inline rhythm marker */
     .sc-sub-hdr {
       display: inline-flex; align-items: center;
       padding: 0 16px; margin: 0 8px;
@@ -1364,18 +1131,14 @@ function Styles() {
       border-right: 1px solid rgba(255,140,0,.22);
       height: 100%;
     }
-
     .sc-pill {
       font-family: 'Press Start 2P', monospace; font-size: .56rem;
-      color: #FF8C00; letter-spacing: 1px;
-      background: rgba(255,140,0,.14);
-      border: 1px solid rgba(255,140,0,.3);
-      border-radius: 2px; padding: .1rem .3rem;
+      color: #FF8C00; background: rgba(255,140,0,.14);
+      border: 1px solid rgba(255,140,0,.3); border-radius: 2px; padding: .1rem .3rem;
     }
     .sc-team {
       font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
-      font-size: 1.05rem; color: rgba(255,255,255,.65);
-      letter-spacing: 1px; text-transform: uppercase;
+      font-size: 1.05rem; color: rgba(255,255,255,.65); letter-spacing: 1px;
     }
     .sc-team.win { color: #FFD700; text-shadow: 0 0 7px rgba(255,215,0,.4); }
     .sc-score {
@@ -1390,7 +1153,7 @@ function Styles() {
     .sc-val.accent-green { color: #4cff91; }
     .sc-val.accent-blue  { color: #87CEEB; }
     .sc-muted  { color: rgba(255,255,255,.28); font-size: .9rem; }
-    .sc-ot     { font-family: 'Press Start 2P', monospace; font-size: .46rem; color: rgba(255,140,0,.6); }
+    .sc-ot { font-family: 'Press Start 2P', monospace; font-size: .46rem; color: rgba(255,140,0,.6); }
 
     /* ── EMPTY / LOADING ── */
     .po-empty {
@@ -1399,20 +1162,14 @@ function Styles() {
       display: flex; align-items: center; justify-content: center;
     }
     .po-empty-inner {
-      text-align: center; display: flex; flex-direction: column;
-      align-items: center; gap: .8rem;
+      text-align: center; display: flex; flex-direction: column; align-items: center; gap: .8rem;
     }
     .po-empty-title {
       font-family: 'Press Start 2P', monospace; font-size: 1.2rem;
       color: rgba(255,215,0,.4); letter-spacing: 2px;
     }
-    .po-empty-sub {
-      font-family: 'VT323', monospace; font-size: 1.4rem;
-      color: rgba(255,255,255,.25);
-    }
-    .key {
-      font-family: 'Press Start 2P', monospace; font-size: 1.6rem; color: #FF8C00;
-    }
+    .po-empty-sub { font-family: 'VT323', monospace; font-size: 1.4rem; color: rgba(255,255,255,.25); }
+    .key { font-family: 'Press Start 2P', monospace; font-size: 1.6rem; color: #FF8C00; }
     .po-loading {
       font-family: 'Press Start 2P', monospace; font-size: 1rem;
       color: #FFD700; animation: bpulse 1s ease-in-out infinite;
@@ -1431,31 +1188,20 @@ function Styles() {
       padding: 1.4rem 1.6rem; width: 320px;
       box-shadow: 0 0 40px rgba(255,140,0,.22), 0 0 80px rgba(0,0,0,.8);
     }
-    .sp-title {
-      font-family: 'Press Start 2P', monospace; font-size: .92rem;
-      color: #FFD700; letter-spacing: 2px; margin-bottom: .25rem;
-    }
-    .sp-note {
-      font-family: 'Press Start 2P', monospace; font-size: .5rem;
-      color: rgba(255,255,255,.2); margin-bottom: 1.1rem;
-    }
-    .sp-row  { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .9rem; }
+    .sp-title { font-family: 'Press Start 2P', monospace; font-size: .92rem; color: #FFD700; letter-spacing: 2px; margin-bottom: .25rem; }
+    .sp-note  { font-family: 'Press Start 2P', monospace; font-size: .5rem; color: rgba(255,255,255,.2); margin-bottom: 1.1rem; }
+    .sp-row   { display: flex; flex-direction: column; gap: .35rem; margin-bottom: .9rem; }
     .sp-label { font-family: 'Press Start 2P', monospace; font-size: .56rem; color: #FF8C00; }
-    .sp-error {
-      font-family: 'Press Start 2P', monospace; font-size: .5rem;
-      color: #ff4444; margin-bottom: .5rem;
-    }
+    .sp-error { font-family: 'Press Start 2P', monospace; font-size: .5rem; color: #ff4444; margin-bottom: .5rem; }
     .sp-apply {
       font-family: 'Press Start 2P', monospace; font-size: .72rem;
       letter-spacing: 2px; color: #000;
       background: linear-gradient(135deg, #FFD700, #FF8C00);
-      border: none; border-radius: 4px;
-      padding: .55rem 1rem; width: 100%;
+      border: none; border-radius: 4px; padding: .55rem 1rem; width: 100%;
       cursor: pointer; transition: opacity .15s;
     }
     .sp-apply:hover:not(:disabled) { opacity: .85; }
     .sp-apply:disabled { opacity: .3; cursor: not-allowed; }
-
     .csel { position: relative; width: 100%; user-select: none; }
     .csel-trigger {
       font-family: 'VT323', monospace; font-size: 1.25rem;

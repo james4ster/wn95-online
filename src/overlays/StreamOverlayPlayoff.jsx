@@ -105,7 +105,7 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
                    : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
                    const atkRaw = isHome ? ts.home_attack : ts.away_attack;
-                   console.log('[ATK RAW]', atkRaw, typeof atkRaw);if (atkRaw != null && atkRaw !== '') {
+                    {
                     const p = String(atkRaw).split(':').map(Number);
                     const sec = p[0] * 60 + p[1];
                     if (sec > 0) { atkSec += sec; atkGames++; }

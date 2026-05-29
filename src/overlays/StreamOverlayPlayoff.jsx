@@ -601,7 +601,7 @@ function SeriesDots({ wins, winsNeeded, side }) {
 const SKATER_ROWS    = 8;
 const SKATER_ROW_H   = 28;
 const SKATER_HEAD_H  = 22;
-const SKATER_FIXED_H = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H;
+const SKATER_FIXED_H = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H + 20;
 
 function SidePanel({ team, skaters, teamStats }) {
   const gp = teamStats?.gamesPlayed || 0;

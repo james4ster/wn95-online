@@ -104,11 +104,12 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
                    : (ts.away_one_timer_goals || ts.away_onetimer_goals || 0);
     oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
                    : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
-    const atkRaw = isHome ? ts.home_attack : ts.away_attack;
-    if (atkRaw != null && atkRaw !== '') {
-      const sec = parseTimeToSeconds(atkRaw);
-      if (sec > 0) { atkSec += sec; atkGames++; }
-    }
+                   const atkRaw = isHome ? ts.home_attack : ts.away_attack;
+                   console.log('[ATK RAW]', atkRaw, typeof atkRaw);if (atkRaw != null && atkRaw !== '') {
+                    const p = String(atkRaw).split(':').map(Number);
+                    const sec = p[0] * 60 + p[1];
+                    if (sec > 0) { atkSec += sec; atkGames++; }
+                  }
     ppg   += isHome ? (ts.home_pp_g || 0) : (ts.away_pp_g || 0);
     ppAmt += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
     shg   += isHome ? (ts.home_shg || ts.home_sh_goals || 0) : (ts.away_shg || ts.away_sh_goals || 0);
@@ -156,11 +157,14 @@ function buildH2HTeamStats(rsGames, rsTeamStats, coachA, coachB, teamA, teamB, f
                    : (ts.away_one_timer_goals || ts.away_onetimer_goals || 0);
     oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
                    : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
-    const atkRaw = isHome ? ts.home_attack : ts.away_attack;
-    if (atkRaw != null && atkRaw !== '') {
-      const sec = parseTimeToSeconds(atkRaw);
-      if (sec > 0) { atkSec += sec; atkGames++; }
-    }
+    
+                   const atkRaw = isHome ? ts.home_attack : ts.away_attack;
+                   if (atkRaw != null && atkRaw !== '') {
+                     const p = String(atkRaw).split(':').map(Number);
+                     const sec = p[0] * 60 + p[1];
+                     if (sec > 0) { atkSec += sec; atkGames++; }
+                   }
+             
     ppg   += isHome ? (ts.home_pp_g || 0) : (ts.away_pp_g || 0);
     ppAmt += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
     shg   += isHome ? (ts.home_shg || ts.home_sh_goals || 0) : (ts.away_shg || ts.away_sh_goals || 0);
@@ -735,7 +739,11 @@ function BottomScroller({ items }) {
             <span className="sc-pill">GM{item.gameNum} STATS</span>
             <span className="sc-stat">SOG <span className="sc-val">{item.teamA} {item.shotA}–{item.shotB} {item.teamB}</span></span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">ATK <span className="sc-val">{secToMMSS(parseTimeToSeconds(item.atkA))}/{secToMMSS(parseTimeToSeconds(item.atkB))}</span></span>
+            <span className="sc-stat">ATK <span className="sc-val">
+                {secToMMSS((() => { const p = String(item.atkA).split(':').map(Number); return p[0]*60+p[1]; })())}
+                /
+                {secToMMSS((() => { const p = String(item.atkB).split(':').map(Number); return p[0]*60+p[1]; })())}
+              </span></span>
             <span className="sc-bullet">·</span>
             <span className="sc-stat">BK <span className="sc-val">{item.bkA}/{item.bkB}</span></span>
             <span className="sc-bullet">·</span>

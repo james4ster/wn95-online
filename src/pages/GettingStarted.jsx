@@ -30,13 +30,13 @@ const sections = [
     icon: '📡',
     label: 'STREAMING (TWITCH)',
     color: '#9146FF',
-  } /*,
+  },
   {
-    id: 'leagues',
-    icon: '🏆',
-    label: 'OTHER LEAGUES',
+    id: 'overlays',
+    icon: '🎬',
+    label: 'STREAM OVERLAYS',
     color: '#FFD700',
-  } */,
+  },
 ];
 
 const stepData = {
@@ -86,6 +86,17 @@ const stepData = {
           <>
             This tab is completely optional but encouraged if you decide to join the league — if you want to broadcast your games to
             Twitch, this tab shows a basic setup guide to stream your games live.
+          </>
+        ),
+      },
+      {
+        num: '05',
+        heading: 'Stream Overlays',
+        body: (
+          <>
+            If you're announcing or streaming WN95HL games, this tab walks you through
+            adding the league's live overlays to your stream — covering both the regular
+            season and playoff overlays, for OBS and Streamlabs.
           </>
         ),
       },
@@ -230,7 +241,6 @@ const stepData = {
             ),
           },
 
-          /* This will be new Section */
           {
             num: '02',
             heading: 'Port Forwarding',
@@ -422,12 +432,260 @@ const stepData = {
             In OBS, add a <strong>Game Capture</strong> source and select
             RetroArch as the target application. This captures the game window
             cleanly. You can also add a microphone for commentary and a webcam
-            if you want to show your reaction.{' '}
-            <span className="placeholder-badge">
-              📝 OVERLAY SETUP COMING SOON
-            </span>
+            if you want to show your reaction.
           </>
         ),
+      },
+    ],
+  },
+  overlays: {
+    title: 'STREAM OVERLAYS',
+    subtitle: 'Add the WN95HL live overlay to your stream',
+    description: 'The WN95HL overlays are browser-based and work in both OBS and Streamlabs. Once set up it only takes a few seconds before each game to configure — pick your two teams and you\'re live.',
+    sections: [
+      {
+        id: 'obs-setup',
+        label: '⚙️ ONE-TIME SETUP — OBS STUDIO',
+        steps: [
+          {
+            num: '01',
+            heading: 'Create a New Scene',
+            body: (
+              <>
+                <p>In OBS, look at the <strong>Scenes</strong> panel in the bottom-left. Click the <strong>+</strong> button and name it something like <em>WN95HL Game</em>.</p>
+                <p>This will be your dedicated scene for league games. You can switch back to your other scenes anytime.</p>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Add the Overlay (Browser Source)',
+            body: (
+              <>
+                <p>In the <strong>Sources</strong> panel, click <strong>+</strong> and choose <strong>Browser</strong>.</p>
+                <p>Name it <em>WN95HL Overlay</em> and click OK. In the properties window that opens:</p>
+                <ul className="guide-list">
+                  <li>Paste the overlay URL into the <strong>URL</strong> field <span className="placeholder-badge">⚠ URL COMING SOON</span></li>
+                  <li>Set <strong>Width</strong> to <strong>1920</strong></li>
+                  <li>Set <strong>Height</strong> to <strong>1080</strong></li>
+                  <li>Check <strong>"Shutdown source when not visible"</strong></li>
+                  <li>Click <strong>OK</strong></li>
+                </ul>
+              </>
+            ),
+          },
+          {
+            num: '03',
+            heading: 'Fit the Overlay to Your Canvas',
+            body: (
+              <>
+                <p>Right-click the overlay source in the preview window and select <strong>Transform → Fit to Screen</strong>. The overlay will expand to fill your canvas.</p>
+                <p><i>The overlay background is fully transparent — it won't block your game capture.</i></p>
+              </>
+            ),
+          },
+          {
+            num: '04',
+            heading: 'Add Your Game Capture',
+            body: (
+              <>
+                <p>Click <strong>+</strong> in Sources again and choose <strong>Game Capture</strong>. Set it to capture <strong>RetroArch</strong>.</p>
+                <p>In the Sources panel, drag the Game Capture source so it sits <strong>below</strong> the WN95HL Overlay. This puts the game behind the overlay, not on top of it.</p>
+                <p>Resize and position the Game Capture so the game fills the open center rectangle of the overlay — drag the corners until it fits snugly inside the frame.</p>
+              </>
+            ),
+          },
+          {
+            num: '05',
+            heading: 'Lock the Overlay Source',
+            body: (
+              <>
+                <p>In the Sources panel, click the <strong>lock icon</strong> next to the WN95HL Overlay source. This prevents you from accidentally moving it during a stream.</p>
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'streamlabs-setup',
+        label: '⚙️ ONE-TIME SETUP — STREAMLABS',
+        steps: [
+          {
+            num: '01',
+            heading: 'Create a New Scene',
+            body: (
+              <>
+                <p>In Streamlabs, find the <strong>Scenes</strong> panel and click <strong>+</strong> to add a new scene. Name it <em>WN95HL Game</em>.</p>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Add the Overlay (Browser Source)',
+            body: (
+              <>
+                <p>Click <strong>+</strong> in the Sources panel and choose <strong>Browser Source</strong>.</p>
+                <p>In the properties:</p>
+                <ul className="guide-list">
+                  <li>Paste the overlay URL into the <strong>URL</strong> field <span className="placeholder-badge">⚠ URL COMING SOON</span></li>
+                  <li>Set <strong>Width</strong> to <strong>1920</strong></li>
+                  <li>Set <strong>Height</strong> to <strong>1080</strong></li>
+                  <li>Click <strong>Done</strong></li>
+                </ul>
+              </>
+            ),
+          },
+          {
+            num: '03',
+            heading: 'Fit the Overlay to Your Canvas',
+            body: (
+              <>
+                <p>Right-click the overlay in the preview and choose <strong>Transform → Fit to Screen</strong>.</p>
+              </>
+            ),
+          },
+          {
+            num: '04',
+            heading: 'Add Your Game Capture',
+            body: (
+              <>
+                <p>Click <strong>+</strong> in Sources and choose <strong>Game Capture</strong>. Select <strong>RetroArch</strong> as the application.</p>
+                <p>In the Sources list, drag Game Capture so it sits <strong>below</strong> the WN95HL Overlay. Resize it to fill the open center area of the overlay.</p>
+              </>
+            ),
+          },
+          {
+            num: '05',
+            heading: 'Lock the Overlay Source',
+            body: (
+              <>
+                <p>Click the <strong>lock icon</strong> next to the WN95HL Overlay in the Sources panel so it can't be accidentally moved.</p>
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'regular-season-overlay',
+        label: '📅 REGULAR SEASON OVERLAY',
+        steps: [
+          {
+            num: '01',
+            heading: 'What It Shows',
+            body: (
+              <>
+                <p>The regular season overlay displays live matchup info, standings, team stats, and head-to-head data for the current game. It pulls live data from the WN95HL database and updates automatically.</p>
+                <p>Overlay URL: <span className="placeholder-badge">⚠ URL COMING SOON</span></p>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Configuring Before Each Game',
+            body: (
+              <>
+                <p>Once your scene is set up, configuring the overlay before each game takes about 10 seconds:</p>
+                <ul className="guide-list">
+                  <li>Switch to your WN95HL Game scene in OBS/Streamlabs</li>
+                  <li>Click on the Browser Source to give it focus, then press <strong>~</strong> (tilde key, top-left of keyboard) to open the setup panel</li>
+                  <li>Select <strong>Team A</strong> and <strong>Team B</strong> from the dropdowns</li>
+                  <li>Click <strong>APPLY</strong></li>
+                  <li>Press <strong>~</strong> again to close the panel</li>
+                </ul>
+                <p><i>The overlay will load the matchup and begin polling for live updates automatically.</i></p>
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'playoff-overlay',
+        label: '🏆 PLAYOFF OVERLAY',
+        steps: [
+          {
+            num: '01',
+            heading: 'What It Shows',
+            body: (
+              <>
+                <p>The playoff overlay shows the series score, win dots, seedings, skater stats, team series stats, and a scrolling ticker with game-by-game scores, team stats, and head-to-head history.</p>
+                <p>Overlay URL: <span className="placeholder-badge">⚠ URL COMING SOON</span></p>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Configuring Before Each Game',
+            body: (
+              <>
+                <p>Same process as the regular season overlay:</p>
+                <ul className="guide-list">
+                  <li>Switch to your WN95HL Game scene</li>
+                  <li>Press <strong>~</strong> to open the setup panel</li>
+                  <li>Select the two teams in the series</li>
+                  <li>Click <strong>APPLY</strong></li>
+                  <li>Press <strong>~</strong> to close</li>
+                </ul>
+                <p><i>The playoff overlay automatically finds the current series between the two teams and shows the correct round, series score, and game number. Series stats and the ticker populate as games are completed.</i></p>
+              </>
+            ),
+          },
+          {
+            num: '03',
+            heading: 'Ticker Sections',
+            body: (
+              <>
+                <p>The scrolling ticker at the bottom of the playoff overlay has three sections that cycle continuously:</p>
+                <ul className="guide-list">
+                  <li><strong>PLAYOFF SERIES</strong> — scores and team stats for each completed game in the series (appears once Game 2 is complete)</li>
+                  <li><strong>SEASON H2H</strong> — the two teams' regular season record against each other, individual game scores, and aggregate stats</li>
+                  <li><strong>ALL TIME H2H</strong> — all-time head-to-head record and career stats between the two teams</li>
+                </ul>
+              </>
+            ),
+          },
+        ],
+      },
+      {
+        id: 'overlay-tips',
+        label: '💡 TIPS & TROUBLESHOOTING',
+        steps: [
+          {
+            num: '01',
+            heading: 'Overlay Not Loading?',
+            body: (
+              <>
+                <p>Right-click the Browser Source in OBS/Streamlabs and choose <strong>Refresh</strong>. If it still doesn't load, make sure you have an active internet connection and that the URL is entered correctly with no extra spaces.</p>
+              </>
+            ),
+          },
+          {
+            num: '02',
+            heading: 'Setup Panel Won\'t Open',
+            body: (
+              <>
+                <p>The <strong>~</strong> key only works when the browser source has focus. Click directly on the overlay preview in OBS/Streamlabs first, then press <strong>~</strong>. In OBS you may need to click <strong>"Interact"</strong> (right-click the source) to give the browser source keyboard focus.</p>
+              </>
+            ),
+          },
+          {
+            num: '03',
+            heading: 'Game Capture Not Fitting Right',
+            body: (
+              <>
+                <p>The game window goes in the open center rectangle between the two side panels, below the top bar and series info, above the ticker. Drag the corners of the Game Capture source until it fills that area cleanly. The overlay side panels will sit on top of it automatically since they're on a higher layer.</p>
+              </>
+            ),
+          },
+          {
+            num: '04',
+            heading: 'Still Stuck?',
+            body: (
+              <>
+                Post in <span className="channel-tag">#help</span> on Discord with a screenshot of your OBS/Streamlabs scene and someone will get you sorted quickly.
+              </>
+            ),
+          },
+        ],
       },
     ],
   },
@@ -441,12 +699,6 @@ const stepData = {
         discord: 'https://discord.gg/xHKErSWN',
         color: '#87CEEB',
       },
-     /* {
-        code: 'PURE LEAGUE',
-        description: 'Description coming soon — check back for details on the Pure League format, schedule, and how to join.',
-        discord: 'https://discord.gg/v5sZxjdX',
-        color: '#FFD700',
-      }, */
     ],
   },
 };
@@ -502,11 +754,11 @@ export default function GettingStarted() {
         {current.steps && (
           <div className="gs-steps">
             {current.steps.map((step) => (
-              <div className="gs-step" key={step.num}>
+              <div className="gs-step" key={step.num + step.heading}>
                 <div className="step-num">{step.num}</div>
                 <div className="step-body">
                   <h3 className="step-heading">{step.heading}</h3>
-                  <p className="step-text">{step.body}</p>
+                  <div className="step-text">{step.body}</div>
                 </div>
               </div>
             ))}
@@ -608,15 +860,6 @@ export default function GettingStarted() {
           max-width: 1100px;
           margin: 0 auto;
           padding: 0 2rem;
-        }
-
-        .gs-header-eyebrow {
-          font-family: 'Press Start 2P', monospace;
-          font-size: 0.55rem;
-          color: #FF8C00;
-          letter-spacing: 4px;
-          margin-bottom: 1rem;
-          text-shadow: 0 0 10px rgba(255,140,0,0.6);
         }
 
         .gs-title {
@@ -735,6 +978,16 @@ export default function GettingStarted() {
           border-left: 3px solid #87CEEB;
           border-radius: 0 6px 6px 0;
         }
+
+        /* Gold accent for overlay subsections */
+        .gs-subsection:nth-child(n+3) .gs-subsection-header {
+          background: rgba(255, 215, 0, 0.05);
+          border-left-color: #FFD700;
+        }
+        .gs-subsection:nth-child(n+3) .gs-subsection-label {
+          color: #FFD700;
+          text-shadow: 0 0 10px rgba(255, 215, 0, 0.4);
+        }
         
         .gs-subsection-label {
           font-family: 'Press Start 2P', monospace;
@@ -752,6 +1005,25 @@ export default function GettingStarted() {
           border-radius: 6px;
           margin: 1rem 0;
           box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ── GUIDE LIST ── */
+        .guide-list {
+          margin: 0.75rem 0 0.75rem 1.25rem;
+          padding: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 0.5rem;
+        }
+        .guide-list li {
+          font-size: 1.05rem;
+          line-height: 1.65;
+          color: #c8c8dc;
+          letter-spacing: 0.3px;
+        }
+        .guide-list li strong {
+          color: #FFD700;
+          font-weight: 700;
         }
 
         /* ── STEPS ── */
@@ -810,6 +1082,9 @@ export default function GettingStarted() {
           font-weight: 400;
           letter-spacing: 0.3px;
         }
+
+        .step-text p { margin: 0 0 0.6rem 0; }
+        .step-text p:last-child { margin-bottom: 0; }
 
         /* ── LEAGUES ── */
         .gs-leagues {

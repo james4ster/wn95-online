@@ -255,7 +255,7 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
 
   // ── SECTION 1: PLAYOFF SERIES ──────────────────────────────────────────
   // Only show once at least 2 games are complete (series is underway)
-  if (completed.length >= 2) {
+  if (completed.length >= 1) {
     items.push({ type: 'section-header', label: 'PLAYOFF SERIES' });
 
     // Game scores

@@ -29,8 +29,8 @@ function parseTimeToSeconds(raw) {
   if (!str) return 0;
   const parts = str.split(':').map(Number);
   if (parts.length === 3) {
-    return parts[0] * 60 + parts[1]; // MM:SS:subsecond
-     }
+    return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+  }
   if (parts.length === 2) {
     if (parts[0] > 59) return parts[0];
     return parts[0] * 60 + (parts[1] || 0);
@@ -127,10 +127,15 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
                    : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
 
     const atkRaw = isHome ? ts.home_attack : ts.away_attack;
-            if (atkRaw != null && atkRaw !== '') {
-                const sec = parseTimeToSeconds(atkRaw);
-                if (sec > 0 && sec < 900) { atkSec += sec; atkGames++; }
-            }
+    if (atkRaw != null && atkRaw !== '') {
+        const sec = (() => {
+            const parts = String(atkRaw).trim().split(':').map(Number);
+            if (parts.length === 3) return parts[0] * 60 + parts[1];
+            if (parts.length === 2) return parts[0] > 59 ? parts[0] : parts[0] * 60 + parts[1];
+            return parseInt(atkRaw, 10) || 0;
+          })();
+      if (sec > 0) { atkSec += sec; atkGames++; }
+    }
 
     ppg    += isHome ? (ts.home_pp_g   || 0) : (ts.away_pp_g   || 0);
     ppAmt  += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
@@ -205,8 +210,11 @@ function buildH2HTeamStats(rsGames, rsTeamStats, coachA, coachB, teamA, teamB, f
 
     const atkRaw = isHome ? ts.home_attack : ts.away_attack;
     if (atkRaw != null && atkRaw !== '') {
-        const sec = parseTimeToSeconds(atkRaw);
-        if (sec > 0) { atkSec += sec; atkGames++; }
+      const parts = String(atkRaw).trim().split(':').map(Number);
+      const sec   = parts.length === 2
+        ? (parts[0] > 59 ? parts[0] : parts[0] * 60 + parts[1])
+        : parseInt(atkRaw, 10) || 0;
+      if (sec > 0) { atkSec += sec; atkGames++; }
     }
 
     ppg   += isHome ? (ts.home_pp_g   || 0) : (ts.away_pp_g   || 0);
@@ -247,7 +255,7 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
 
   // ── SECTION 1: PLAYOFF SERIES ──────────────────────────────────────────
   // Only show once at least 2 games are complete (series is underway)
-  if (completed.length >= 1) {
+  if (completed.length >= 2) {
     items.push({ type: 'section-header', label: 'PLAYOFF SERIES' });
 
     // Game scores
@@ -311,10 +319,10 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
           bkB:   aIsHome ? `${ts.away_break_goals}/${ts.away_break_attempts}` : `${ts.home_break_goals}/${ts.home_break_attempts}`,
           ppA:   aIsHome ? `${ts.home_pp_g}/${ts.home_pp_amt}` : `${ts.away_pp_g}/${ts.away_pp_amt}`,
           ppB:   aIsHome ? `${ts.away_pp_g}/${ts.away_pp_amt}` : `${ts.home_pp_g}/${ts.home_pp_amt}`,
-          pimA: aIsHome ? (ts.home_pim  ?? 0) : (ts.away_pim  ?? 0),
-          pimB: aIsHome ? (ts.away_pim  ?? 0) : (ts.home_pim  ?? 0),
-          fowA: aIsHome ? (ts.home_fow  ?? 0) : (ts.away_fow  ?? 0),
-          fowB: aIsHome ? (ts.away_fow  ?? 0) : (ts.home_fow  ?? 0),
+          pimA:  aIsHome ? ts.home_pim : ts.away_pim,
+          pimB:  aIsHome ? ts.away_pim : ts.home_pim,
+          fowA:  aIsHome ? ts.home_fow : ts.away_fow,
+          fowB:  aIsHome ? ts.away_fow : ts.home_fow,
         });
       });
     }
@@ -328,7 +336,7 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
     items.push({
       type: 'h2h-record',
       teamA, teamB,
-      aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, 
+      aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, gp: h2h.seasonGP,
     });
 
     // Per-game scores from this season
@@ -352,16 +360,6 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
         label: 'SEASON STATS',
       });
     }
-
-    // Season aggregate stats for teamB
-if (h2h.seasonStatsB) {
-    items.push({
-      type: 'h2h-team-stats',
-      team: teamB,
-      stats: h2h.seasonStatsB,
-      label: 'SEASON STATS',
-    });
-  }
   }
 
   // ── SECTION 3: ALL TIME H2H ───────────────────────────────────────────
@@ -384,12 +382,22 @@ if (h2h.seasonStatsB) {
         label: 'ALL TIME STATS',
       });
     }
-    if (h2h.allTimeStatsB) {
-        items.push({ type: 'h2h-team-stats', team: teamB, stats: h2h.allTimeStatsB, label: 'ALL TIME STATS' });
-      }
   }
 
   return items;
+}
+
+// ── Auto-scale hook ────────────────────────────────────────────────────────
+// Keeps the 1280×720 canvas scaled to fit whatever window OBS renders into.
+function useOverlayScale(baseW = 1280, baseH = 720) {
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const calc = () => setScale(Math.min(window.innerWidth / baseW, window.innerHeight / baseH));
+    calc();
+    window.addEventListener('resize', calc);
+    return () => window.removeEventListener('resize', calc);
+  }, [baseW, baseH]);
+  return scale;
 }
 
 // ── Main Component ─────────────────────────────────────────────────────────
@@ -402,7 +410,7 @@ export default function StreamOverlayPlayoff() {
   const [data,      setData]      = useState(null);
   const [loading,   setLoading]   = useState(false);
   const pollRef = useRef(null);
-  const [allMatchups, setAllMatchups] = useState([]);
+  const scale   = useOverlayScale();
 
   const getParams = () => {
     const p = new URLSearchParams(window.location.search);
@@ -436,25 +444,6 @@ export default function StreamOverlayPlayoff() {
         setPendingB(teams[1].abr);
         setShowPanel(true);
       }
-
-      // Fetch available playoff matchups for quick-pick
-        const { data: pgRows } = await supabase
-        .from('playoff_games_test')
-        .select('team_code_a, team_code_b, round, series_number')
-        .eq('lg', lg);
-
-        const matchupMap = {};
-        (pgRows || []).forEach(g => {
-        const key = `${g.team_code_a}|${g.team_code_b}|${g.round}|${g.series_number}`;
-        if (!matchupMap[key]) matchupMap[key] = {
-        teamA: g.team_code_a,
-        teamB: g.team_code_b,
-        round: g.round,
-        series: g.series_number,
-        label: `${g.team_code_a} vs ${g.team_code_b}  ·  ${ROUND_LABELS[g.round] || `R${g.round}`}`,
-        };
-        });
-        setAllMatchups(Object.values(matchupMap));
     }
     bootstrap();
   }, []);
@@ -570,17 +559,13 @@ export default function StreamOverlayPlayoff() {
     // ── Team stats per section ──────────────────────────────────────────
     const seasonStatsA  = buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg);
     const allTimeStatsA = buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null);
-    const seasonStatsB  = buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, lg);
-    const allTimeStatsB = buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, null);
 
     const h2h = {
       seasonGP, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
       seasonGames: seasonGameScores,
       seasonStatsA,
-      seasonStatsB,
       allTimeGP, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
       allTimeStatsA,
-      allTimeStatsB,
     };
 
     const { aW, bW } = getSeriesScore(playoffGames, tA, tB);
@@ -631,12 +616,12 @@ export default function StreamOverlayPlayoff() {
   }, [data, loadMatchup]);
 
   return (
-    <div className="po-root">
+    <div className="po-root" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
       {showPanel && (
-        <SetupPanel allTeams={allTeams} allMatchups={allMatchups}
-        pendingA={pendingA} setPendingA={setPendingA}
-        pendingB={pendingB} setPendingB={setPendingB}
-        onApply={handleApply} />
+        <SetupPanel allTeams={allTeams}
+          pendingA={pendingA} setPendingA={setPendingA}
+          pendingB={pendingB} setPendingB={setPendingB}
+          onApply={handleApply} />
       )}
       {!data && !loading && <EmptyState />}
       {loading && !data && <LoadingState />}
@@ -896,13 +881,13 @@ function BottomScroller({ items }) {
             <span className="sc-bullet">·</span>
             <span className="sc-stat">ATK <span className="sc-val">{secToMMSS(parseTimeToSeconds(item.atkA))}/{secToMMSS(parseTimeToSeconds(item.atkB))}</span></span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">BRK <span className="sc-val">{item.bkA} – {item.bkB}</span></span>
+            <span className="sc-stat">BK <span className="sc-val">{item.bkA}/{item.bkB}</span></span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">PP <span className="sc-val">{item.ppA} – {item.ppB}</span></span>
+            <span className="sc-stat">PP <span className="sc-val">{item.ppA}/{item.ppB}</span></span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">PIM <span className="sc-val">{item.pimA}-{item.pimB}</span></span>
+            <span className="sc-stat">PIM <span className="sc-val">{item.pimA}/{item.pimB}</span></span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">FOW <span className="sc-val">{item.fowA}-{item.fowB}</span></span>
+            <span className="sc-stat">FO <span className="sc-val">{item.fowA}/{item.fowB}</span></span>
           </span>
         );
 
@@ -918,6 +903,7 @@ function BottomScroller({ items }) {
             {item.ties > 0 && <span className="sc-muted">{item.ties}T</span>}
             <span className="sc-team">{item.teamB}</span>
             <span className="sc-bullet">·</span>
+            <span className="sc-muted">{item.gp} GP</span>
           </span>
         );
 
@@ -928,7 +914,7 @@ function BottomScroller({ items }) {
             <span className={`sc-team${item.winner === item.teamA ? ' win' : ''}`}>{item.teamA}</span>
             <span className="sc-score">{item.aScore} – {item.bScore}</span>
             <span className={`sc-team${item.winner === item.teamB ? ' win' : ''}`}>{item.teamB}</span>
-            {item.ot ? <span className="sc-muted sc-ot">OT</span> : null}
+            {item.ot && <span className="sc-muted sc-ot">OT</span>}
           </span>
         );
 
@@ -945,7 +931,7 @@ function BottomScroller({ items }) {
             {s.sh > 0 && (
               <>
                 <span className="sc-bullet">·</span>
-                <span className="sc-stat">SOG <span className="sc-val">{s.sh}</span></span>
+                <span className="sc-stat">SH <span className="sc-val">{s.sh > 0 ? (s.sh / s.gp).toFixed(1) : '—'}</span></span>
               </>
             )}
             {s.brA > 0 && (
@@ -967,7 +953,6 @@ function BottomScroller({ items }) {
               </>
             )}
           </span>
-          
         );
       }
 
@@ -1006,49 +991,31 @@ function SubHeader({ label }) {
 }
 
 // ── Setup Panel ────────────────────────────────────────────────────────────
-function SetupPanel({ allTeams, allMatchups, pendingA, setPendingA, pendingB, setPendingB, onApply }) {
-    return (
-      <div className="sp-panel">
-        <div className="sp-title">⚡ PLAYOFF OVERLAY SETUP</div>
-        <div className="sp-note">Press ~ to close</div>
-  
-        {allMatchups.length > 0 && (
-          <div className="sp-row">
-            <label className="sp-label">QUICK PICK</label>
-            <CustomSelect
-              value=""
-              onChange={val => {
-                const m = allMatchups.find(x => `${x.teamA}|${x.teamB}` === val);
-                if (m) { setPendingA(m.teamA); setPendingB(m.teamB); }
-              }}
-              options={allMatchups.map(m => ({ value: `${m.teamA}|${m.teamB}`, label: m.label }))}
-              placeholder="-- PICK A MATCHUP --"
-            />
-          </div>
-        )}
-  
-        <div className="sp-divider" />
-  
-        <div className="sp-row">
-          <label className="sp-label">TEAM A</label>
-          <CustomSelect value={pendingA} onChange={setPendingA}
-            options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
-            placeholder="-- SELECT --" />
-        </div>
-        <div className="sp-row">
-          <label className="sp-label">TEAM B</label>
-          <CustomSelect value={pendingB} onChange={setPendingB}
-            options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
-            placeholder="-- SELECT --" />
-        </div>
-        {pendingA && pendingB && pendingA === pendingB && (
-          <div className="sp-error">Teams must be different</div>
-        )}
-        <button className="sp-apply" onClick={onApply}
-          disabled={!pendingA || !pendingB || pendingA === pendingB}>APPLY</button>
+function SetupPanel({ allTeams, pendingA, setPendingA, pendingB, setPendingB, onApply }) {
+  return (
+    <div className="sp-panel">
+      <div className="sp-title">⚡ PLAYOFF OVERLAY SETUP</div>
+      <div className="sp-note">Press ~ to close</div>
+      <div className="sp-row">
+        <label className="sp-label">TEAM A</label>
+        <CustomSelect value={pendingA} onChange={setPendingA}
+          options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
+          placeholder="-- SELECT --" />
       </div>
-    );
-  }
+      <div className="sp-row">
+        <label className="sp-label">TEAM B</label>
+        <CustomSelect value={pendingB} onChange={setPendingB}
+          options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
+          placeholder="-- SELECT --" />
+      </div>
+      {pendingA && pendingB && pendingA === pendingB && (
+        <div className="sp-error">Teams must be different</div>
+      )}
+      <button className="sp-apply" onClick={onApply}
+        disabled={!pendingA || !pendingB || pendingA === pendingB}>APPLY</button>
+    </div>
+  );
+}
 
 function CustomSelect({ value, onChange, options, placeholder }) {
   const [open, setOpen] = useState(false);
@@ -1103,10 +1070,6 @@ function LoadingState() {
 // ── Styles ─────────────────────────────────────────────────────────────────
 function Styles() {
   return <style>{`
-  html, body {
-    background: rgb(3,1,12) !important;
-    margin: 0; padding: 0;
-  }
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Barlow+Condensed:wght@400;600;700;800&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1297,7 +1260,7 @@ function Styles() {
     }
     .po-table { width: 100%; border-collapse: collapse; }
     .po-th {
-      font-family: 'Press Start 2P', monospace; font-size: .55rem;
+      font-family: 'Press Start 2P', monospace; font-size: .40rem;
       color: rgba(255,255,255,.45); padding: .14rem .32rem;
       text-align: center;
       background: rgba(0,0,0,.2);
@@ -1310,8 +1273,7 @@ function Styles() {
       color: #C8D8E8; padding: .08rem .32rem;
       text-align: center; line-height: 1.25;
     }
-    .po-td.al  { text-align: left; color: #EEF2F8; white-space: nowrap;overflow: hidden;
-        text-overflow: ellipsis;}
+    .po-td.al  { text-align: left; color: #EEF2F8; }
     .po-td.pts { color: #FFD700; font-size: 1.35rem; font-weight: 700; }
     .po-td.g   { color: #9DDDFF; }
     .po-td.a   { color: #8AACCC; }
@@ -1324,7 +1286,7 @@ function Styles() {
     .po-side-divider {
       height: 1px;
       background: linear-gradient(90deg, transparent, rgba(255,215,0,.3), transparent);
-      margin: 1rem .55rem;
+      margin: .4rem .55rem;
     }
     .po-stats-grid {
       display: flex; flex-direction: column; gap: 0;
@@ -1340,20 +1302,19 @@ function Styles() {
     }
     .po-stat-row:nth-child(even) { background: rgba(255,255,255,.017); }
     .po-stat-label {
-      font-family: 'Press Start 2P', monospace; font-size: .65rem;
+      font-family: 'Press Start 2P', monospace; font-size: .40rem;
       color: rgba(255,255,255,.5); letter-spacing: 1px; text-align: left;
     }
     .po-stat-val {
       font-family: 'VT323', monospace; font-size: 1.42rem;
       color: #FFFFFF; text-align: left; line-height: 1;
-      padding-left: 8px;
     }
     .po-stat-val.accent-gold  { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.4); }
     .po-stat-val.accent-red   { color: #ff6e6e; }
     .po-stat-val.accent-blue  { color: #87CEEB; text-shadow: 0 0 8px rgba(135,206,235,.4); }
     .po-stat-val.accent-green { color: #4cff91; text-shadow: 0 0 8px rgba(76,255,145,.4); }
     .po-stat-sub {
-      font-family: 'Barlow Condensed', sans-serif; font-size: 1rem;
+      font-family: 'Barlow Condensed', sans-serif; font-size: .78rem;
       color: rgba(255,255,255,.38); text-align: right; white-space: nowrap;
     }
 
@@ -1494,11 +1455,6 @@ function Styles() {
     }
     .sp-apply:hover:not(:disabled) { opacity: .85; }
     .sp-apply:disabled { opacity: .3; cursor: not-allowed; }
-    .sp-divider {
-        height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255,215,0,.25), transparent);
-        margin: .4rem 0 .9rem;
-      }
 
     .csel { position: relative; width: 100%; user-select: none; }
     .csel-trigger {

@@ -256,7 +256,7 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
     items.push({ type: 'section-header', label: 'SEASON H2H' });
     items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, gp: h2h.seasonGP });
     (h2h.seasonGames || []).forEach((g, i) => {
-      items.push({ type: 'h2h-game-score', idx: i + 1, teamA, teamB, aScore: g.aScore, bScore: g.bScore, winner: g.winner, ot: g.ot });
+      items.push({ type: 'h2h-game-score', idx: i + 1, teamA, teamB, aScore: g.aScore, bScore: g.bScore, winner: g.winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
     });
     if (h2h.seasonStatsA) items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.seasonStatsA });
   }
@@ -422,7 +422,7 @@ export default function StreamOverlayPlayoff() {
       if (sh === sa) sTies++;
       else if (aScore > bScore) { sAW++; winner = tA; }
       else { sBW++; winner = tB; }
-      seasonGameScores.push({ aScore, bScore, winner, ot: g.ot });
+      seasonGameScores.push({ aScore, bScore, winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
     });
 
     const h2h = {
@@ -759,7 +759,7 @@ function BottomScroller({ items }) {
             <span className={`sc-team${item.winner === item.teamA ? ' win' : ''}`}>{item.teamA}</span>
             <span className="sc-score">{item.aScore} – {item.bScore}</span>
             <span className={`sc-team${item.winner === item.teamB ? ' win' : ''}`}>{item.teamB}</span>
-            {item.ot && <span className="sc-muted sc-ot">OT</span>}
+            {item.ot && item.ot !== '0' && item.ot !== 0 && <span className="sc-muted sc-ot">OT</span>}
           </span>
         );
       case 'h2h-team-stats': {

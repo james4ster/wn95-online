@@ -527,7 +527,7 @@ const stepData = {
                 <p>Click <strong>+</strong> in the Sources panel and choose <strong>Browser Source</strong>.</p>
                 <p>In the properties:</p>
                 <ul className="guide-list">
-                <li>Paste the overlay URL into the <strong>URL</strong> field — use the Regular Season or Playoff URL from the sections below</li>                  <li>Set <strong>Width</strong> to <strong>1920</strong></li>
+                <li>Paste the overlay URL into the <strong>URL</strong> field — use the Regular Season or Playoff URL from the sections below</li>  <li>Set <strong>Width</strong> to <strong>1920</strong></li>
                   <li>Set <strong>Height</strong> to <strong>1080</strong></li>
                   <li>Click <strong>Done</strong></li>
                 </ul>
@@ -587,7 +587,7 @@ const stepData = {
                     </span>
             
                     <a
-                      href="wn95-online.vercel.app/overlay-matchup-default"
+                      href="/overlay-matchup-default"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="guide-link overlay-url-link"
@@ -602,7 +602,7 @@ const stepData = {
                     </span>
             
                     <a
-                      href="wn95-online.vercel.app/overlay-matchup-icey"
+                      href="/overlay-matchup-icey"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="guide-link overlay-url-link"
@@ -617,7 +617,7 @@ const stepData = {
                     </span>
             
                     <a
-                      href="wn95-online.vercel.app/overlay-standings"
+                      href="/overlay-standings"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="guide-link overlay-url-link"
@@ -660,7 +660,7 @@ const stepData = {
               <>
                 <p>The playoff overlay shows the series score, win dots, seedings, skater stats, team series stats, and a scrolling ticker with game-by-game scores, team stats, and head-to-head history.</p>
                 <p>Overlay URL:{' '}
-                  <a href="wn95-online.vercel.app/overlay-playoff" target="_blank" rel="noopener noreferrer" className="guide-link">
+                  <a href="/overlay-playoff" target="_blank" rel="noopener noreferrer" className="guide-link">
                   wn95-online.vercel.app/overlay-playoff
                   </a>
                 </p>

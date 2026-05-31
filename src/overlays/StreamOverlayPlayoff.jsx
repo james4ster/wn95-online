@@ -10,8 +10,9 @@ const ROUND_LABELS = {
   4: 'BRULE CHAMPIONSHIP',
 };
 
-const norm  = s => (s || '').trim().toLowerCase();
-const svPct = (saves, sa) => (sa > 0 ? (saves / sa).toFixed(3).replace('0.', '.') : '—');
+const norm = (s) => (s || '').trim().toLowerCase();
+const svPct = (saves, sa) =>
+  sa > 0 ? (saves / sa).toFixed(3).replace('0.', '.') : '—';
 
 function secToMMSS(totalSec) {
   if (!totalSec && totalSec !== 0) return '0:00';
@@ -26,8 +27,10 @@ function parseTimeToSeconds(raw) {
   const str = String(raw).trim();
   if (!str) return 0;
   const parts = str.split(':').map(Number);
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
-  if (parts.length === 2) return parts[0] > 59 ? parts[0] : parts[0] * 60 + (parts[1] || 0);
+  if (parts.length === 3)
+    return parts[0] * 3600 + parts[1] * 60 + (parts[2] || 0);
+  if (parts.length === 2)
+    return parts[0] > 59 ? parts[0] : parts[0] * 60 + (parts[1] || 0);
   const n = parseInt(str, 10);
   return isNaN(n) ? 0 : n;
 }
@@ -41,8 +44,9 @@ function fmtName(fullName) {
 
 // ── Data helpers ───────────────────────────────────────────────────────────
 function getSeriesScore(playoffGames, teamA, teamB) {
-  let aW = 0, bW = 0;
-  (playoffGames || []).forEach(g => {
+  let aW = 0,
+    bW = 0;
+  (playoffGames || []).forEach((g) => {
     if (g.team_a_score == null || g.team_b_score == null) return;
     const aIsCodeA = g.team_code_a === teamA;
     const aScore = aIsCodeA ? g.team_a_score : g.team_b_score;
@@ -55,138 +59,230 @@ function getSeriesScore(playoffGames, teamA, teamB) {
 
 function buildCumulativeSkaterStatsFromRaw(rawScoring, teamCode) {
   const map = {};
-  const ensure = name => {
+  const ensure = (name) => {
     if (!name || !name.trim()) return null;
     const key = name.trim();
     if (!map[key]) map[key] = { name: key, g: 0, a: 0, pts: 0 };
     return key;
   };
   (rawScoring || [])
-    .filter(r => r.g_team === teamCode)
-    .forEach(r => {
+    .filter((r) => r.g_team === teamCode)
+    .forEach((r) => {
       const scorer = ensure(r.goal_player_name);
-      if (scorer) { map[scorer].g++; map[scorer].pts++; }
+      if (scorer) {
+        map[scorer].g++;
+        map[scorer].pts++;
+      }
       const pa = ensure(r.assist_primary_name);
-      if (pa) { map[pa].a++; map[pa].pts++; }
+      if (pa) {
+        map[pa].a++;
+        map[pa].pts++;
+      }
       const sa = ensure(r.assist_secondary_name);
-      if (sa) { map[sa].a++; map[sa].pts++; }
+      if (sa) {
+        map[sa].a++;
+        map[sa].pts++;
+      }
     });
   return Object.values(map).sort((a, b) => b.pts - a.pts || b.g - a.g);
 }
 
 function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
-  let gf = 0, ga = 0, sh = 0, sa = 0;
-  let brG = 0, brA = 0, oneG = 0, oneA = 0;
-  let atkSec = 0, atkGames = 0;
-  let ppg = 0, ppAmt = 0, shg = 0;
-  let totalSaves = 0, totalSA = 0;
+  let gf = 0,
+    ga = 0,
+    sh = 0,
+    sa = 0;
+  let brG = 0,
+    brA = 0,
+    oneG = 0,
+    oneA = 0;
+  let atkSec = 0,
+    atkGames = 0;
+  let ppg = 0,
+    ppAmt = 0,
+    shg = 0;
+  let totalSaves = 0,
+    totalSA = 0;
 
-  (rawScoring || []).forEach(r => {
-    if (!playoffGames.find(g => g.id === r.playoff_game_id)) return;
+  (rawScoring || []).forEach((r) => {
+    if (!playoffGames.find((g) => g.id === r.playoff_game_id)) return;
     if (r.g_team === teamCode) gf++;
     else ga++;
   });
 
-  playoffGames.forEach(pg => {
+  playoffGames.forEach((pg) => {
     if (pg.team_a_score == null) return;
-    const ts = (teamStats || []).find(t => t.playoff_game_id === pg.id);
+    const ts = (teamStats || []).find((t) => t.playoff_game_id === pg.id);
     if (!ts) return;
     const isHome = ts.home === teamCode;
-    const mySH = isHome ? (ts.home_shots || 0) : (ts.away_shots || 0);
-    const mySA = isHome ? (ts.away_shots || 0) : (ts.home_shots || 0);
-    sh += mySH; sa += mySA;
-    const gameRaw = (rawScoring || []).filter(r => r.playoff_game_id === pg.id);
-    const gameGA  = gameRaw.filter(r => r.g_team !== teamCode).length;
-    totalSA += mySA; totalSaves += Math.max(0, mySA - gameGA);
-    brG += isHome ? (ts.home_break_goals || 0) : (ts.away_break_goals || 0);
-    brA += isHome ? (ts.home_break_attempts || 0) : (ts.away_break_attempts || 0);
-    oneG += isHome ? (ts.home_one_timer_goals || ts.home_onetimer_goals || 0)
-                   : (ts.away_one_timer_goals || ts.away_onetimer_goals || 0);
-    oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
-                   : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
-                   const atkRaw = isHome ? ts.home_attack : ts.away_attack;
-                    {
-                    const p = String(atkRaw).split(':').map(Number);
-                    const sec = p[0] * 60 + p[1];
-                    if (sec > 0) { atkSec += sec; atkGames++; }
-                  }
-    ppg   += isHome ? (ts.home_pp_g || 0) : (ts.away_pp_g || 0);
-    ppAmt += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
-    shg   += isHome ? (ts.home_shg || ts.home_sh_goals || 0) : (ts.away_shg || ts.away_sh_goals || 0);
+    const mySH = isHome ? ts.home_shots || 0 : ts.away_shots || 0;
+    const mySA = isHome ? ts.away_shots || 0 : ts.home_shots || 0;
+    sh += mySH;
+    sa += mySA;
+    const gameRaw = (rawScoring || []).filter(
+      (r) => r.playoff_game_id === pg.id
+    );
+    const gameGA = gameRaw.filter((r) => r.g_team !== teamCode).length;
+    totalSA += mySA;
+    totalSaves += Math.max(0, mySA - gameGA);
+    brG += isHome ? ts.home_break_goals || 0 : ts.away_break_goals || 0;
+    brA += isHome ? ts.home_break_attempts || 0 : ts.away_break_attempts || 0;
+    oneG += isHome
+      ? ts.home_one_timer_goals || ts.home_onetimer_goals || 0
+      : ts.away_one_timer_goals || ts.away_onetimer_goals || 0;
+    oneA += isHome
+      ? ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0
+      : ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0;
+    const atkRaw = isHome ? ts.home_attack : ts.away_attack;
+    {
+      const p = String(atkRaw).split(':').map(Number);
+      const sec = p[0] * 60 + p[1];
+      if (sec > 0) {
+        atkSec += sec;
+        atkGames++;
+      }
+    }
+    ppg += isHome ? ts.home_pp_g || 0 : ts.away_pp_g || 0;
+    ppAmt += isHome ? ts.home_pp_amt || 0 : ts.away_pp_amt || 0;
+    shg += isHome
+      ? ts.home_shg || ts.home_sh_goals || 0
+      : ts.away_shg || ts.away_sh_goals || 0;
   });
 
-  const gamesPlayed = playoffGames.filter(g => g.team_a_score != null).length;
+  const gamesPlayed = playoffGames.filter((g) => g.team_a_score != null).length;
   return {
-    gf, ga, sh, sa, gamesPlayed,
-    brG, brA, brPct: brA > 0 ? `${((brG/brA)*100).toFixed(0)}%` : '—',
-    oneG, oneA, onePct: oneA > 0 ? `${((oneG/oneA)*100).toFixed(0)}%` : '—',
+    gf,
+    ga,
+    sh,
+    sa,
+    gamesPlayed,
+    brG,
+    brA,
+    brPct: brA > 0 ? `${((brG / brA) * 100).toFixed(0)}%` : '—',
+    oneG,
+    oneA,
+    onePct: oneA > 0 ? `${((oneG / oneA) * 100).toFixed(0)}%` : '—',
     atkAvg: atkGames > 0 ? secToMMSS(Math.round(atkSec / atkGames)) : '—',
-    ppg, ppAmt, ppPct: ppAmt > 0 ? `${((ppg/ppAmt)*100).toFixed(0)}%` : '—',
-    shg, seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
-    totalSaves, totalSA,
+    ppg,
+    ppAmt,
+    ppPct: ppAmt > 0 ? `${((ppg / ppAmt) * 100).toFixed(0)}%` : '—',
+    shg,
+    seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
+    totalSaves,
+    totalSA,
   };
 }
 
-function buildH2HTeamStats(rsGames, rsTeamStats, coachA, coachB, teamA, teamB, filterLg) {
-  let gf = 0, ga = 0, sh = 0, sa = 0;
-  let brG = 0, brA = 0, oneG = 0, oneA = 0;
-  let atkSec = 0, atkGames = 0;
-  let ppg = 0, ppAmt = 0, shg = 0;
-  let totalSaves = 0, totalSA = 0, gp = 0;
+function buildH2HTeamStats(
+  rsGames,
+  rsTeamStats,
+  coachA,
+  coachB,
+  teamA,
+  teamB,
+  filterLg
+) {
+  let gf = 0,
+    ga = 0,
+    sh = 0,
+    sa = 0;
+  let brG = 0,
+    brA = 0,
+    oneG = 0,
+    oneA = 0;
+  let atkSec = 0,
+    atkGames = 0;
+  let ppg = 0,
+    ppAmt = 0,
+    shg = 0;
+  let totalSaves = 0,
+    totalSA = 0,
+    gp = 0;
 
-  (rsGames || []).forEach(g => {
-    const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
-    if (!((h === coachA && a === coachB) || (h === coachB && a === coachA))) return;
+  (rsGames || []).forEach((g) => {
+    const h = norm(g.coach_home || ''),
+      a = norm(g.coach_away || '');
+    if (!((h === coachA && a === coachB) || (h === coachB && a === coachA)))
+      return;
     if (filterLg && g.lg !== filterLg) return;
     if (g.score_home == null || g.score_away == null) return;
     gp++;
     const hIsA = h === coachA;
     const myGF = hIsA ? Number(g.score_home) : Number(g.score_away);
     const myGA = hIsA ? Number(g.score_away) : Number(g.score_home);
-    gf += myGF; ga += myGA;
-    const ts = (rsTeamStats || []).find(t => t.game_id === g.id);
+    gf += myGF;
+    ga += myGA;
+    const ts = (rsTeamStats || []).find((t) => t.game_id === g.id);
     if (!ts) return;
     const isHome = hIsA;
-    const mySH = isHome ? (ts.home_shots || 0) : (ts.away_shots || 0);
-    const mySA = isHome ? (ts.away_shots || 0) : (ts.home_shots || 0);
-    sh += mySH; sa += mySA;
-    totalSA += mySA; totalSaves += Math.max(0, mySA - myGA);
-    brG += isHome ? (ts.home_break_goals || 0) : (ts.away_break_goals || 0);
-    brA += isHome ? (ts.home_break_attempts || 0) : (ts.away_break_attempts || 0);
-    oneG += isHome ? (ts.home_one_timer_goals || ts.home_onetimer_goals || 0)
-                   : (ts.away_one_timer_goals || ts.away_onetimer_goals || 0);
-    oneA += isHome ? (ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0)
-                   : (ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0);
-    
-                   const atkRaw = isHome ? ts.home_attack : ts.away_attack;
-                   if (atkRaw != null && atkRaw !== '') {
-                     const p = String(atkRaw).split(':').map(Number);
-                     const sec = p[0] * 60 + p[1];
-                     if (sec > 0) { atkSec += sec; atkGames++; }
-                   }
-             
-    ppg   += isHome ? (ts.home_pp_g || 0) : (ts.away_pp_g || 0);
-    ppAmt += isHome ? (ts.home_pp_amt || 0) : (ts.away_pp_amt || 0);
-    shg   += isHome ? (ts.home_shg || ts.home_sh_goals || 0) : (ts.away_shg || ts.away_sh_goals || 0);
+    const mySH = isHome ? ts.home_shots || 0 : ts.away_shots || 0;
+    const mySA = isHome ? ts.away_shots || 0 : ts.home_shots || 0;
+    sh += mySH;
+    sa += mySA;
+    totalSA += mySA;
+    totalSaves += Math.max(0, mySA - myGA);
+    brG += isHome ? ts.home_break_goals || 0 : ts.away_break_goals || 0;
+    brA += isHome ? ts.home_break_attempts || 0 : ts.away_break_attempts || 0;
+    oneG += isHome
+      ? ts.home_one_timer_goals || ts.home_onetimer_goals || 0
+      : ts.away_one_timer_goals || ts.away_onetimer_goals || 0;
+    oneA += isHome
+      ? ts.home_one_timer_attempts || ts.home_onetimer_attempts || 0
+      : ts.away_one_timer_attempts || ts.away_onetimer_attempts || 0;
+
+    const atkRaw = isHome ? ts.home_attack : ts.away_attack;
+    if (atkRaw != null && atkRaw !== '') {
+      const p = String(atkRaw).split(':').map(Number);
+      const sec = p[0] * 60 + p[1];
+      if (sec > 0) {
+        atkSec += sec;
+        atkGames++;
+      }
+    }
+
+    ppg += isHome ? ts.home_pp_g || 0 : ts.away_pp_g || 0;
+    ppAmt += isHome ? ts.home_pp_amt || 0 : ts.away_pp_amt || 0;
+    shg += isHome
+      ? ts.home_shg || ts.home_sh_goals || 0
+      : ts.away_shg || ts.away_sh_goals || 0;
   });
 
   return {
-    gp, gf, ga, sh, sa,
-    brG, brA, brPct: brA > 0 ? `${((brG/brA)*100).toFixed(0)}%` : '—',
-    oneG, oneA, onePct: oneA > 0 ? `${((oneG/oneA)*100).toFixed(0)}%` : '—',
+    gp,
+    gf,
+    ga,
+    sh,
+    sa,
+    brG,
+    brA,
+    brPct: brA > 0 ? `${((brG / brA) * 100).toFixed(0)}%` : '—',
+    oneG,
+    oneA,
+    onePct: oneA > 0 ? `${((oneG / oneA) * 100).toFixed(0)}%` : '—',
     atkAvg: atkGames > 0 ? secToMMSS(Math.round(atkSec / atkGames)) : '—',
-    ppg, ppAmt, ppPct: ppAmt > 0 ? `${((ppg/ppAmt)*100).toFixed(0)}%` : '—',
-    shg, seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
-    totalSaves, totalSA,
+    ppg,
+    ppAmt,
+    ppPct: ppAmt > 0 ? `${((ppg / ppAmt) * 100).toFixed(0)}%` : '—',
+    shg,
+    seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
+    totalSaves,
+    totalSA,
     gfpg: gp > 0 ? (gf / gp).toFixed(2) : '—',
     gapg: gp > 0 ? (ga / gp).toFixed(2) : '—',
   };
 }
 
 // FIX 1: changed completed.length >= 2 → >= 1 so Game 1 shows in ticker immediately
-function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h) {
+function buildScrollItems(
+  playoffGames,
+  rawScoring,
+  teamStats,
+  teamA,
+  teamB,
+  h2h
+) {
   const completed = (playoffGames || []).filter(
-    g => g.team_a_score != null && g.team_b_score != null
+    (g) => g.team_a_score != null && g.team_b_score != null
   );
   const items = [];
 
@@ -194,62 +290,100 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
   if (completed.length >= 1) {
     items.push({ type: 'section-header', label: 'PLAYOFF SERIES' });
     items.push({ type: 'scores-sub-header' });
-    completed.forEach(g => {
-      const gid      = g.id;
-      const gameRaw  = (rawScoring || []).filter(r => r.playoff_game_id === gid);
+    completed.forEach((g) => {
+      const gid = g.id;
+      const gameRaw = (rawScoring || []).filter(
+        (r) => r.playoff_game_id === gid
+      );
       const aIsCodeA = g.team_code_a === teamA;
-      const aScore   = aIsCodeA ? g.team_a_score : g.team_b_score;
-      const bScore   = aIsCodeA ? g.team_b_score : g.team_a_score;
-      const winner   = aScore > bScore ? teamA : teamB;
+      const aScore = aIsCodeA ? g.team_a_score : g.team_b_score;
+      const bScore = aIsCodeA ? g.team_b_score : g.team_a_score;
+      const winner = aScore > bScore ? teamA : teamB;
 
       const scorerMap = {};
-      gameRaw.forEach(r => {
+      gameRaw.forEach((r) => {
         if (!r.goal_player_name) return;
-        scorerMap[r.goal_player_name] = (scorerMap[r.goal_player_name] || 0) + 1;
+        scorerMap[r.goal_player_name] =
+          (scorerMap[r.goal_player_name] || 0) + 1;
       });
-      const sortedScorers = Object.entries(scorerMap).sort((a, b) => b[1] - a[1]);
-      const topGoals  = sortedScorers[0]?.[1] || 0;
-      const gLeaders  = topGoals > 0
-        ? sortedScorers.filter(([, cnt]) => cnt === topGoals)
-            .map(([name, cnt]) => `${fmtName(name)}${cnt > 1 ? ` (${cnt})` : ''}`).join(', ')
-        : '—';
+      const sortedScorers = Object.entries(scorerMap).sort(
+        (a, b) => b[1] - a[1]
+      );
+      const topGoals = sortedScorers[0]?.[1] || 0;
+      const gLeaders =
+        topGoals > 0
+          ? sortedScorers
+              .filter(([, cnt]) => cnt === topGoals)
+              .map(
+                ([name, cnt]) => `${fmtName(name)}${cnt > 1 ? ` (${cnt})` : ''}`
+              )
+              .join(', ')
+          : '—';
 
       const ptMap = {};
-      gameRaw.forEach(r => {
-        [r.goal_player_name, r.assist_primary_name, r.assist_secondary_name].forEach(n => {
+      gameRaw.forEach((r) => {
+        [
+          r.goal_player_name,
+          r.assist_primary_name,
+          r.assist_secondary_name,
+        ].forEach((n) => {
           if (n?.trim()) ptMap[n.trim()] = (ptMap[n.trim()] || 0) + 1;
         });
       });
-      const sortedPts  = Object.entries(ptMap).sort((a, b) => b[1] - a[1]);
-      const topPts     = sortedPts[0]?.[1] || 0;
-      const ptsLeaders = topPts > 0
-        ? sortedPts.filter(([, c]) => c === topPts).map(([name, c]) => `${fmtName(name)} ${c}`).join(', ')
-        : '—';
+      const sortedPts = Object.entries(ptMap).sort((a, b) => b[1] - a[1]);
+      const topPts = sortedPts[0]?.[1] || 0;
+      const ptsLeaders =
+        topPts > 0
+          ? sortedPts
+              .filter(([, c]) => c === topPts)
+              .map(([name, c]) => `${fmtName(name)} ${c}`)
+              .join(', ')
+          : '—';
 
-      items.push({ type: 'game-score', gameNum: g.game_number, aScore, bScore, teamA, teamB, winner, ptsLeaders, gLeaders });
+      items.push({
+        type: 'game-score',
+        gameNum: g.game_number,
+        aScore,
+        bScore,
+        teamA,
+        teamB,
+        winner,
+        ptsLeaders,
+        gLeaders,
+      });
     });
 
     if ((teamStats || []).length > 0) {
       items.push({ type: 'teamstats-sub-header' });
-      completed.forEach(g => {
-        const ts = (teamStats || []).find(t => t.playoff_game_id === g.id);
+      completed.forEach((g) => {
+        const ts = (teamStats || []).find((t) => t.playoff_game_id === g.id);
         if (!ts) return;
         const aIsHome = ts.home === teamA;
         items.push({
           type: 'team-stats',
-          gameNum: g.game_number, teamA, teamB,
-          shotA: aIsHome ? ts.home_shots  : ts.away_shots,
-          shotB: aIsHome ? ts.away_shots  : ts.home_shots,
-          atkA:  aIsHome ? ts.home_attack : ts.away_attack,
-          atkB:  aIsHome ? ts.away_attack : ts.home_attack,
-          bkA:   aIsHome ? `${ts.home_break_goals}/${ts.home_break_attempts}` : `${ts.away_break_goals}/${ts.away_break_attempts}`,
-          bkB:   aIsHome ? `${ts.away_break_goals}/${ts.away_break_attempts}` : `${ts.home_break_goals}/${ts.home_break_attempts}`,
-          ppA:   aIsHome ? `${ts.home_pp_g}/${ts.home_pp_amt}` : `${ts.away_pp_g}/${ts.away_pp_amt}`,
-          ppB:   aIsHome ? `${ts.away_pp_g}/${ts.away_pp_amt}` : `${ts.home_pp_g}/${ts.home_pp_amt}`,
-          pimA:  aIsHome ? ts.home_pim : ts.away_pim,
-          pimB:  aIsHome ? ts.away_pim : ts.home_pim,
-          fowA:  aIsHome ? ts.home_fow : ts.away_fow,
-          fowB:  aIsHome ? ts.away_fow : ts.home_fow,
+          gameNum: g.game_number,
+          teamA,
+          teamB,
+          shotA: aIsHome ? ts.home_shots : ts.away_shots,
+          shotB: aIsHome ? ts.away_shots : ts.home_shots,
+          atkA: aIsHome ? ts.home_attack : ts.away_attack,
+          atkB: aIsHome ? ts.away_attack : ts.home_attack,
+          bkA: aIsHome
+            ? `${ts.home_break_goals}/${ts.home_break_attempts}`
+            : `${ts.away_break_goals}/${ts.away_break_attempts}`,
+          bkB: aIsHome
+            ? `${ts.away_break_goals}/${ts.away_break_attempts}`
+            : `${ts.home_break_goals}/${ts.home_break_attempts}`,
+          ppA: aIsHome
+            ? `${ts.home_pp_g}/${ts.home_pp_amt}`
+            : `${ts.away_pp_g}/${ts.away_pp_amt}`,
+          ppB: aIsHome
+            ? `${ts.away_pp_g}/${ts.away_pp_amt}`
+            : `${ts.home_pp_g}/${ts.home_pp_amt}`,
+          pimA: aIsHome ? ts.home_pim : ts.away_pim,
+          pimB: aIsHome ? ts.away_pim : ts.home_pim,
+          fowA: aIsHome ? ts.home_fow : ts.away_fow,
+          fowB: aIsHome ? ts.away_fow : ts.home_fow,
         });
       });
     }
@@ -258,23 +392,64 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
   // SECTION 2: SEASON H2H
   if (h2h && h2h.seasonGP > 0) {
     items.push({ type: 'section-header', label: 'SEASON H2H' });
-    items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, gp: h2h.seasonGP });
+    items.push({
+      type: 'h2h-record',
+      teamA,
+      teamB,
+      aW: h2h.seasonAW,
+      bW: h2h.seasonBW,
+      ties: h2h.seasonTies,
+      gp: h2h.seasonGP,
+    });
     (h2h.seasonGames || []).forEach((g, i) => {
-      items.push({ type: 'h2h-game-score', idx: i + 1, teamA, teamB, aScore: g.aScore, bScore: g.bScore, winner: g.winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
+      items.push({
+        type: 'h2h-game-score',
+        idx: i + 1,
+        teamA,
+        teamB,
+        aScore: g.aScore,
+        bScore: g.bScore,
+        winner: g.winner,
+        ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null,
+      });
     });
     if (h2h.seasonStatsA) {
-      items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.seasonStatsA });
-      items.push({ type: 'h2h-team-stats', team: teamB, stats: h2h.seasonStatsB });
+      items.push({
+        type: 'h2h-team-stats',
+        team: teamA,
+        stats: h2h.seasonStatsA,
+      });
+      items.push({
+        type: 'h2h-team-stats',
+        team: teamB,
+        stats: h2h.seasonStatsB,
+      });
     }
   }
 
   // SECTION 3: ALL TIME H2H
   if (h2h && h2h.allTimeGP > 0) {
     items.push({ type: 'section-header', label: 'ALL TIME H2H' });
-    items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.allTimeAW, bW: h2h.allTimeBW, ties: h2h.allTimeTies, gp: h2h.allTimeGP });
+    items.push({
+      type: 'h2h-record',
+      teamA,
+      teamB,
+      aW: h2h.allTimeAW,
+      bW: h2h.allTimeBW,
+      ties: h2h.allTimeTies,
+      gp: h2h.allTimeGP,
+    });
     if (h2h.allTimeStatsA) {
-      items.push({ type: 'h2h-team-stats', team: teamA, stats: h2h.allTimeStatsA });
-      items.push({ type: 'h2h-team-stats', team: teamB, stats: h2h.allTimeStatsB });
+      items.push({
+        type: 'h2h-team-stats',
+        team: teamA,
+        stats: h2h.allTimeStatsA,
+      });
+      items.push({
+        type: 'h2h-team-stats',
+        team: teamB,
+        stats: h2h.allTimeStatsB,
+      });
     }
   }
 
@@ -284,7 +459,8 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
 function useOverlayScale(baseW = 1280, baseH = 720) {
   const [scale, setScale] = useState(1);
   useEffect(() => {
-    const calc = () => setScale(Math.min(window.innerWidth / baseW, window.innerHeight / baseH));
+    const calc = () =>
+      setScale(Math.min(window.innerWidth / baseW, window.innerHeight / baseH));
     calc();
     window.addEventListener('resize', calc);
     return () => window.removeEventListener('resize', calc);
@@ -295,22 +471,22 @@ function useOverlayScale(baseW = 1280, baseH = 720) {
 // ── Main Component ─────────────────────────────────────────────────────────
 export default function StreamOverlayPlayoff() {
   const [showPanel, setShowPanel] = useState(false);
-  const [allTeams,  setAllTeams]  = useState([]);
+  const [allTeams, setAllTeams] = useState([]);
   const [currentLg, setCurrentLg] = useState(null);
-  const [pendingA,  setPendingA]  = useState('');
-  const [pendingB,  setPendingB]  = useState('');
-  const [data,      setData]      = useState(null);
-  const [loading,   setLoading]   = useState(false);
+  const [pendingA, setPendingA] = useState('');
+  const [pendingB, setPendingB] = useState('');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
   const pollRef = useRef(null);
-  const scale   = useOverlayScale();
+  const scale = useOverlayScale();
 
   const getParams = () => {
     const p = new URLSearchParams(window.location.search);
     return {
-      teamA:  p.get('teamA')  || '',
-      teamB:  p.get('teamB')  || '',
-      lg:     p.get('lg')     || '',
-      round:  p.get('round')  ? parseInt(p.get('round'))  : null,
+      teamA: p.get('teamA') || '',
+      teamB: p.get('teamB') || '',
+      lg: p.get('lg') || '',
+      round: p.get('round') ? parseInt(p.get('round')) : null,
       series: p.get('series') ? parseInt(p.get('series')) : null,
     };
   };
@@ -318,19 +494,31 @@ export default function StreamOverlayPlayoff() {
   useEffect(() => {
     async function bootstrap() {
       const { data: seasons } = await supabase
-        .from('seasons').select('lg')
-        .ilike('lg', 'W%').order('lg', { ascending: false }).limit(1);
+        .from('seasons')
+        .select('lg')
+        .ilike('lg', 'W%')
+        .order('lg', { ascending: false })
+        .limit(1);
       const lg = seasons?.[0]?.lg;
       if (!lg) return;
       setCurrentLg(lg);
       const { data: teams } = await supabase
-        .from('teams').select('abr,team,coach').eq('lg', lg).order('abr');
+        .from('teams')
+        .select('abr,team,coach')
+        .eq('lg', lg)
+        .order('abr');
       setAllTeams(teams || []);
       const params = getParams();
       if (params.teamA && params.teamB) {
         setPendingA(params.teamA);
         setPendingB(params.teamB);
-        loadMatchup(params.teamA, params.teamB, params.lg || lg, params.round, params.series);
+        loadMatchup(
+          params.teamA,
+          params.teamB,
+          params.lg || lg,
+          params.round,
+          params.series
+        );
       } else if (teams?.length >= 2) {
         setPendingA(teams[0].abr);
         setPendingB(teams[1].abr);
@@ -341,7 +529,9 @@ export default function StreamOverlayPlayoff() {
   }, []);
 
   useEffect(() => {
-    const h = e => { if (e.key === '`' || e.key === '~') setShowPanel(p => !p); };
+    const h = (e) => {
+      if (e.key === '`' || e.key === '~') setShowPanel((p) => !p);
+    };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
   }, []);
@@ -352,127 +542,239 @@ export default function StreamOverlayPlayoff() {
 
     // FIX 2: use production playoff_games table (not _test)
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games_test').select('*')
-      .ilike('lg', 'W%').eq('lg', lg).order('game_number');
+      .from('playoff_games')
+      .select('*')
+      .ilike('lg', 'W%')
+      .eq('lg', lg)
+      .order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 
-    let playoffGames = (allPgRows || []).filter(g =>
-      (g.team_code_a === tA && g.team_code_b === tB) ||
-      (g.team_code_a === tB && g.team_code_b === tA)
+    let playoffGames = (allPgRows || []).filter(
+      (g) =>
+        (g.team_code_a === tA && g.team_code_b === tB) ||
+        (g.team_code_a === tB && g.team_code_b === tA)
     );
-    if (round  != null) playoffGames = playoffGames.filter(g => g.round         === round);
-    if (series != null) playoffGames = playoffGames.filter(g => g.series_number === series);
+    if (round != null)
+      playoffGames = playoffGames.filter((g) => g.round === round);
+    if (series != null)
+      playoffGames = playoffGames.filter((g) => g.series_number === series);
     if (playoffGames.length > 0 && round == null) {
-      const maxRound = Math.max(...playoffGames.map(g => g.round));
-      playoffGames = playoffGames.filter(g => g.round === maxRound);
+      const maxRound = Math.max(...playoffGames.map((g) => g.round));
+      playoffGames = playoffGames.filter((g) => g.round === maxRound);
     }
 
-    const game1         = playoffGames.find(g => g.game_number === 1) || playoffGames[0];
-    const seedA         = game1?.team_code_a === tA ? game1?.seed_a : game1?.seed_b;
-    const seedB         = game1?.team_code_a === tA ? game1?.seed_b : game1?.seed_a;
-    const pgIds         = playoffGames.map(g => g.id).filter(Boolean);
-    const completed     = playoffGames.filter(g => g.team_a_score != null);
-    const derivedRound  = playoffGames[0]?.round         || 1;
+    const game1 =
+      playoffGames.find((g) => g.game_number === 1) || playoffGames[0];
+    const seedA = game1?.team_code_a === tA ? game1?.seed_a : game1?.seed_b;
+    const seedB = game1?.team_code_a === tA ? game1?.seed_b : game1?.seed_a;
+    const pgIds = playoffGames.map((g) => g.id).filter(Boolean);
+    const completed = playoffGames.filter((g) => g.team_a_score != null);
+    const derivedRound = playoffGames[0]?.round || 1;
     const derivedSeries = playoffGames[0]?.series_number || 1;
-    const seriesLength  = playoffGames[0]?.series_length || 7;
-    const winsNeeded    = Math.ceil(seriesLength / 2);
+    const seriesLength = playoffGames[0]?.series_length || 7;
+    const winsNeeded = Math.ceil(seriesLength / 2);
 
-    let rawScoring = [], teamStats = [];
+    let rawScoring = [],
+      teamStats = [];
     if (pgIds.length > 0) {
       const [{ data: rs, error: rsErr }, { data: ts }] = await Promise.all([
-        supabase.from('game_raw_scoring').select('*').in('playoff_game_id', pgIds),
-        supabase.from('game_stats_team').select('*').in('playoff_game_id', pgIds),
+        supabase
+          .from('game_raw_scoring')
+          .select('*')
+          .in('playoff_game_id', pgIds),
+        supabase
+          .from('game_stats_team')
+          .select('*')
+          .in('playoff_game_id', pgIds),
       ]);
       if (rsErr) console.error('raw_scoring error:', rsErr);
       rawScoring = rs || [];
-      teamStats  = ts || [];
+      teamStats = ts || [];
     }
 
-    const { data: teamRows } = await supabase.from('teams').select('abr,coach').eq('lg', lg);
-    const coachA = norm((teamRows || []).find(t => t.abr === tA)?.coach || tA);
-    const coachB = norm((teamRows || []).find(t => t.abr === tB)?.coach || tB);
+    const { data: teamRows } = await supabase
+      .from('teams')
+      .select('abr,coach')
+      .eq('lg', lg);
+    const coachA = norm(
+      (teamRows || []).find((t) => t.abr === tA)?.coach || tA
+    );
+    const coachB = norm(
+      (teamRows || []).find((t) => t.abr === tB)?.coach || tB
+    );
 
     const { data: allRsGames } = await supabase
       .from('games')
       .select('id,lg,score_home,score_away,ot,coach_home,coach_away')
-      .ilike('lg', 'W%').ilike('mode', 'season').not('score_home', 'is', null);
+      .ilike('lg', 'W%')
+      .ilike('mode', 'season')
+      .not('score_home', 'is', null);
 
-    const h2hGames = (allRsGames || []).filter(g => {
-      const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
+    const h2hGames = (allRsGames || []).filter((g) => {
+      const h = norm(g.coach_home || ''),
+        a = norm(g.coach_away || '');
       return (h === coachA && a === coachB) || (h === coachB && a === coachA);
     });
 
-    const h2hGameIds = h2hGames.map(g => g.id).filter(Boolean);
+    const h2hGameIds = h2hGames.map((g) => g.id).filter(Boolean);
     let rsTeamStats = [];
     if (h2hGameIds.length > 0) {
-      const { data: rts } = await supabase.from('game_stats_team').select('*').in('game_id', h2hGameIds);
+      const { data: rts } = await supabase
+        .from('game_stats_team')
+        .select('*')
+        .in('game_id', h2hGameIds);
       rsTeamStats = rts || [];
     }
 
-    let atAW = 0, atBW = 0, atTies = 0;
-    h2hGames.forEach(g => {
-      const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
-      const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
+    let atAW = 0,
+      atBW = 0,
+      atTies = 0;
+    h2hGames.forEach((g) => {
+      const h = norm(g.coach_home || ''),
+        a = norm(g.coach_away || '');
+      const sh = Number(g.score_home ?? 0),
+        sa = Number(g.score_away ?? 0);
       const hIsA = h === coachA;
-      const gfA = hIsA ? sh : sa, gaA = hIsA ? sa : sh;
+      const gfA = hIsA ? sh : sa,
+        gaA = hIsA ? sa : sh;
       if (sh === sa) atTies++;
       else if (gfA > gaA) atAW++;
       else atBW++;
     });
 
-    const seasonGames = h2hGames.filter(g => g.lg === lg);
-    let sAW = 0, sBW = 0, sTies = 0;
+    const seasonGames = h2hGames.filter((g) => g.lg === lg);
+    let sAW = 0,
+      sBW = 0,
+      sTies = 0;
     const seasonGameScores = [];
-    seasonGames.forEach(g => {
-      const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
-      const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
+    seasonGames.forEach((g) => {
+      const h = norm(g.coach_home || ''),
+        a = norm(g.coach_away || '');
+      const sh = Number(g.score_home ?? 0),
+        sa = Number(g.score_away ?? 0);
       const hIsA = h === coachA;
-      const aScore = hIsA ? sh : sa, bScore = hIsA ? sa : sh;
+      const aScore = hIsA ? sh : sa,
+        bScore = hIsA ? sa : sh;
       let winner = null;
       if (sh === sa) sTies++;
-      else if (aScore > bScore) { sAW++; winner = tA; }
-      else { sBW++; winner = tB; }
-      seasonGameScores.push({ aScore, bScore, winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
+      else if (aScore > bScore) {
+        sAW++;
+        winner = tA;
+      } else {
+        sBW++;
+        winner = tB;
+      }
+      seasonGameScores.push({
+        aScore,
+        bScore,
+        winner,
+        ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null,
+      });
     });
 
     const h2h = {
-      seasonGP: sAW + sBW + sTies, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
+      seasonGP: sAW + sBW + sTies,
+      seasonAW: sAW,
+      seasonBW: sBW,
+      seasonTies: sTies,
       seasonGames: seasonGameScores,
-      seasonStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg),
-      seasonStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, lg),  // ADD
-      allTimeGP: atAW + atBW + atTies, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
-      allTimeStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null),
-      allTimeStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, null),  // ADD
+      seasonStatsA: buildH2HTeamStats(
+        h2hGames,
+        rsTeamStats,
+        coachA,
+        coachB,
+        tA,
+        tB,
+        lg
+      ),
+      seasonStatsB: buildH2HTeamStats(
+        h2hGames,
+        rsTeamStats,
+        coachB,
+        coachA,
+        tB,
+        tA,
+        lg
+      ), // ADD
+      allTimeGP: atAW + atBW + atTies,
+      allTimeAW: atAW,
+      allTimeBW: atBW,
+      allTimeTies: atTies,
+      allTimeStatsA: buildH2HTeamStats(
+        h2hGames,
+        rsTeamStats,
+        coachA,
+        coachB,
+        tA,
+        tB,
+        null
+      ),
+      allTimeStatsB: buildH2HTeamStats(
+        h2hGames,
+        rsTeamStats,
+        coachB,
+        coachA,
+        tB,
+        tA,
+        null
+      ), // ADD
     };
 
     const { aW, bW } = getSeriesScore(playoffGames, tA, tB);
-    const leftTeam  = (seedA != null && seedB != null && seedA > seedB) ? tA : tB;
+    const leftTeam = seedA != null && seedB != null && seedA > seedB ? tA : tB;
     const rightTeam = leftTeam === tA ? tB : tA;
 
     setData({
-      teamA: tA, teamB: tB,
-      leftTeam, rightTeam,
-      leftWins:  leftTeam === tA ? aW : bW,
+      teamA: tA,
+      teamB: tB,
+      leftTeam,
+      rightTeam,
+      leftWins: leftTeam === tA ? aW : bW,
       rightWins: rightTeam === tA ? aW : bW,
-      leftSeed:  leftTeam === tA ? seedA : seedB,
+      leftSeed: leftTeam === tA ? seedA : seedB,
       rightSeed: rightTeam === tA ? seedA : seedB,
-      winsNeeded, seriesLength, totalGames: completed.length,
+      winsNeeded,
+      seriesLength,
+      totalGames: completed.length,
       nextGameNum: Math.min(completed.length + 1, seriesLength),
       roundLabel: ROUND_LABELS[derivedRound] || `ROUND ${derivedRound}`,
-      roundNum: derivedRound, seriesNum: derivedSeries,
+      roundNum: derivedRound,
+      seriesNum: derivedSeries,
       skaterStatsA: buildCumulativeSkaterStatsFromRaw(rawScoring, tA),
       skaterStatsB: buildCumulativeSkaterStatsFromRaw(rawScoring, tB),
-      teamSeriesStatsA: buildTeamSeriesStats(teamStats, rawScoring, playoffGames, tA),
-      teamSeriesStatsB: buildTeamSeriesStats(teamStats, rawScoring, playoffGames, tB),
-      scrollItems: buildScrollItems(playoffGames, rawScoring, teamStats, tA, tB, h2h),
-      lg, season: lg,
+      teamSeriesStatsA: buildTeamSeriesStats(
+        teamStats,
+        rawScoring,
+        playoffGames,
+        tA
+      ),
+      teamSeriesStatsB: buildTeamSeriesStats(
+        teamStats,
+        rawScoring,
+        playoffGames,
+        tB
+      ),
+      scrollItems: buildScrollItems(
+        playoffGames,
+        rawScoring,
+        teamStats,
+        tA,
+        tB,
+        h2h
+      ),
+      lg,
+      season: lg,
     });
     setLoading(false);
   }, []);
 
   const handleApply = useCallback(() => {
     if (!pendingA || !pendingB || pendingA === pendingB) return;
-    const p = new URLSearchParams({ lg: currentLg, teamA: pendingA, teamB: pendingB });
+    const p = new URLSearchParams({
+      lg: currentLg,
+      teamA: pendingA,
+      teamB: pendingB,
+    });
     window.history.replaceState(null, '', `?${p.toString()}`);
     setShowPanel(false);
     loadMatchup(pendingA, pendingB, currentLg, null, null);
@@ -483,22 +785,30 @@ export default function StreamOverlayPlayoff() {
     pollRef.current = setInterval(() => {
       const params = getParams();
       loadMatchup(
-        params.teamA || data.teamA, params.teamB || data.teamB,
+        params.teamA || data.teamA,
+        params.teamB || data.teamB,
         params.lg || data.lg,
-        params.round  != null ? params.round  : data.roundNum,
-        params.series != null ? params.series : data.seriesNum,
+        params.round != null ? params.round : data.roundNum,
+        params.series != null ? params.series : data.seriesNum
       );
     }, POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
   }, [data, loadMatchup]);
 
   return (
-    <div className="po-root" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+    <div
+      className="po-root"
+      style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
+    >
       {showPanel && (
-        <SetupPanel allTeams={allTeams}
-          pendingA={pendingA} setPendingA={setPendingA}
-          pendingB={pendingB} setPendingB={setPendingB}
-          onApply={handleApply} />
+        <SetupPanel
+          allTeams={allTeams}
+          pendingA={pendingA}
+          setPendingA={setPendingA}
+          pendingB={pendingB}
+          setPendingB={setPendingB}
+          onApply={handleApply}
+        />
       )}
       {!data && !loading && <EmptyState />}
       {loading && !data && <LoadingState />}
@@ -511,24 +821,37 @@ export default function StreamOverlayPlayoff() {
 // ── Playoff Layout ─────────────────────────────────────────────────────────
 function PlayoffLayout({ data, loading }) {
   const {
-    leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed,
-    roundLabel, nextGameNum, winsNeeded,
-    skaterStatsA, skaterStatsB, teamSeriesStatsA, teamSeriesStatsB,
-    teamA, teamB, scrollItems,
+    leftTeam,
+    rightTeam,
+    leftWins,
+    rightWins,
+    leftSeed,
+    rightSeed,
+    roundLabel,
+    nextGameNum,
+    winsNeeded,
+    skaterStatsA,
+    skaterStatsB,
+    teamSeriesStatsA,
+    teamSeriesStatsB,
+    teamA,
+    teamB,
+    scrollItems,
   } = data;
 
-  const leftIsA     = leftTeam === teamA;
-  const leftSkaters  = leftIsA ? skaterStatsA : skaterStatsB;
+  const leftIsA = leftTeam === teamA;
+  const leftSkaters = leftIsA ? skaterStatsA : skaterStatsB;
   const rightSkaters = leftIsA ? skaterStatsB : skaterStatsA;
-  const leftStats    = leftIsA ? teamSeriesStatsA : teamSeriesStatsB;
-  const rightStats   = leftIsA ? teamSeriesStatsB : teamSeriesStatsA;
+  const leftStats = leftIsA ? teamSeriesStatsA : teamSeriesStatsB;
+  const rightStats = leftIsA ? teamSeriesStatsB : teamSeriesStatsA;
 
   const seriesStatus = () => {
-    if (leftWins  === winsNeeded) return `${leftTeam} WINS SERIES`;
+    if (leftWins === winsNeeded) return `${leftTeam} WINS SERIES`;
     if (rightWins === winsNeeded) return `${rightTeam} WINS SERIES`;
-    if (leftWins  === rightWins)  return `SERIES TIED ${leftWins}-${rightWins}`;
+    if (leftWins === rightWins) return `SERIES TIED ${leftWins}-${rightWins}`;
     const leader = leftWins > rightWins ? leftTeam : rightTeam;
-    const lw = Math.max(leftWins, rightWins), tw = Math.min(leftWins, rightWins);
+    const lw = Math.max(leftWins, rightWins),
+      tw = Math.min(leftWins, rightWins);
     return `${leader} LEADS ${lw}-${tw}`;
   };
 
@@ -539,8 +862,14 @@ function PlayoffLayout({ data, loading }) {
           <span className="po-round-label">{roundLabel}</span>
         </div>
         <div className="po-topbar-center">
-          <img src="/assets/leagueLogos/mainLogo-512.png" className="po-league-logo" alt="WN95HL"
-            onError={e => { e.target.style.display='none'; }} />
+          <img
+            src="/assets/leagueLogos/mainLogo-512.png"
+            className="po-league-logo"
+            alt="WN95HL"
+            onError={(e) => {
+              e.target.style.display = 'none';
+            }}
+          />
         </div>
         <div className="po-topbar-right">
           <span className="po-game-label">GAME {nextGameNum}</span>
@@ -550,15 +879,29 @@ function PlayoffLayout({ data, loading }) {
         </div>
       </div>
 
-      <SeriesHero leftTeam={leftTeam} rightTeam={rightTeam}
-        leftWins={leftWins} rightWins={rightWins}
-        leftSeed={leftSeed} rightSeed={rightSeed} winsNeeded={winsNeeded} />
+      <SeriesHero
+        leftTeam={leftTeam}
+        rightTeam={rightTeam}
+        leftWins={leftWins}
+        rightWins={rightWins}
+        leftSeed={leftSeed}
+        rightSeed={rightSeed}
+        winsNeeded={winsNeeded}
+      />
 
       <div className="po-side-left">
-        <SidePanel team={leftTeam} skaters={leftSkaters} teamStats={leftStats} />
+        <SidePanel
+          team={leftTeam}
+          skaters={leftSkaters}
+          teamStats={leftStats}
+        />
       </div>
       <div className="po-side-right">
-        <SidePanel team={rightTeam} skaters={rightSkaters} teamStats={rightStats} />
+        <SidePanel
+          team={rightTeam}
+          skaters={rightSkaters}
+          teamStats={rightStats}
+        />
       </div>
 
       <BottomScroller items={scrollItems} />
@@ -566,21 +909,43 @@ function PlayoffLayout({ data, loading }) {
   );
 }
 
-function SeriesHero({ leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed, winsNeeded }) {
+function SeriesHero({
+  leftTeam,
+  rightTeam,
+  leftWins,
+  rightWins,
+  leftSeed,
+  rightSeed,
+  winsNeeded,
+}) {
   return (
     <div className="po-series-bar">
       <div className="po-hero-half left">
         <span className="po-hero-wins">{leftWins}</span>
         <SeriesDots wins={leftWins} winsNeeded={winsNeeded} side="left" />
-        <img src={`/assets/teamLogos/${leftTeam}.png`} className="po-hero-logo" alt={leftTeam}
-          onError={e => e.target.style.display='none'} />
-        <div className="po-hero-seed">{leftSeed != null ? `#${leftSeed}` : ''}</div>
+        <img
+          src={`/assets/teamLogos/${leftTeam}.png`}
+          className="po-hero-logo"
+          alt={leftTeam}
+          onError={(e) => (e.target.style.display = 'none')}
+        />
+        <div className="po-hero-seed">
+          {leftSeed != null ? `#${leftSeed}` : ''}
+        </div>
       </div>
-      <div className="po-hero-divider"><div className="po-hero-divider-line" /></div>
+      <div className="po-hero-divider">
+        <div className="po-hero-divider-line" />
+      </div>
       <div className="po-hero-half right">
-        <div className="po-hero-seed">{rightSeed != null ? `#${rightSeed}` : ''}</div>
-        <img src={`/assets/teamLogos/${rightTeam}.png`} className="po-hero-logo" alt={rightTeam}
-          onError={e => e.target.style.display='none'} />
+        <div className="po-hero-seed">
+          {rightSeed != null ? `#${rightSeed}` : ''}
+        </div>
+        <img
+          src={`/assets/teamLogos/${rightTeam}.png`}
+          className="po-hero-logo"
+          alt={rightTeam}
+          onError={(e) => (e.target.style.display = 'none')}
+        />
         <SeriesDots wins={rightWins} winsNeeded={winsNeeded} side="right" />
         <span className="po-hero-wins">{rightWins}</span>
       </div>
@@ -592,15 +957,18 @@ function SeriesDots({ wins, winsNeeded, side }) {
   return (
     <div className={`po-dots po-dots-${side}`}>
       {Array.from({ length: winsNeeded }, (_, i) => (
-        <div key={i} className={`po-dot ${i < wins ? 'filled' : 'empty'} ${side}`} />
+        <div
+          key={i}
+          className={`po-dot ${i < wins ? 'filled' : 'empty'} ${side}`}
+        />
       ))}
     </div>
   );
 }
 
-const SKATER_ROWS    = 8;
-const SKATER_ROW_H   = 28;
-const SKATER_HEAD_H  = 22;
+const SKATER_ROWS = 8;
+const SKATER_ROW_H = 28;
+const SKATER_HEAD_H = 22;
 const SKATER_FIXED_H = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H + 20;
 
 function SidePanel({ team, skaters, teamStats }) {
@@ -608,8 +976,12 @@ function SidePanel({ team, skaters, teamStats }) {
   return (
     <div className="po-side-panel">
       <div className="po-side-header">
-        <img src={`/assets/teamLogos/${team}.png`} className="po-side-logo" alt={team}
-          onError={e => e.target.style.display='none'} />
+        <img
+          src={`/assets/teamLogos/${team}.png`}
+          className="po-side-logo"
+          alt={team}
+          onError={(e) => (e.target.style.display = 'none')}
+        />
         <span className="po-side-code">{team}</span>
       </div>
       <div style={{ minHeight: `${SKATER_FIXED_H}px` }}>
@@ -646,13 +1018,43 @@ function SidePanel({ team, skaters, teamStats }) {
           <div className="po-side-divider" />
           <div className="po-section-label">SERIES STATS</div>
           <div className="po-stats-grid">
-            <StatRow label="GF"  value={teamStats.gf}  sub={`${(teamStats.gf/gp).toFixed(1)}/gm`}  accent="gold" />
-            <StatRow label="GA"  value={teamStats.ga}  sub={`${(teamStats.ga/gp).toFixed(1)}/gm`}  accent="red" />
-            <StatRow label="SV%" value={teamStats.seriesSvPct}
-              sub={teamStats.totalSA > 0 ? `${teamStats.totalSaves}/${teamStats.totalSA}` : null} accent="green" />
-            <StatRow label="SH"  value={teamStats.sh}  sub={`${(teamStats.sh/gp).toFixed(1)}/gm`} />
-            <StatRow label="SA"  value={teamStats.sa}  sub={`${(teamStats.sa/gp).toFixed(1)}/gm`} />
-            <StatRow label="BRK" value={`${teamStats.brG}/${teamStats.brA}`} sub={teamStats.brPct} />
+            <StatRow
+              label="GF"
+              value={teamStats.gf}
+              sub={`${(teamStats.gf / gp).toFixed(1)}/gm`}
+              accent="gold"
+            />
+            <StatRow
+              label="GA"
+              value={teamStats.ga}
+              sub={`${(teamStats.ga / gp).toFixed(1)}/gm`}
+              accent="red"
+            />
+            <StatRow
+              label="SV%"
+              value={teamStats.seriesSvPct}
+              sub={
+                teamStats.totalSA > 0
+                  ? `${teamStats.totalSaves}/${teamStats.totalSA}`
+                  : null
+              }
+              accent="green"
+            />
+            <StatRow
+              label="SH"
+              value={teamStats.sh}
+              sub={`${(teamStats.sh / gp).toFixed(1)}/gm`}
+            />
+            <StatRow
+              label="SA"
+              value={teamStats.sa}
+              sub={`${(teamStats.sa / gp).toFixed(1)}/gm`}
+            />
+            <StatRow
+              label="BRK"
+              value={`${teamStats.brG}/${teamStats.brA}`}
+              sub={teamStats.brPct}
+            />
             {teamStats.oneA > 0 && (
               <>
                 <StatRow label="1xG" value={teamStats.oneG} accent="blue" />
@@ -661,8 +1063,15 @@ function SidePanel({ team, skaters, teamStats }) {
               </>
             )}
             <StatRow label="ATK" value={teamStats.atkAvg} sub="avg/gm" />
-            <StatRow label="PPG" value={`${teamStats.ppg}/${teamStats.ppAmt}`} sub={teamStats.ppPct} accent="blue" />
-            {teamStats.shg > 0 && <StatRow label="SHG" value={teamStats.shg} accent="green" />}
+            <StatRow
+              label="PPG"
+              value={`${teamStats.ppg}/${teamStats.ppAmt}`}
+              sub={teamStats.ppPct}
+              accent="blue"
+            />
+            {teamStats.shg > 0 && (
+              <StatRow label="SHG" value={teamStats.shg} accent="green" />
+            )}
           </div>
         </>
       )}
@@ -674,7 +1083,9 @@ function StatRow({ label, value, sub, accent }) {
   return (
     <div className="po-stat-row">
       <span className="po-stat-label">{label}</span>
-      <span className={`po-stat-val${accent ? ` accent-${accent}` : ''}`}>{value ?? '—'}</span>
+      <span className={`po-stat-val${accent ? ` accent-${accent}` : ''}`}>
+        {value ?? '—'}
+      </span>
       {sub && <span className="po-stat-sub">{sub}</span>}
     </div>
   );
@@ -683,7 +1094,7 @@ function StatRow({ label, value, sub, accent }) {
 // ── Bottom Scroller ─────────────────────────────────────────────────────────
 // FIX 3: reset posRef when items change so the loop never reads a stale half-width
 function BottomScroller({ items }) {
-  const posRef   = useRef(0);
+  const posRef = useRef(0);
   const frameRef = useRef(null);
   const innerRef = useRef(null);
   const [x, setX] = useState(0);
@@ -724,34 +1135,86 @@ function BottomScroller({ items }) {
         return (
           <span key={idx} className="sc-item">
             <span className="sc-pill">GM{item.gameNum}</span>
-            <span className={`sc-team${item.winner === item.teamA ? ' win' : ''}`}>{item.teamA}</span>
-            <span className="sc-score">{item.aScore} – {item.bScore}</span>
-            <span className={`sc-team${item.winner === item.teamB ? ' win' : ''}`}>{item.teamB}</span>
+            <span
+              className={`sc-team${item.winner === item.teamA ? ' win' : ''}`}
+            >
+              {item.teamA}
+            </span>
+            <span className="sc-score">
+              {item.aScore} – {item.bScore}
+            </span>
+            <span
+              className={`sc-team${item.winner === item.teamB ? ' win' : ''}`}
+            >
+              {item.teamB}
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">PTS <span className="sc-val">{item.ptsLeaders}</span></span>
+            <span className="sc-stat">
+              PTS <span className="sc-val">{item.ptsLeaders}</span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">G <span className="sc-val">{item.gLeaders}</span></span>
+            <span className="sc-stat">
+              G <span className="sc-val">{item.gLeaders}</span>
+            </span>
           </span>
         );
       case 'team-stats':
         return (
           <span key={idx} className="sc-item">
             <span className="sc-pill">GM{item.gameNum} STATS</span>
-            <span className="sc-stat">SOG <span className="sc-val">{item.teamA} {item.shotA}–{item.shotB} {item.teamB}</span></span>
+            <span className="sc-stat">
+              SOG{' '}
+              <span className="sc-val">
+                {item.teamA} {item.shotA}–{item.shotB} {item.teamB}
+              </span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">ATK <span className="sc-val">
-                {secToMMSS((() => { const p = String(item.atkA).split(':').map(Number); return p[0]*60+p[1]; })())}
+            <span className="sc-stat">
+              ATK{' '}
+              <span className="sc-val">
+                {secToMMSS(
+                  (() => {
+                    const p = String(item.atkA).split(':').map(Number);
+                    return p[0] * 60 + p[1];
+                  })()
+                )}
                 /
-                {secToMMSS((() => { const p = String(item.atkB).split(':').map(Number); return p[0]*60+p[1]; })())}
-              </span></span>
+                {secToMMSS(
+                  (() => {
+                    const p = String(item.atkB).split(':').map(Number);
+                    return p[0] * 60 + p[1];
+                  })()
+                )}
+              </span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">BK <span className="sc-val">{item.bkA}/{item.bkB}</span></span>
+            <span className="sc-stat">
+              BK{' '}
+              <span className="sc-val">
+                {item.bkA}/{item.bkB}
+              </span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">PP <span className="sc-val">{item.ppA}/{item.ppB}</span></span>
+            <span className="sc-stat">
+              PP{' '}
+              <span className="sc-val">
+                {item.ppA}/{item.ppB}
+              </span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">PIM <span className="sc-val">{item.pimA}/{item.pimB}</span></span>
+            <span className="sc-stat">
+              PIM{' '}
+              <span className="sc-val">
+                {item.pimA}/{item.pimB}
+              </span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">FO <span className="sc-val">{item.fowA}/{item.fowB}</span></span>
+            <span className="sc-stat">
+              FO{' '}
+              <span className="sc-val">
+                {item.fowA}/{item.fowB}
+              </span>
+            </span>
           </span>
         );
       case 'h2h-record':
@@ -772,10 +1235,22 @@ function BottomScroller({ items }) {
         return (
           <span key={idx} className="sc-item">
             <span className="sc-pill">G{item.idx}</span>
-            <span className={`sc-team${item.winner === item.teamA ? ' win' : ''}`}>{item.teamA}</span>
-            <span className="sc-score">{item.aScore} – {item.bScore}</span>
-            <span className={`sc-team${item.winner === item.teamB ? ' win' : ''}`}>{item.teamB}</span>
-            {item.ot && item.ot !== '0' && item.ot !== 0 && <span className="sc-muted sc-ot">OT</span>}
+            <span
+              className={`sc-team${item.winner === item.teamA ? ' win' : ''}`}
+            >
+              {item.teamA}
+            </span>
+            <span className="sc-score">
+              {item.aScore} – {item.bScore}
+            </span>
+            <span
+              className={`sc-team${item.winner === item.teamB ? ' win' : ''}`}
+            >
+              {item.teamB}
+            </span>
+            {item.ot && item.ot !== '0' && item.ot !== 0 && (
+              <span className="sc-muted sc-ot">OT</span>
+            )}
           </span>
         );
       case 'h2h-team-stats': {
@@ -783,27 +1258,67 @@ function BottomScroller({ items }) {
         return (
           <span key={idx} className="sc-item">
             <span className="sc-pill">{item.team}</span>
-            <span className="sc-stat">GF/G <span className="sc-val accent-gold">{s.gfpg}</span></span>
+            <span className="sc-stat">
+              GF/G <span className="sc-val accent-gold">{s.gfpg}</span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">GA/G <span className="sc-val accent-red">{s.gapg}</span></span>
+            <span className="sc-stat">
+              GA/G <span className="sc-val accent-red">{s.gapg}</span>
+            </span>
             <span className="sc-bullet">·</span>
-            <span className="sc-stat">SV% <span className="sc-val accent-green">{s.seriesSvPct}</span></span>
-            {s.sh > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">SH <span className="sc-val">{(s.sh/s.gp).toFixed(1)}</span></span></>}
-            {s.brA > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">BRK <span className="sc-val">{s.brPct}</span></span></>}
-            {s.ppAmt > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">PP <span className="sc-val accent-blue">{s.ppPct}</span></span></>}
-            {s.atkAvg !== '—' && <><span className="sc-bullet">·</span><span className="sc-stat">ATK <span className="sc-val">{s.atkAvg}</span></span></>}
+            <span className="sc-stat">
+              SV% <span className="sc-val accent-green">{s.seriesSvPct}</span>
+            </span>
+            {s.sh > 0 && (
+              <>
+                <span className="sc-bullet">·</span>
+                <span className="sc-stat">
+                  SH <span className="sc-val">{(s.sh / s.gp).toFixed(1)}</span>
+                </span>
+              </>
+            )}
+            {s.brA > 0 && (
+              <>
+                <span className="sc-bullet">·</span>
+                <span className="sc-stat">
+                  BRK <span className="sc-val">{s.brPct}</span>
+                </span>
+              </>
+            )}
+            {s.ppAmt > 0 && (
+              <>
+                <span className="sc-bullet">·</span>
+                <span className="sc-stat">
+                  PP <span className="sc-val accent-blue">{s.ppPct}</span>
+                </span>
+              </>
+            )}
+            {s.atkAvg !== '—' && (
+              <>
+                <span className="sc-bullet">·</span>
+                <span className="sc-stat">
+                  ATK <span className="sc-val">{s.atkAvg}</span>
+                </span>
+              </>
+            )}
           </span>
         );
       }
-      default: return null;
+      default:
+        return null;
     }
   };
 
   const nodes = items.map(renderItem).filter(Boolean);
   return (
     <div className="po-scroller">
-      <div className="po-scroller-inner" ref={innerRef} style={{ transform: `translateX(-${x}px)` }}>
-        {nodes}{nodes}
+      <div
+        className="po-scroller-inner"
+        ref={innerRef}
+        style={{ transform: `translateX(-${x}px)` }}
+      >
+        {nodes}
+        {nodes}
       </div>
     </div>
   );
@@ -820,33 +1335,55 @@ function SectionHeader({ label }) {
 }
 
 function SubHeader({ label }) {
-  return (
-    <span className="sc-sub-hdr">{label}</span>
-  );
+  return <span className="sc-sub-hdr">{label}</span>;
 }
 
-function SetupPanel({ allTeams, pendingA, setPendingA, pendingB, setPendingB, onApply }) {
+function SetupPanel({
+  allTeams,
+  pendingA,
+  setPendingA,
+  pendingB,
+  setPendingB,
+  onApply,
+}) {
   return (
     <div className="sp-panel">
       <div className="sp-title">⚡ PLAYOFF OVERLAY SETUP</div>
       <div className="sp-note">Press ~ to close</div>
       <div className="sp-row">
         <label className="sp-label">TEAM A</label>
-        <CustomSelect value={pendingA} onChange={setPendingA}
-          options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
-          placeholder="-- SELECT --" />
+        <CustomSelect
+          value={pendingA}
+          onChange={setPendingA}
+          options={allTeams.map((t) => ({
+            value: t.abr,
+            label: `${t.abr}${t.team ? ` — ${t.team}` : ''}`,
+          }))}
+          placeholder="-- SELECT --"
+        />
       </div>
       <div className="sp-row">
         <label className="sp-label">TEAM B</label>
-        <CustomSelect value={pendingB} onChange={setPendingB}
-          options={allTeams.map(t => ({ value: t.abr, label: `${t.abr}${t.team ? ` — ${t.team}` : ''}` }))}
-          placeholder="-- SELECT --" />
+        <CustomSelect
+          value={pendingB}
+          onChange={setPendingB}
+          options={allTeams.map((t) => ({
+            value: t.abr,
+            label: `${t.abr}${t.team ? ` — ${t.team}` : ''}`,
+          }))}
+          placeholder="-- SELECT --"
+        />
       </div>
       {pendingA && pendingB && pendingA === pendingB && (
         <div className="sp-error">Teams must be different</div>
       )}
-      <button className="sp-apply" onClick={onApply}
-        disabled={!pendingA || !pendingB || pendingA === pendingB}>APPLY</button>
+      <button
+        className="sp-apply"
+        onClick={onApply}
+        disabled={!pendingA || !pendingB || pendingA === pendingB}
+      >
+        APPLY
+      </button>
     </div>
   );
 }
@@ -855,22 +1392,37 @@ function CustomSelect({ value, onChange, options, placeholder }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
-    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const h = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+    };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
-  const selected = options.find(o => o.value === value);
+  const selected = options.find((o) => o.value === value);
   return (
     <div className="csel" ref={ref}>
-      <div className={`csel-trigger${open ? ' open' : ''}`} onClick={() => setOpen(o => !o)}>
-        <span className={selected ? '' : 'csel-ph'}>{selected ? selected.label : placeholder}</span>
+      <div
+        className={`csel-trigger${open ? ' open' : ''}`}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className={selected ? '' : 'csel-ph'}>
+          {selected ? selected.label : placeholder}
+        </span>
         <span className="csel-arr">{open ? '▲' : '▼'}</span>
       </div>
       {open && (
         <div className="csel-list">
-          {options.map(o => (
-            <div key={o.value} className={`csel-opt${o.value === value ? ' sel' : ''}`}
-              onClick={() => { onChange(o.value); setOpen(false); }}>{o.label}</div>
+          {options.map((o) => (
+            <div
+              key={o.value}
+              className={`csel-opt${o.value === value ? ' sel' : ''}`}
+              onClick={() => {
+                onChange(o.value);
+                setOpen(false);
+              }}
+            >
+              {o.label}
+            </div>
           ))}
         </div>
       )}
@@ -883,10 +1435,16 @@ function EmptyState() {
     <div className="po-empty">
       <div className="po-scanlines" />
       <div className="po-empty-inner">
-        <img src="/assets/leagueLogos/mainLogo-512.png" className="po-empty-logo" alt="WN95HL"
-          onError={e => e.target.style.display='none'} />
+        <img
+          src="/assets/leagueLogos/mainLogo-512.png"
+          className="po-empty-logo"
+          alt="WN95HL"
+          onError={(e) => (e.target.style.display = 'none')}
+        />
         <div className="po-empty-title">PLAYOFF OVERLAY</div>
-        <div className="po-empty-sub">Press <span className="key">~</span> to configure</div>
+        <div className="po-empty-sub">
+          Press <span className="key">~</span> to configure
+        </div>
       </div>
     </div>
   );
@@ -902,7 +1460,8 @@ function LoadingState() {
 }
 
 function Styles() {
-  return <style>{`
+  return (
+    <style>{`
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&family=Barlow+Condensed:wght@400;600;700;800&display=swap');
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -1245,5 +1804,6 @@ function Styles() {
     }
     .csel-opt:hover { background: rgba(255,215,0,.11); color: #FFD700; }
     .csel-opt.sel   { background: rgba(255,140,0,.17); color: #FF8C00; }
-  `}</style>;
+  `}</style>
+  );
 }

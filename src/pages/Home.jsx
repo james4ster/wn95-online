@@ -196,11 +196,6 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
             <span className="icd-u">{u}</span>
           </div>
         ))}
-        {tick.d < 7 && (
-          <span style={{ fontSize: 15, marginLeft: 2 }}>
-            {tick.urgent ? '🚨' : '⚡'}
-          </span>
-        )}
       </div>
     );
   };
@@ -226,26 +221,58 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
             <span className="icd-season">{tick.seasonLabel}</span>
           ) : null}
         </div>
-        {tick?.mode !== 'offseason' && tick?.mode !== 'playoffs' && tick?.mode !== 'done' && currentSeason?.end_date && (
-          <div className="icd-enddate">
-            ENDS {new Date(currentSeason.end_date).toLocaleDateString('en-US', {
-              month: '2-digit', day: '2-digit', year: 'numeric'
-            }).replace(/\//g, '.')} {new Date(currentSeason.end_date).toLocaleTimeString('en-US', {
-              hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'
-            })} EST
-          </div>
-        )}    
-
+        {tick?.mode !== 'offseason' &&
+          tick?.mode !== 'playoffs' &&
+          tick?.mode !== 'done' &&
+          currentSeason?.end_date && (
+            <div className="icd-enddate">
+              ENDS{' '}
+              {new Date(currentSeason.end_date)
+                .toLocaleDateString('en-US', {
+                  month: '2-digit',
+                  day: '2-digit',
+                  year: 'numeric',
+                })
+                .replace(/\//g, '.')}{' '}
+              {new Date(currentSeason.end_date).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                timeZone: 'America/New_York',
+              })}{' '}
+              EST
+            </div>
+          )}
       </div>
 
       <div className="icd-right">{renderRight()}</div>
-            {seasonPace && tick?.mode !== 'offseason' && tick?.mode !== 'done' && (
+      {seasonPace && tick?.mode !== 'offseason' && tick?.mode !== 'done' && (
         <div className="icd-pace">
           {[
             { label: 'GP', value: seasonPace.totalGP },
-            { label: 'GP/DAY', value: seasonPace.gpPerDay != null ? seasonPace.gpPerDay.toFixed(1) : '—' },
-            { label: 'LEFT', value: seasonPace.isComplete ? '✓' : (seasonPace.remaining != null ? seasonPace.remaining : '—') },
-            { label: 'NEED/DAY', value: seasonPace.isComplete ? '—' : (seasonPace.paceNeeded != null ? seasonPace.paceNeeded.toFixed(1) : '—') },          ].map(({ label, value }) => (
+            {
+              label: 'GP/DAY',
+              value:
+                seasonPace.gpPerDay != null
+                  ? seasonPace.gpPerDay.toFixed(1)
+                  : '—',
+            },
+            {
+              label: 'LEFT',
+              value: seasonPace.isComplete
+                ? '✓'
+                : seasonPace.remaining != null
+                ? seasonPace.remaining
+                : '—',
+            },
+            {
+              label: 'NEED/DAY',
+              value: seasonPace.isComplete
+                ? '—'
+                : seasonPace.paceNeeded != null
+                ? seasonPace.paceNeeded.toFixed(1)
+                : '—',
+            },
+          ].map(({ label, value }) => (
             <div key={label} className="icd-pace-cell">
               <span className="icd-pace-val">{value}</span>
               <span className="icd-pace-lbl">{label}</span>
@@ -288,14 +315,19 @@ const SL_PANELS = [
     sub: 'Active loss streaks',
   },
   { id: 'scorers', icon: '⭐', label: 'TOP SCORERS', sub: 'Points leaders' },
-  { id: 'shame',   icon: '🤮', label: 'SHAME LIST',     sub: 'Biggest Offenders' },
-
+  { id: 'shame', icon: '🤮', label: 'SHAME LIST', sub: 'Biggest Offenders' },
 ];
 
 function Spotlight({
-  recentForm, winStreaks, lossStreaks, loading,
-  topSeasonScorers, isPlayoffActive,
-  teamGP, teamNameMap, seasonTeams,
+  recentForm,
+  winStreaks,
+  lossStreaks,
+  loading,
+  topSeasonScorers,
+  isPlayoffActive,
+  teamGP,
+  teamNameMap,
+  seasonTeams,
 }) {
   const [idx, setIdx] = useState(2);
   const goTo = (i) => setIdx(i);
@@ -304,39 +336,70 @@ function Spotlight({
   const rows = () => {
     if (loading)
       return [1, 2, 3, 4].map((i) => (
-        <div key={i} className="skel" style={{ height: 24, margin: '.12rem .65rem' }} />
+        <div
+          key={i}
+          className="skel"
+          style={{ height: 24, margin: '.12rem .65rem' }}
+        />
       ));
 
     if (p.id === 'hot' || p.id === 'cold') {
       const list = p.id === 'hot' ? recentForm.hot : recentForm.cold;
-      if (!list.length) return <div className="sl-empty">No data available</div>;
+      if (!list.length)
+        return <div className="sl-empty">No data available</div>;
       return list.map((t, i) => (
         <div key={t.team} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img src={`/assets/teamLogos/${t.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img
+            src={`/assets/teamLogos/${t.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{t.team}</span>
           <div className="sl-dots">
             {t.last10.map((w, j) => (
-              <span key={j} className={`sl-dot ${w ? 'sl-dot-w' : 'sl-dot-l'}`} />
+              <span
+                key={j}
+                className={`sl-dot ${w ? 'sl-dot-w' : 'sl-dot-l'}`}
+              />
             ))}
           </div>
-          <span className={`sl-val ${p.id === 'hot' ? 'sl-val-hot' : 'sl-val-cold'}`}>{t.w}-{t.l}</span>
+          <span
+            className={`sl-val ${
+              p.id === 'hot' ? 'sl-val-hot' : 'sl-val-cold'
+            }`}
+          >
+            {t.w}-{t.l}
+          </span>
         </div>
       ));
     }
 
     if (p.id === 'wstreak') {
-      if (!winStreaks.length) return <div className="sl-empty">No active win streaks</div>;
+      if (!winStreaks.length)
+        return <div className="sl-empty">No active win streaks</div>;
       return winStreaks.slice(0, 5).map((s, i) => (
         <div key={s.team} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
             {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
               <span key={j} className="sl-dot sl-dot-w" />
             ))}
-            {s.count > 10 && <span className="sl-dots-more">+{s.count - 10}</span>}
+            {s.count > 10 && (
+              <span className="sl-dots-more">+{s.count - 10}</span>
+            )}
           </div>
           <span className="sl-val sl-val-hot">{s.count}W</span>
         </div>
@@ -344,17 +407,27 @@ function Spotlight({
     }
 
     if (p.id === 'lstreak') {
-      if (!lossStreaks.length) return <div className="sl-empty">No active loss streaks</div>;
+      if (!lossStreaks.length)
+        return <div className="sl-empty">No active loss streaks</div>;
       return lossStreaks.slice(0, 5).map((s, i) => (
         <div key={s.team} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{s.team}</span>
           <div className="sl-dots">
             {Array.from({ length: Math.min(s.count, 10) }, (_, j) => (
               <span key={j} className="sl-dot sl-dot-l" />
             ))}
-            {s.count > 10 && <span className="sl-dots-more">+{s.count - 10}</span>}
+            {s.count > 10 && (
+              <span className="sl-dots-more">+{s.count - 10}</span>
+            )}
           </div>
           <span className="sl-val sl-val-cold">{s.count}L</span>
         </div>
@@ -362,28 +435,49 @@ function Spotlight({
     }
 
     if (p.id === 'scorers') {
-      if (!topSeasonScorers?.length) return <div className="sl-empty">No scorer data</div>;
+      if (!topSeasonScorers?.length)
+        return <div className="sl-empty">No scorer data</div>;
       return topSeasonScorers.slice(0, 5).map((s, i) => (
         <div key={s.name} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img src={`/assets/teamLogos/${s.team}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-          <span className="sl-team">{s.name.trim().split(' ').slice(-1)[0]}</span>
+          <img
+            src={`/assets/teamLogos/${s.team}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
+          <span className="sl-team">
+            {s.name.trim().split(' ').slice(-1)[0]}
+          </span>
           <span className="sl-val sl-val-hot">{s.pts}</span>
         </div>
       ));
     }
 
     if (p.id === 'shame') {
-      
       const shameList = (seasonTeams || [])
-        .map(t => ({ code: t.abr, name: teamNameMap?.[t.abr]?.full || t.abr, gp: teamGP?.[t.abr] || 0 }))
+        .map((t) => ({
+          code: t.abr,
+          name: teamNameMap?.[t.abr]?.full || t.abr,
+          gp: teamGP?.[t.abr] || 0,
+        }))
         .sort((a, b) => a.gp - b.gp || a.code.localeCompare(b.code))
         .slice(0, 5);
-      if (!shameList.length) return <div className="sl-empty">No data available</div>;
+      if (!shameList.length)
+        return <div className="sl-empty">No data available</div>;
       return shameList.map((t, i) => (
         <div key={t.code} className="sl-row">
           <span className="sl-rank">#{i + 1}</span>
-          <img src={`/assets/teamLogos/${t.code}.png`} alt="" className="sl-logo" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+          <img
+            src={`/assets/teamLogos/${t.code}.png`}
+            alt=""
+            className="sl-logo"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none';
+            }}
+          />
           <span className="sl-team">{t.code}</span>
           <span className="sl-val sl-val-shame">{t.gp} GP</span>
         </div>
@@ -396,8 +490,12 @@ function Spotlight({
         {[1, 2, 3, 4, 5].map((i) => (
           <div key={i} className="sl-row" style={{ opacity: 1 - i * 0.15 }}>
             <span className="sl-rank">#{i}</span>
-            <div className="sl-bar-wrap"><div className="sl-bar" style={{ width: `${100 - i * 13}%` }} /></div>
-            <span className="sl-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>
+            <div className="sl-bar-wrap">
+              <div className="sl-bar" style={{ width: `${100 - i * 13}%` }} />
+            </div>
+            <span className="sl-val" style={{ color: 'rgba(255,255,255,.18)' }}>
+              —
+            </span>
           </div>
         ))}
         <div className="sl-coming">PLAYER STATS COMING SOON</div>
@@ -420,7 +518,9 @@ function Spotlight({
         ))}
       </div>
       <div className="sl-titlebar">
-        <span className="sl-title">{p.icon} {p.label}</span>
+        <span className="sl-title">
+          {p.icon} {p.label}
+        </span>
         <span className="sl-sub">{p.sub}</span>
       </div>
       <div className="sl-body">{rows()}</div>
@@ -431,7 +531,6 @@ function Spotlight({
 /* ═══════════════════════════════════════════════════════════════
    LEAGUE — Daily AI-Generated Newspaper
 ═══════════════════════════════════════════════════════════════ */
-
 
 function todayStamp() {
   return new Date().toISOString().slice(0, 10);
@@ -456,7 +555,11 @@ const getMeta = (t) => STORY_META[t] || STORY_META.hot_streak;
    Fetch from Supabase edge fn
    Now receives: teamNameMap (abr→{city,nickname,full}) + topScorers
 ───────────────────────────────────────────────────────────── */
-async function fetchGazetteEdition({ leagueLabel, currentSeason, isPlayoffActive }) {
+async function fetchGazetteEdition({
+  leagueLabel,
+  currentSeason,
+  isPlayoffActive,
+}) {
   const isOffseason = currentSeason?.status === 'offseason';
   const season = currentSeason?.lg || leagueLabel;
 
@@ -478,15 +581,23 @@ async function fetchGazetteEdition({ leagueLabel, currentSeason, isPlayoffActive
       .limit(1)
       .maybeSingle();
 
-      const cached = res.data;
-      if (!cached?.data) {
-        console.log('[Gazette] No cache found for', cacheKey);
-        return null;
-      }
-      // Serve most recent row regardless of date — cron writes UTC dates which
-      // can be ahead of the browser's local date, causing a false "stale" result.
-      console.log('[Gazette] ✅ Serving cached edition for', cacheKey, '(date:', cached.date, ')');
-      return typeof cached.data === 'string' ? JSON.parse(cached.data) : cached.data;
+    const cached = res.data;
+    if (!cached?.data) {
+      console.log('[Gazette] No cache found for', cacheKey);
+      return null;
+    }
+    // Serve most recent row regardless of date — cron writes UTC dates which
+    // can be ahead of the browser's local date, causing a false "stale" result.
+    console.log(
+      '[Gazette] ✅ Serving cached edition for',
+      cacheKey,
+      '(date:',
+      cached.date,
+      ')'
+    );
+    return typeof cached.data === 'string'
+      ? JSON.parse(cached.data)
+      : cached.data;
   } catch (e) {
     console.log('[Gazette] Cache lookup failed:', e.message);
     return null;
@@ -572,7 +683,7 @@ function LeagueGazette({
   const [featuredSrc, setFeaturedSrc] = useState(null);
   const [useBanner, setUseBanner] = useState(false);
   const probeRef = useRef(null);
-  
+
   const team = edition?.featured_team || '';
   // Resolve to a team code even if AI returned a full name
   const teamCode =
@@ -580,74 +691,72 @@ function LeagueGazette({
       ([code, info]) => info.full === team || code === team
     )?.[0] || team;
 
-    useEffect(() => {
-      if (!teamCode) return;
-      setFeaturedSrc(null);
-      setUseBanner(false);
-    
-      const isOffseason = currentSeason?.status === 'offseason';
-    
-      if (edition?.champion_team && currentSeason?.status === 'playoffs') {
-        setFeaturedSrc(`/assets/team-art/champ/${teamCode}.png`);
+  useEffect(() => {
+    if (!teamCode) return;
+    setFeaturedSrc(null);
+    setUseBanner(false);
+
+    const isOffseason = currentSeason?.status === 'offseason';
+
+    if (edition?.champion_team && currentSeason?.status === 'playoffs') {
+      setFeaturedSrc(`/assets/team-art/champ/${teamCode}.png`);
+      return;
+    }
+
+    const found = [];
+    let cancelled = false;
+
+    const check = (n) => {
+      if (cancelled) return;
+      if (n > 10) {
+        found.length > 0
+          ? setFeaturedSrc(found[Math.floor(Math.random() * found.length)])
+          : setUseBanner(true);
         return;
       }
-    
-      const found = [];
-      let cancelled = false;
-    
-      const check = (n) => {
-        if (cancelled) return;
-        if (n > 10) {
-          found.length > 0
-            ? setFeaturedSrc(found[Math.floor(Math.random() * found.length)])
-            : setUseBanner(true);
-          return;
+      const url = `/assets/team-art/random/${teamCode}${n}.png`;
+      const img = new Image();
+      img.onload = () => {
+        if (!cancelled) {
+          found.push(url);
+          check(n + 1);
         }
-        const url = `/assets/team-art/random/${teamCode}${n}.png`;
-        const img = new Image();
-        img.onload = () => {
-          if (!cancelled) {
-            found.push(url);
-            check(n + 1);
-          }
-        };
-        img.onerror = () => {
-          if (!cancelled) check(n + 1);
-        };
-        img.src = url;
       };
-    
-      check(1);
-    
-      return () => {
-        cancelled = true;
+      img.onerror = () => {
+        if (!cancelled) check(n + 1);
       };
-    }, [teamCode, edition?.champion_team, currentSeason?.status]);
-  
-   
+      img.src = url;
+    };
 
-    const load = useCallback(async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const data = await fetchGazetteEdition({
-          leagueLabel,
-          currentSeason,
-          isPlayoffActive,
-        });
-        if (!data) {
-          console.log('[Gazette] No cached edition — not displaying');
-          setEdition(null);
-        } else {
-          setEdition(data);
-        }
-      } catch (e) {
-        console.error('[Gazette]', e);
-        setError(true);
-      } finally {
-        setLoading(false);
+    check(1);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [teamCode, edition?.champion_team, currentSeason?.status]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchGazetteEdition({
+        leagueLabel,
+        currentSeason,
+        isPlayoffActive,
+      });
+      if (!data) {
+        console.log('[Gazette] No cached edition — not displaying');
+        setEdition(null);
+      } else {
+        setEdition(data);
       }
-    }, [leagueLabel, currentSeason?.lg, currentSeason?.status, isPlayoffActive]);
+    } catch (e) {
+      console.error('[Gazette]', e);
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, [leagueLabel, currentSeason?.lg, currentSeason?.status, isPlayoffActive]);
 
   const loadedKeyRef = useRef(null);
 
@@ -664,7 +773,6 @@ function LeagueGazette({
     load(true);
   };
 
-  
   const meta = getMeta(edition?.story_type);
   const lgKey = leagueLabel?.match(/[A-Za-z]/g)?.[0]?.toLowerCase() || 'w';
   const dateStr = new Date().toLocaleDateString('en-US', {
@@ -684,7 +792,6 @@ function LeagueGazette({
   // Full name for the hero footer — key into map by teamCode, not team
   const featFullName = teamNameMap[teamCode]?.full || teamCode;
 
-  
   return (
     <div
       className="si-wrap"
@@ -764,33 +871,39 @@ function LeagueGazette({
             {/* CENTER — team hero */}
             <div className="si-col-center">
               <div className="si-hero">
-              <div className="si-hero-bg">
-              {featuredSrc ? (
-                <img
-                  src={featuredSrc}
-                  alt=""
-                  className={edition?.champion_team ? 'si-hero-champ' : 'si-hero-featured'}
-                  onError={() => setUseBanner(true)}
-                />
-              ) : (
-                <img
-                  src={`/assets/banners/${teamCode}.png`}
-                  alt=""
-                  className="si-hero-banner"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-              )}
-              <div className="si-hero-vignette" />
-            </div>
+                <div className="si-hero-bg">
+                  {featuredSrc ? (
+                    <img
+                      src={featuredSrc}
+                      alt=""
+                      className={
+                        edition?.champion_team
+                          ? 'si-hero-champ'
+                          : 'si-hero-featured'
+                      }
+                      onError={() => setUseBanner(true)}
+                    />
+                  ) : (
+                    <img
+                      src={`/assets/banners/${teamCode}.png`}
+                      alt=""
+                      className="si-hero-banner"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                      }}
+                    />
+                  )}
+                  <div className="si-hero-vignette" />
+                </div>
                 <div className="si-hero-body">
-                <img
-                  src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
-                  alt={teamCode}
-                  className="si-hero-logo"
-                  onError={(e) => {
-                    e.currentTarget.style.opacity = '0';
-                  }}
-                />
+                  <img
+                    src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
+                    alt={teamCode}
+                    className="si-hero-logo"
+                    onError={(e) => {
+                      e.currentTarget.style.opacity = '0';
+                    }}
+                  />
                 </div>
                 <div className="si-hero-foot">
                   {/* Show full team name in hero footer */}
@@ -1366,7 +1479,7 @@ export default function Home() {
   const [newsItems, setNewsItems] = useState([]);
   const [topSeasonScorers, setTopSeasonScorers] = useState([]);
   const [seasonTeams, setSeasonTeams] = useState([]);
-  const [teamGP, setTeamGP] = useState({});       // { teamCode: gameCount }
+  const [teamGP, setTeamGP] = useState({}); // { teamCode: gameCount }
   const [seasonPace, setSeasonPace] = useState(null); // { totalGP, gpPerDay, remaining, paceNeeded }
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
@@ -1438,29 +1551,31 @@ export default function Home() {
     });
     setCurrentSeason(latest);
 
-
     // Resolve champion team abr for offseason display
-      let resolvedChampion = null;
-      if (latest.status === 'offseason' && latest.season_champion_manager_id) {
-        // Champion is on the current (offseason) season row
-        const { data: champTeam } = await supabase
-          .from('teams')
-          .select('abr')
-          .eq('manager_id', latest.season_champion_manager_id)
-          .eq('lg', latest.lg)
-          .single();
-        resolvedChampion = champTeam?.abr || null;
-      } else if (latest.status === 'playoffs' && latest.season_champion_manager_id) {
-        // Champion already crowned during playoffs
-        const { data: champTeam } = await supabase
-          .from('teams')
-          .select('abr')
-          .eq('manager_id', latest.season_champion_manager_id)
-          .eq('lg', latest.lg)
-          .single();
-        resolvedChampion = champTeam?.abr || null;
-      }
-      setChampionTeam(resolvedChampion);
+    let resolvedChampion = null;
+    if (latest.status === 'offseason' && latest.season_champion_manager_id) {
+      // Champion is on the current (offseason) season row
+      const { data: champTeam } = await supabase
+        .from('teams')
+        .select('abr')
+        .eq('manager_id', latest.season_champion_manager_id)
+        .eq('lg', latest.lg)
+        .single();
+      resolvedChampion = champTeam?.abr || null;
+    } else if (
+      latest.status === 'playoffs' &&
+      latest.season_champion_manager_id
+    ) {
+      // Champion already crowned during playoffs
+      const { data: champTeam } = await supabase
+        .from('teams')
+        .select('abr')
+        .eq('manager_id', latest.season_champion_manager_id)
+        .eq('lg', latest.lg)
+        .single();
+      resolvedChampion = champTeam?.abr || null;
+    }
+    setChampionTeam(resolvedChampion);
 
     /* Capture Season for Countdown */
     const futureSeasons = (seasons || [])
@@ -1491,9 +1606,11 @@ export default function Home() {
         )
         .eq('lg', latest.lg)
         .order('id', { ascending: false }),
-        supabase
+      supabase
         .from('playoff_games')
-        .select('id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length,game_date')
+        .select(
+          'id,lg,team_code_a,team_code_b,team_a_score,team_b_score,round,game_number,series_number,series_length,game_date'
+        )
         .eq('lg', latest.lg)
         .not('team_a_score', 'is', null)
         .order('id', { ascending: false }),
@@ -1583,15 +1700,19 @@ export default function Home() {
     setTeamGP(gpByTeam);
 
     // Total unique games played (not summed per team)
-    const totalGP = (allGames || []).filter(g => g.score_home != null).length;
+    const totalGP = (allGames || []).filter((g) => g.score_home != null).length;
 
     // Pace calc using season dates
     const today = Date.now();
-    const startMs = latest.start_date ? new Date(latest.start_date).getTime() : null;
-    const endMs   = latest.end_date   ? new Date(latest.end_date).getTime()   : null;
-    const daysElapsed  = startMs ? Math.max(1, (today - startMs) / 86400000)  : null;
-    const daysTotal    = (startMs && endMs) ? (endMs - startMs) / 86400000    : null;
-    const daysLeft     = endMs ? Math.max(0, (endMs - today) / 86400000)      : null;
+    const startMs = latest.start_date
+      ? new Date(latest.start_date).getTime()
+      : null;
+    const endMs = latest.end_date ? new Date(latest.end_date).getTime() : null;
+    const daysElapsed = startMs
+      ? Math.max(1, (today - startMs) / 86400000)
+      : null;
+    const daysTotal = startMs && endMs ? (endMs - startMs) / 86400000 : null;
+    const daysLeft = endMs ? Math.max(0, (endMs - today) / 86400000) : null;
 
     // Expected total games = teams/2 × games_per_team_scheduled
     // Simpler: use rs_games_vs from seasons row if available, else skip
@@ -1600,17 +1721,18 @@ export default function Home() {
     const totalExpected = numTeams > 1 ? numTeams * (numTeams - 1) : null;
 
     // Guard: if we've met or exceeded expected, season is effectively complete
-    const remaining = totalExpected != null
-      ? Math.max(0, totalExpected - totalGP)
-      : null;
+    const remaining =
+      totalExpected != null ? Math.max(0, totalExpected - totalGP) : null;
 
-    const paceNeeded = (remaining != null && remaining > 0 && daysLeft > 0)
-      ? remaining / daysLeft
-      : remaining === 0 ? null : null;  // null shows '—' when done or unknown
+    const paceNeeded =
+      remaining != null && remaining > 0 && daysLeft > 0
+        ? remaining / daysLeft
+        : remaining === 0
+        ? null
+        : null; // null shows '—' when done or unknown
 
-    const gpPerDay = (daysElapsed && daysElapsed > 1)
-      ? totalGP / daysElapsed
-      : null;
+    const gpPerDay =
+      daysElapsed && daysElapsed > 1 ? totalGP / daysElapsed : null;
 
     setSeasonPace({
       totalGP,
@@ -1748,13 +1870,18 @@ export default function Home() {
     // ── Top scorers — playoff takes priority over regular season ──────────────
     // Use playoff_game_id from recentPlayoffNorm; only use season IDs as fallback.
     // Use most recently played series only
-      const maxDate = (allPlayoffGames || []).reduce((best, g) => 
-      (g.game_date ?? '') > best ? (g.game_date ?? '') : best, '');
-      const mostRecentGame = (allPlayoffGames || []).find((g) => g.game_date === maxDate);
-      const recentSeriesGames = (allPlayoffGames || []).filter(
-      (g) => g.round === mostRecentGame?.round && 
-            g.series_number === mostRecentGame?.series_number
-      );
+    const maxDate = (allPlayoffGames || []).reduce(
+      (best, g) => ((g.game_date ?? '') > best ? g.game_date ?? '' : best),
+      ''
+    );
+    const mostRecentGame = (allPlayoffGames || []).find(
+      (g) => g.game_date === maxDate
+    );
+    const recentSeriesGames = (allPlayoffGames || []).filter(
+      (g) =>
+        g.round === mostRecentGame?.round &&
+        g.series_number === mostRecentGame?.series_number
+    );
     const recentPlayoffIds = recentSeriesGames.slice(0, 5).map((g) => g.id);
     const recentSeasonIds = isPlayoffActive
       ? [] // suppress season scoring when playoffs are active
@@ -2023,7 +2150,12 @@ export default function Home() {
       <div className="cg">
         {/* ── LEFT COLUMN ── */}
         <div className="cg-a">
-          <InlineCountdown cfg={cfg} tick={tick} seasonPace={seasonPace} currentSeason={currentSeason} />
+          <InlineCountdown
+            cfg={cfg}
+            tick={tick}
+            seasonPace={seasonPace}
+            currentSeason={currentSeason}
+          />
           <Spotlight
             recentForm={recentForm}
             winStreaks={winStreaks}
@@ -2035,7 +2167,7 @@ export default function Home() {
             teamNameMap={teamNameMap}
             seasonTeams={seasonTeams}
           />
-         {/* ======== UNCOMMENTING THIS WILL DISPLAY TRANSACTIONS PANEL ==================== 
+          {/* ======== UNCOMMENTING THIS WILL DISPLAY TRANSACTIONS PANEL ==================== 
             <section className="panel">
             <PanelHeader icon="🔄" title="TRANSACTIONS" />
 
@@ -2054,7 +2186,7 @@ export default function Home() {
                 ))
               )}
             </div>
-                </section> { */ }
+                </section> { */}
         </div>
 
         {/* ── CENTER COLUMN — GAZETTE ── */}

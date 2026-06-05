@@ -1726,7 +1726,7 @@ export default function Home() {
 
     const paceNeeded =
       remaining != null && remaining > 0 && daysLeft > 0
-        ? remaining / daysLeft
+        ? remaining / Math.max(1, daysLeft)
         : remaining === 0
         ? null
         : null; // null shows '—' when done or unknown

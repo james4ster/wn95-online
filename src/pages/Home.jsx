@@ -245,8 +245,8 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
       </div>
 
       <div className="icd-right">{renderRight()}</div>
-      {seasonPace && tick?.mode !== 'offseason' && tick?.mode !== 'done' && (
-        <div className="icd-pace">
+      {seasonPace && tick?.mode !== 'offseason' && tick?.mode !== 'done' && tick?.mode !== 'playoffs' && (
+           <div className="icd-pace">
           {[
             { label: 'GP', value: seasonPace.totalGP },
             {

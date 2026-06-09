@@ -1452,6 +1452,204 @@ function LeagueGazette({
   );
 }
 
+function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamNameMap }) {
+  // Build eliminated set and seed map from series data
+  const { eliminated, seedMap } = useMemo(() => {
+    const eliminated = new Set();
+    const seedMap = {}; // code → seed number
+
+    playoffSeriesData.forEach((s) => {
+      // Record seeds
+      if (s.seed_a != null) seedMap[s.team_code_a] = s.seed_a;
+      if (s.seed_b != null) seedMap[s.team_code_b] = s.seed_b;
+      // Mark eliminated
+      const needed = Math.ceil((s.series_length ?? 7) / 2);
+      if (s.wins_a >= needed) eliminated.add(s.team_code_b);
+      else if (s.wins_b >= needed) eliminated.add(s.team_code_a);
+    });
+
+    return { eliminated, seedMap };
+  }, [playoffSeriesData]);
+
+  // Sort teams by seed (1–8 top row, 9–16 bottom row)
+  const playoffTeams = useMemo(() => {
+    return [...playoffTeamCodes].sort((a, b) => {
+      const sa = seedMap[a] ?? 99;
+      const sb = seedMap[b] ?? 99;
+      return sa - sb;
+    });
+  }, [playoffTeamCodes, seedMap]);
+
+  if (!playoffTeams.length) return null;
+
+  const remaining = playoffTeams.filter((c) => !eliminated.has(c)).length;
+
+  // Split into two rows of 8: seeds 1-8 top, 9-16 bottom
+  const topRow = playoffTeams.filter((c) => (seedMap[c] ?? 99) <= 8);
+  const bottomRow = playoffTeams.filter((c) => (seedMap[c] ?? 99) > 8);
+
+  const TeamTile = ({ code }) => {
+    const isOut = eliminated.has(code);
+    const seed = seedMap[code];
+    return (
+      <div
+        className={`peb-team ${isOut ? 'peb-out' : 'peb-alive'}`}
+        title={teamNameMap[code]?.full || code}
+      >
+        <div className="peb-logo-wrap">
+          {seed != null && (
+            <span className="peb-seed">{seed}</span>
+          )}
+          <img
+            src={`/assets/teamLogos/${code}.png`}
+            alt={code}
+            className="peb-logo"
+            onError={(e) => { e.currentTarget.style.opacity = '0'; }}
+          />
+        </div>
+        <span className="peb-code">{code}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="peb-wrap">
+      <div className="peb-header">
+        <span className="peb-title">🏒 PLAYOFF FIELD</span>
+        <span className="peb-remaining">{remaining} REMAINING</span>
+      </div>
+      <div className="peb-rows">
+        <div className="peb-grid">
+          {topRow.map((code) => <TeamTile key={code} code={code} />)}
+        </div>
+        {bottomRow.length > 0 && (
+          <div className="peb-grid">
+            {bottomRow.map((code) => <TeamTile key={code} code={code} />)}
+          </div>
+        )}
+      </div>
+      <style>{`
+        .peb-wrap {
+          margin-bottom: .6rem;
+          padding: .55rem .72rem .52rem;
+          background: linear-gradient(135deg, rgba(255,180,0,.05) 0%, rgba(0,0,0,.45) 100%);
+          border: 1.5px solid rgba(255,180,0,.16);
+          border-radius: 10px;
+          overflow: hidden;
+          position: relative;
+        }
+        .peb-wrap::before {
+          content: '';
+          position: absolute; inset: 0; pointer-events: none;
+          background: radial-gradient(ellipse 80% 55% at 50% 0%, rgba(255,180,0,.07), transparent 70%);
+        }
+        .peb-header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: .42rem; position: relative;
+        }
+        .peb-title {
+          font-family: 'Press Start 2P', monospace; font-size: 8.5px;
+          color: rgba(255,180,0,.75); letter-spacing: 2.5px;
+        }
+        .peb-remaining {
+          font-family: 'Press Start 2P', monospace; font-size: 7px;
+          color: rgba(0,200,100,.6); letter-spacing: 1.5px;
+          background: rgba(0,200,100,.08);
+          border: 1px solid rgba(0,200,100,.2);
+          border-radius: 3px; padding: .18rem .4rem;
+        }
+        .peb-rows {
+          display: flex; flex-direction: column; gap: .32rem;
+        }
+        .peb-grid {
+          display: grid;
+          grid-template-columns: repeat(8, 1fr);
+          gap: .32rem;
+        }
+        .peb-team {
+          display: flex; flex-direction: column; align-items: center; gap: 4px;
+          padding: .3rem .1rem .22rem;
+          border-radius: 7px;
+          transition: transform .18s;
+          cursor: default;
+        }
+        .peb-alive {
+          background: rgba(255,255,255,.03);
+          border: 1px solid rgba(255,255,255,.08);
+        }
+        .peb-alive:hover {
+          transform: translateY(-2px);
+        }
+        .peb-out {
+          background: rgba(0,0,0,.25);
+          border: 1px solid rgba(255,255,255,.04);
+        }
+        .peb-team {
+          display: flex; flex-direction: column; align-items: center; gap: 4px;
+          padding: .3rem .1rem .22rem;
+          border-radius: 7px;
+          transition: transform .18s;
+          cursor: default;
+          overflow: visible;
+        }
+        .peb-seed {
+          position: absolute;
+          top: 1px; left: 1px;
+          z-index: 3;
+          font-family: 'Press Start 2P', monospace;
+          font-size: 6px;
+          line-height: 1;
+          color: #000;
+          background: #FFD700;
+          border-radius: 3px;
+          padding: 2px 3px;
+          box-shadow: 0 0 4px rgba(255,215,0,.6);
+          min-width: 12px;
+          text-align: center;
+        }
+        .peb-logo {
+          width: 38px; height: 38px;
+          object-fit: contain; display: block;
+          border-radius: 6px;
+        }
+        /* Alive — green pulsing border (mirrors .logo-clinched from standings) */
+        .peb-alive .peb-logo {
+          border: 2.5px solid #00DD60;
+          box-shadow: 0 0 8px rgba(0,221,96,.55), 0 0 18px rgba(0,221,96,.2);
+          animation: pebClinchPulse 2.4s ease-in-out infinite;
+          border-radius: 6px;
+        }
+        @keyframes pebClinchPulse {
+          0%,100% { box-shadow: 0 0 7px rgba(0,221,96,.5), 0 0 14px rgba(0,221,96,.2); border-color: #00DD60; }
+          50%      { box-shadow: 0 0 13px rgba(0,255,100,.8), 0 0 26px rgba(0,255,100,.35); border-color: #00FF70; }
+        }
+        /* Eliminated — red border + desaturate (mirrors .logo-elim from standings) */
+        .peb-out .peb-logo {
+          border: 2.5px solid #FF0000;
+          box-shadow: 0 0 8px #FF0000, 0 0 16px rgba(255,0,0,.35), inset 0 0 5px rgba(255,0,0,.5);
+          filter: saturate(0.35) brightness(0.75);
+          border-radius: 6px;
+        }
+        .peb-out .peb-seed {
+          background: rgba(80,0,0,.8);
+          color: rgba(255,100,100,.7);
+          box-shadow: none;
+        }
+        .peb-code {
+          font-family: 'Press Start 2P', monospace; font-size: 6px;
+          letter-spacing: .3px; text-align: center; line-height: 1;
+        }
+        .peb-alive .peb-code { color: rgba(255,255,255,.45); }
+        .peb-out .peb-code {
+          color: rgba(255,80,80,.4);
+          text-decoration: line-through;
+          text-decoration-color: rgba(255,60,60,.35);
+        }
+      `}</style>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════
    HOME PAGE
 ═══════════════════════════════════════════════════════════════ */
@@ -1481,6 +1679,7 @@ export default function Home() {
   const [seasonTeams, setSeasonTeams] = useState([]);
   const [teamGP, setTeamGP] = useState({}); // { teamCode: gameCount }
   const [seasonPace, setSeasonPace] = useState(null); // { totalGP, gpPerDay, remaining, paceNeeded }
+  const [playoffTeamCodes, setPlayoffTeamCodes] = useState([]); // Needed for playoff field component
 
   const tick = useLeagueCountdown(currentSeason, nextSeason);
   const beltRef = useRef(null);
@@ -1598,7 +1797,7 @@ export default function Home() {
     setSeasonTeams(fetchedTeams || []);
 
     // ── Games (season + playoff merged) ──────────────────────────────────
-    const [{ data: allGames }, { data: allPlayoffGames }] = await Promise.all([
+    const [{ data: allGames }, { data: allPlayoffGames }, { data: allPlayoffScheduled }] = await Promise.all([
       supabase
         .from('games')
         .select(
@@ -1614,6 +1813,10 @@ export default function Home() {
         .eq('lg', latest.lg)
         .not('team_a_score', 'is', null)
         .order('id', { ascending: false }),
+      supabase
+        .from('playoff_games')
+        .select('team_code_a,team_code_b')
+        .eq('lg', latest.lg),
     ]);
 
     // Normalize playoff rows to same shape as games rows
@@ -1866,6 +2069,15 @@ export default function Home() {
       (a, b) => b.round - a.round || a.series_number - b.series_number
     );
     setPlayoffSeriesData(computedSeriesData);
+
+    // Needed for playoff field component - show all unique teams that appear anywhere in playoff_games for this season
+    const allPlayoffTeamCodes = [
+      ...new Set([
+        ...(allPlayoffScheduled || []).map((g) => g.team_code_a),
+        ...(allPlayoffScheduled || []).map((g) => g.team_code_b),
+      ])
+    ];
+    setPlayoffTeamCodes(allPlayoffTeamCodes);
 
     // ── Top scorers — playoff takes priority over regular season ──────────────
     // Use playoff_game_id from recentPlayoffNorm; only use season IDs as fallback.
@@ -2191,6 +2403,14 @@ export default function Home() {
 
         {/* ── CENTER COLUMN — GAZETTE ── */}
         <div className="cg-b">
+          {isPlayoffActive && (
+            <PlayoffEliminationBoard
+            playoffSeriesData={playoffSeriesData}
+            playoffTeamCodes={playoffTeamCodes}
+            teamNameMap={teamNameMap}
+            seasonTeams={seasonTeams}
+          />
+          )}
           <LeagueGazette
             leagueLabel={cfg.label}
             recentForm={recentForm}

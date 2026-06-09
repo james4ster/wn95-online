@@ -1452,7 +1452,11 @@ function LeagueGazette({
   );
 }
 
-function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamNameMap }) {
+ // Used to control versions of the exploding logos in visitors local storage
+ // Increment the version if I want to have new changes reanimate
+const ELIM_ANIM_VERSION = 'v2';
+
+function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamNameMap, currentSeason }) {
   // Build eliminated set and seed map from series data
   const { eliminated, seedMap } = useMemo(() => {
     const eliminated = new Set();
@@ -1488,26 +1492,76 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
   const topRow = playoffTeams.filter((c) => (seedMap[c] ?? 99) <= 8);
   const bottomRow = playoffTeams.filter((c) => (seedMap[c] ?? 99) > 8);
 
-  const TeamTile = ({ code }) => {
-    const isOut = eliminated.has(code);
-    const seed = seedMap[code];
+  const SHARD_CONFIGS = [
+    { bx:0,   by:0,   tx:-55, ty:-55, rot:'-145deg', dur:.65 },
+    { bx:-17, by:0,   tx:0,   ty:-70, rot:'30deg',   dur:.55 },
+    { bx:-34, by:0,   tx:60,  ty:-50, rot:'120deg',  dur:.70 },
+    { bx:0,   by:-17, tx:-65, ty:10,  rot:'-80deg',  dur:.60 },
+    { bx:-34, by:-17, tx:65,  ty:15,  rot:'95deg',   dur:.58 },
+    { bx:0,   by:-34, tx:-45, ty:60,  rot:'-110deg', dur:.72 },
+    { bx:-17, by:-34, tx:5,   ty:72,  rot:'15deg',   dur:.62 },
+    { bx:-34, by:-34, tx:58,  ty:58,  rot:'160deg',  dur:.68 },
+  ];
+  
+
+
+  const TeamTile = ({ code, isOut, seed, season, index = 0 }) => {
+    const wrapRef = useRef(null);
+    const logoRef = useRef(null);
+    const flashRef = useRef(null);
+  
+    useEffect(() => {
+      if (!isOut) return;
+      const key = `wn95_elim_${ELIM_ANIM_VERSION}_${season}_${code}`;
+
+      if (localStorage.getItem(key)) return; // already seen
+  
+      //localStorage.setItem(key, '1');
+      // hide logo until explosion reveals it
+      if (logoRef.current) logoRef.current.style.opacity = '0';
+  
+      const triggerExplosion = () => {
+        const wrap = wrapRef.current;
+        const logo = logoRef.current;
+        const flash = flashRef.current;
+        if (!wrap || !logo) return;
+        localStorage.setItem(key, '1');  // ← moved here, inside triggerExplosion
+        wrap.classList.add('peb-shake');
+        setTimeout(() => {
+          // spawn shards
+          SHARD_CONFIGS.forEach(cfg => {
+            const s = document.createElement('div');
+            s.className = 'peb-shard';
+            s.style.setProperty('--tx', `${cfg.tx}px`);
+            s.style.setProperty('--ty', `${cfg.ty}px`);
+            s.style.setProperty('--rot', cfg.rot);
+            s.style.setProperty('--dur', `${cfg.dur}s`);
+            s.style.backgroundImage = `url(/assets/teamLogos/${code}.png)`;
+            s.style.backgroundPosition = `${cfg.bx}px ${cfg.by}px`;
+            wrap.appendChild(s);
+            requestAnimationFrame(() => s.classList.add('fly'));
+            setTimeout(() => s.remove(), cfg.dur * 1000 + 50);
+          });
+          flash?.classList.add('bang');
+          setTimeout(() => flash?.classList.remove('bang'), 600);
+          setTimeout(() => {
+            if (logo) { logo.style.opacity = '1'; logo.classList.add('peb-reveal'); }
+          }, 480);
+        }, 160);
+      };
+  
+      // slight delay so page has settled
+      setTimeout(triggerExplosion, 400 + (index * 400));
+    }, [isOut, code, season]);
+  
     return (
-      <div
-        className={`peb-team ${isOut ? 'peb-out' : 'peb-alive'}`}
-        title={teamNameMap[code]?.full || code}
-      >
-        <div className="peb-logo-wrap">
-          {seed != null && (
-            <span className="peb-seed">{seed}</span>
-          )}
-          <img
-            src={`/assets/teamLogos/${code}.png`}
-            alt={code}
-            className="peb-logo"
-            onError={(e) => { e.currentTarget.style.opacity = '0'; }}
-          />
+      <div className={`peb-team ${isOut ? 'peb-out' : 'peb-alive'}`} title={teamNameMap[code]?.full || code}>
+        <div className="peb-logo-wrap" ref={wrapRef}>
+          {seed != null && <span className="peb-seed">{seed}</span>}
+          <img ref={logoRef} src={`/assets/teamLogos/${code}.png`} alt={code} className="peb-logo"
+            onError={(e) => { e.currentTarget.style.opacity = '0'; }} />
+          <div className="peb-flash" ref={flashRef} />
         </div>
-       
       </div>
     );
   };
@@ -1520,15 +1574,30 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
       </div>
       <div className="peb-rows">
         <div className="peb-grid">
-          {topRow.map((code) => <TeamTile key={code} code={code} />)}
+        {topRow.map((code, i) => (
+          <TeamTile key={code} code={code} isOut={eliminated.has(code)} seed={seedMap[code]} season={currentSeason?.lg} index={i} />))}
         </div>
         {bottomRow.length > 0 && (
           <div className="peb-grid">
-            {bottomRow.map((code) => <TeamTile key={code} code={code} />)}
+            {bottomRow.map((code, i) => (
+  <TeamTile key={code} code={code} isOut={eliminated.has(code)} seed={seedMap[code]} season={currentSeason?.lg} index={topRow.length + i} />))}
+
           </div>
         )}
       </div>
       <style>{`
+        .peb-flash { position:absolute; inset:-4px; border-radius:8px; background:#fff; opacity:0; pointer-events:none; z-index:10; }
+        .peb-flash.bang { animation: flashBang .55s ease-out forwards; }
+        @keyframes flashBang { 0%{opacity:.9;background:#fff} 15%{opacity:1;background:#FF3300} 40%{opacity:.6;background:#FF0000} 100%{opacity:0} }
+        .peb-shard { position:absolute; width:18px; height:18px; border-radius:3px; background-size:52px 52px; background-repeat:no-repeat; opacity:0; pointer-events:none; z-index:20; top:50%; left:50%; transform:translate(-50%,-50%); }
+        .peb-shard.fly { animation: shardFly var(--dur) ease-out forwards; }
+        @keyframes shardFly { 0%{opacity:1;transform:translate(-50%,-50%) translate(0,0) rotate(0deg) scale(1)} 60%{opacity:.85} 100%{opacity:0;transform:translate(-50%,-50%) translate(var(--tx),var(--ty)) rotate(var(--rot)) scale(.3)} }
+        .peb-shake { animation: logoShake .18s ease-in-out; }
+        @keyframes logoShake { 0%,100%{transform:translate(0,0) rotate(0deg)} 20%{transform:translate(-3px,2px) rotate(-4deg)} 40%{transform:translate(3px,-2px) rotate(4deg)} 60%{transform:translate(-2px,3px) rotate(-2deg)} 80%{transform:translate(2px,-1px) rotate(2deg)} }
+        .peb-reveal { animation: logoReveal .4s ease-out both; }
+        @keyframes logoReveal { from{opacity:0;transform:scale(1.2)} to{opacity:1;transform:scale(1)} }
+        .peb-logo-wrap { position: relative; width: 52px; height: 52px; }      
+
         .peb-wrap {
           margin-bottom: .6rem;
           padding: .55rem .72rem .52rem;
@@ -2399,6 +2468,7 @@ export default function Home() {
             playoffTeamCodes={playoffTeamCodes}
             teamNameMap={teamNameMap}
             seasonTeams={seasonTeams}
+            currentSeason={currentSeason}
           />
           )}
           <LeagueGazette

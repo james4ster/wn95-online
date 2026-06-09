@@ -1507,7 +1507,7 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
             onError={(e) => { e.currentTarget.style.opacity = '0'; }}
           />
         </div>
-        <span className="peb-code">{code}</span>
+       
       </div>
     );
   };
@@ -1566,13 +1566,6 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
           grid-template-columns: repeat(8, 1fr);
           gap: .32rem;
         }
-        .peb-team {
-          display: flex; flex-direction: column; align-items: center; gap: 4px;
-          padding: .3rem .1rem .22rem;
-          border-radius: 7px;
-          transition: transform .18s;
-          cursor: default;
-        }
         .peb-alive {
           background: rgba(255,255,255,.03);
           border: 1px solid rgba(255,255,255,.08);
@@ -1586,7 +1579,7 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
         }
         .peb-team {
           display: flex; flex-direction: column; align-items: center; gap: 4px;
-          padding: .3rem .1rem .22rem;
+          padding: 3px;
           border-radius: 7px;
           transition: transform .18s;
           cursor: default;
@@ -1608,7 +1601,7 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
           text-align: center;
         }
         .peb-logo {
-          width: 38px; height: 38px;
+          width: 52px; height: 52px;
           object-fit: contain; display: block;
           border-radius: 6px;
         }
@@ -1635,10 +1628,7 @@ function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamName
           color: rgba(255,100,100,.7);
           box-shadow: none;
         }
-        .peb-code {
-          font-family: 'Press Start 2P', monospace; font-size: 6px;
-          letter-spacing: .3px; text-align: center; line-height: 1;
-        }
+       
         .peb-alive .peb-code { color: rgba(255,255,255,.45); }
         .peb-out .peb-code {
           color: rgba(255,80,80,.4);

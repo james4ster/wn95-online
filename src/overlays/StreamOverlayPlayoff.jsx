@@ -100,7 +100,8 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     atkGames = 0;
   let ppg = 0,
     ppAmt = 0,
-    shg = 0;
+    shg = 0,
+    pim = 0;
   let totalSaves = 0,
     totalSA = 0;
 
@@ -147,6 +148,7 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     shg += isHome
       ? ts.home_shg || ts.home_sh_goals || 0
       : ts.away_shg || ts.away_sh_goals || 0;
+    pim += isHome ? ts.home_pens || 0 : ts.away_pens || 0;
   });
 
   const gamesPlayed = playoffGames.filter((g) => g.team_a_score != null).length;
@@ -167,6 +169,7 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     ppAmt,
     ppPct: ppAmt > 0 ? `${((ppg / ppAmt) * 100).toFixed(0)}%` : '—',
     shg,
+    pim,
     seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
     totalSaves,
     totalSA,
@@ -389,8 +392,8 @@ function buildScrollItems(
     }
   }
 
-  // SECTION 2: SEASON H2H
-  if (h2h && h2h.seasonGP > 0) {
+  // SECTION 2: SEASON H2H — only show before Game 2 (i.e. 0 or 1 completed games)
+  if (h2h && h2h.seasonGP > 0 && completed.length <= 1) {
     items.push({ type: 'section-header', label: 'SEASON H2H' });
     items.push({
       type: 'h2h-record',
@@ -1055,6 +1058,7 @@ function SidePanel({ team, skaters, teamStats }) {
               value={`${teamStats.brG}/${teamStats.brA}`}
               sub={teamStats.brPct}
             />
+            <StatRow label="PEN" value={teamStats.pim} />
             {teamStats.oneA > 0 && (
               <>
                 <StatRow label="1xG" value={teamStats.oneG} accent="blue" />

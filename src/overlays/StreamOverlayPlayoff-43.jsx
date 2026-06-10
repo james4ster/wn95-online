@@ -13,11 +13,11 @@ const ROUND_LABELS = {
 
 // Root canvas: 1024×768 (4:3)
 // Topbar: 62px | Scroller: 50px | Sidebars: 370px each | Center gap: 284px
-const ROOT_W    = 1024;
-const ROOT_H    = 768;
-const TOPBAR_H  = 62;
-const SCROLL_H  = 50;
-const SIDE_W    = 210;
+const ROOT_W    = 1920;
+const ROOT_H    = 1080;
+const TOPBAR_H  = 88;
+const SCROLL_H  = 70;
+const SIDE_W    = 393;
 const SKATER_ROWS = 8;
 
 const norm  = (s) => (s || '').trim().toLowerCase();
@@ -943,8 +943,8 @@ function Styles() {
       justify-content: flex-end; gap: 12px;
     }
     .po-league-logo {
-      height: 52px; width: auto; object-fit: contain;
-      filter: drop-shadow(0 0 10px rgba(255,215,0,.55));
+        height: 76px; width: auto; object-fit: contain;
+        filter: drop-shadow(0 0 10px rgba(255,215,0,.55));
     }
     .po-empty-logo {
       height: 90px; width: auto; object-fit: contain;
@@ -1000,7 +1000,7 @@ function Styles() {
       margin-bottom: .45rem;
     }
     .po-hero-logo {
-      width: 52px; height: 52px; object-fit: contain; flex-shrink: 0;
+      height: 72px; width: auto; object-fit: contain; flex-shrink: 0;
       filter: drop-shadow(0 0 8px rgba(255,215,0,.3));
     }
     .po-hero-code {

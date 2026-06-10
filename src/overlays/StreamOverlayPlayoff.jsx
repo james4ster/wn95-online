@@ -27,7 +27,7 @@ const LAYOUTS = {
   '4:3': {
     rootW: 1024, rootH: 768,
     topbarH: 44, scrollerH: 36,
-    sidePanelW: 190,
+    sidePanelW: 164,
     heroLogoSize: 66,
     heroWinsFontSize: '5rem',
     heroSeedFontSize: '.88rem',

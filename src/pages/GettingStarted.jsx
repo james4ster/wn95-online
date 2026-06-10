@@ -829,8 +829,9 @@ const stepData = {
                     the setup panel
                   </li>
                   <li>
-                    Select <strong>Team A</strong> and <strong>Team B</strong>{' '}
+                    Select <strong>Screen Ratio</strong>, <strong>Team A</strong> and <strong>Team B</strong>{' '}
                     from the dropdowns
+      
                   </li>
                   <li>
                     Click <strong>APPLY</strong>

@@ -867,27 +867,48 @@ const stepData = {
                   ticker with game-by-game scores, team stats, and head-to-head
                   history.
                 </p>
-
+            
                 <div className="guide-callout guide-callout-warning">
                   <div className="callout-title">⚠ IMPORTANT</div>
-
                   <div className="callout-body">
                     Copy & paste the URL below into your OBS/StreamLabs browser
                     source setting.
                   </div>
                 </div>
-
-                <p>
-                  Control Panel:{' '}
-                  <a
-                    href="/overlay-playoff"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="guide-link"
-                  >
-                    wn95-online.vercel.app/overlay-playoff
-                  </a>
-                </p>
+            
+                <div className="guide-callout guide-callout-info" style={{ marginTop: '10px' }}>
+                  <div className="callout-title">📺 PLAYING IN 4:3?</div>
+                  <div className="callout-body">
+                    If your screen ratio is <strong>4:3</strong>, use the dedicated 4:3 version of the overlay instead — it's
+                    optimized for that aspect ratio and will fit your stream properly.
+                    The default URL below is for <strong>16:9</strong>.
+                  </div>
+                </div>
+            
+                <div className="overlay-url-list" style={{ marginTop: '14px' }}>
+                  <div className="overlay-url-row">
+                    <span className="overlay-url-label">🖥️ 16:9 (Default)</span>
+                    <a
+                      href="/overlay-playoff"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="guide-link overlay-url-link"
+                    >
+                      wn95-online.vercel.app/overlay-playoff
+                    </a>
+                  </div>
+                  <div className="overlay-url-row">
+                    <span className="overlay-url-label">📺 4:3</span>
+                    <a
+                      href="/overlay-playoff-43"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="guide-link overlay-url-link"
+                    >
+                      wn95-online.vercel.app/overlay-playoff-43
+                    </a>
+                  </div>
+                </div>
               </>
             ),
           },
@@ -1586,7 +1607,8 @@ export default function GettingStarted() {
         }
         
         .overlay-url-link {
-          font-family: monospace;
+          font-family: 'Barlow Condensed', sans-serif;
+          font-size: 1.05rem;
           white-space: nowrap;
         }
 

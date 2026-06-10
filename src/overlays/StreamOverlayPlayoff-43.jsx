@@ -13,11 +13,11 @@ const ROUND_LABELS = {
 
 // Root canvas: 1024×768 (4:3)
 // Topbar: 62px | Scroller: 50px | Sidebars: 370px each | Center gap: 284px
-const ROOT_W    = 1024;
-const ROOT_H    = 768;
-const TOPBAR_H  = 62;
+const ROOT_W    = 1920;
+const ROOT_H    = 1080;
+const TOPBAR_H  = 88;
 const SCROLL_H  = 50;
-const SIDE_W    = 210;
+const SIDE_W    = 393;
 const SKATER_ROWS = 8;
 
 const norm  = (s) => (s || '').trim().toLowerCase();
@@ -88,7 +88,7 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
   let gf = 0, ga = 0, sh = 0, sa = 0;
   let brG = 0, brA = 0, oneG = 0, oneA = 0;
   let atkSec = 0, atkGames = 0;
-  let ppg = 0, ppAmt = 0, shg = 0;
+  let ppg = 0, ppAmt = 0, shg = 0, pim = 0;;
   let totalSaves = 0, totalSA = 0;
 
   (rawScoring || []).forEach((r) => {
@@ -126,6 +126,7 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     ppg  += isHome ? ts.home_pp_g   || 0 : ts.away_pp_g   || 0;
     ppAmt += isHome ? ts.home_pp_amt || 0 : ts.away_pp_amt || 0;
     shg  += isHome ? ts.home_shg || ts.home_sh_goals || 0 : ts.away_shg || ts.away_sh_goals || 0;
+    pim  += isHome ? ts.home_pens || 0 : ts.away_pens || 0;
   });
 
   const gamesPlayed = playoffGames.filter((g) => g.team_a_score != null).length;
@@ -140,6 +141,7 @@ function buildTeamSeriesStats(teamStats, rawScoring, playoffGames, teamCode) {
     shg,
     seriesSvPct: totalSA > 0 ? svPct(totalSaves, totalSA) : '—',
     totalSaves, totalSA,
+    pim,
   };
 }
 
@@ -147,7 +149,7 @@ function buildH2HTeamStats(rsGames, rsTeamStats, coachA, coachB, teamA, teamB, f
   let gf = 0, ga = 0, sh = 0, sa = 0;
   let brG = 0, brA = 0, oneG = 0, oneA = 0;
   let atkSec = 0, atkGames = 0;
-  let ppg = 0, ppAmt = 0, shg = 0;
+  let ppg = 0, ppAmt = 0, shg = 0, pim = 0;
   let totalSaves = 0, totalSA = 0, gp = 0;
 
   (rsGames || []).forEach((g) => {
@@ -261,8 +263,8 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
           bkB:   aIsHome ? `${ts.away_break_goals}/${ts.away_break_attempts}` : `${ts.home_break_goals}/${ts.home_break_attempts}`,
           ppA:   aIsHome ? `${ts.home_pp_g}/${ts.home_pp_amt}` : `${ts.away_pp_g}/${ts.away_pp_amt}`,
           ppB:   aIsHome ? `${ts.away_pp_g}/${ts.away_pp_amt}` : `${ts.home_pp_g}/${ts.home_pp_amt}`,
-          pimA:  aIsHome ? ts.home_pim : ts.away_pim,
-          pimB:  aIsHome ? ts.away_pim : ts.home_pim,
+          pimA:  aIsHome ? ts.home_pens : ts.away_pens,
+          pimB:  aIsHome ? ts.away_pens : ts.home_pens,
           fowA:  aIsHome ? ts.home_fow : ts.away_fow,
           fowB:  aIsHome ? ts.away_fow : ts.home_fow,
         });
@@ -270,8 +272,8 @@ function buildScrollItems(playoffGames, rawScoring, teamStats, teamA, teamB, h2h
     }
   }
 
-  // SECTION 2: SEASON H2H
-  if (h2h && h2h.seasonGP > 0) {
+  // SECTION 2: SEASON H2H — only show before any playoff games are played
+  if (h2h && h2h.seasonGP > 0 && completed.length === 0) {
     items.push({ type: 'section-header', label: 'SEASON H2H' });
     items.push({ type: 'h2h-record', teamA, teamB, aW: h2h.seasonAW, bW: h2h.seasonBW, ties: h2h.seasonTies, gp: h2h.seasonGP });
     (h2h.seasonGames || []).forEach((g, i) => {
@@ -671,6 +673,7 @@ function SidePanel43({ team, wins, seed, winsNeeded, side, skaters, teamStats })
             <StatRow label="SH"  value={teamStats.sh}  sub={`${(teamStats.sh/gp).toFixed(1)}/gm`} />
             <StatRow label="SA"  value={teamStats.sa}  sub={`${(teamStats.sa/gp).toFixed(1)}/gm`} />
             <StatRow label="BRK" value={`${teamStats.brG}/${teamStats.brA}`} sub={teamStats.brPct} />
+            <StatRow label="PEN" value={teamStats.pim} />
             {teamStats.oneA > 0 && (
               <>
                 <StatRow label="1xG" value={teamStats.oneG} accent="blue" />
@@ -943,8 +946,8 @@ function Styles() {
       justify-content: flex-end; gap: 12px;
     }
     .po-league-logo {
-      height: 52px; width: auto; object-fit: contain;
-      filter: drop-shadow(0 0 10px rgba(255,215,0,.55));
+        height: 76px; width: auto; object-fit: contain;
+        filter: drop-shadow(0 0 10px rgba(255,215,0,.55));
     }
     .po-empty-logo {
       height: 90px; width: auto; object-fit: contain;
@@ -1000,7 +1003,7 @@ function Styles() {
       margin-bottom: .45rem;
     }
     .po-hero-logo {
-      width: 52px; height: 52px; object-fit: contain; flex-shrink: 0;
+      height: 72px; width: auto; object-fit: contain; flex-shrink: 0;
       filter: drop-shadow(0 0 8px rgba(255,215,0,.3));
     }
     .po-hero-code {
@@ -1056,16 +1059,16 @@ function Styles() {
 
     /* ── SKATERS + STATS ── */
     .po-section-label {
-      font-family: 'Press Start 2P', monospace; font-size: .40rem;
-      color: #FF8C00; letter-spacing: 2px;
-      padding: .28rem .6rem .14rem;
+        font-family: 'Press Start 2P', monospace; font-size: .52rem;
+        color: #FF8C00; letter-spacing: 2px;
+        padding: .35rem .6rem .18rem;
       background: rgba(255,140,0,.06);
       border-bottom: 1px solid rgba(255,140,0,.14);
       border-top: 1px solid rgba(255,255,255,.03);
     }
     .po-table { width: 100%; border-collapse: collapse; }
     .po-th {
-      font-family: 'Press Start 2P', monospace; font-size: .34rem;
+      font-family: 'Press Start 2P', monospace; font-size: .64rem;
       color: rgba(255,255,255,.42); padding: .08rem .3rem;
       text-align: center; background: rgba(0,0,0,.2);
       border-bottom: 1px solid rgba(255,215,0,.06);
@@ -1093,9 +1096,9 @@ function Styles() {
     }
     .po-stat-row:nth-child(even) { background: rgba(255,255,255,.018); }
     .po-stat-label {
-      font-family: 'Press Start 2P', monospace; font-size: .34rem;
-      color: rgba(255,255,255,.48); letter-spacing: 1px;
-    }
+        font-family: 'Press Start 2P', monospace; font-size: .50rem;
+        color: rgba(255,255,255,.85); letter-spacing: 1px;
+      }
     .po-stat-val {
       font-family: 'VT323', monospace; font-size: 1.28rem;
       color: #FFFFFF; text-align: left; line-height: 1;
@@ -1105,7 +1108,7 @@ function Styles() {
     .po-stat-val.accent-blue  { color: #87CEEB; text-shadow: 0 0 8px rgba(135,206,235,.4); }
     .po-stat-val.accent-green { color: #4cff91; text-shadow: 0 0 8px rgba(76,255,145,.4); }
     .po-stat-sub {
-       font-family: 'Barlow Condensed', sans-serif; font-size: .72rem;
+       font-family: 'Barlow Condensed', sans-serif; font-size: .96rem;
        color: rgba(255,255,255,.36); text-align: right; white-space: nowrap;
     }
 
@@ -1122,15 +1125,15 @@ function Styles() {
       height: 100%; white-space: nowrap; will-change: transform;
     }
     .sc-item {
-      display: inline-flex; align-items: center; gap: 8px; padding: 0 30px;
-      font-family: 'Barlow Condensed', sans-serif;
-      font-size: 1.08rem; font-weight: 600; letter-spacing: .4px;
+        display: inline-flex; align-items: center; gap: 8px; padding: 0 30px;
+        font-family: 'Barlow Condensed', sans-serif;
+        font-size: .95rem; font-weight: 600; letter-spacing: .4px;
       border-right: 2px solid rgba(255,215,0,.08);
     }
     .sc-section-hdr {
-      display: inline-flex; align-items: center; gap: 10px;
-      padding: 0 26px; margin: 0 4px;
-      font-family: 'Press Start 2P', monospace; font-size: .64rem;
+        display: inline-flex; align-items: center; gap: 10px;
+        padding: 0 26px; margin: 0 4px;
+        font-family: 'Press Start 2P', monospace; font-size: .52rem;
       color: #FFD700; letter-spacing: 3px;
       text-shadow: 0 0 10px rgba(255,215,0,.6);
       background: rgba(255,215,0,.08);

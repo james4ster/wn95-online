@@ -19,16 +19,19 @@ import StreamOverlayStandings from './overlays/StreamOverlayStandings';
 import StreamOverlayMatchupDefault from './overlays/StreamOverlayMatchupDefault';
 import StreamOverlayMatchupIcey from './overlays/StreamOverlayMatchupIcey';
 import StreamOverlayPlayoff from './overlays/StreamOverlayPlayoff';
+import StreamOverlayPlayoff43 from './overlays/StreamOverlayPlayoff-43';
 import PodcastOverlay from './overlays/PodcastOverlay';
 import PodcastCtrl from './overlays/PodcastCtrl';
 import PowerRankings from './pages/PowerRankings';
 import GettingStarted from './pages/GettingStarted';
+
 
 const OVERLAY_PATHS = [
   '/overlay-standings',
   '/overlay-matchup-default',
   '/overlay-matchup-icey',
   '/overlay-playoff',
+  '/overlay-playoff-43',
   '/overlay-podcast',
   '/overlay-podcast-ctrl',
 ];
@@ -46,6 +49,7 @@ function AppShell() {
         <Route path="/overlay-podcast-ctrl"     element={<PodcastCtrl />} />
         <Route path="/overlay-podcast"          element={<PodcastOverlay />} />
         <Route path="/overlay-playoff"          element={<StreamOverlayPlayoff />} />
+        <Route path="/overlay-playoff-43"       element={<StreamOverlayPlayoff43 />} />
       </Routes>
     );
   }

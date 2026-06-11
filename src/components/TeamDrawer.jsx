@@ -535,7 +535,7 @@ function SingleTeamStats({ totals, derived, standing, allTeamTotals, computedSta
       val:  derived?.hitsPerGame,
       rank: rankVal(derived?.hitsPerGame, ra.allHPG, true) },
     { label: 'ATK/G',   val: derived?.atkPerGame,  rank: rankVal(derived?.atkSecPerGame, ra.allATKsec, true) },
-    { label: 'DEF/G',   val: derived?.defPerGame,  rank: rankVal(derived?.defSecPerGame, ra.allDEFsec, true) },
+    { label: 'DEF/G',   val: derived?.defPerGame,  rank: rankVal(derived?.defSecPerGame, ra.allDEFsec, false) },
     { label: 'PIM/G',   val: derived?.pimPerGame,  rank: rankVal(derived?.pimPerGame, ra.allPIM, true) },
   ];
 
@@ -635,8 +635,9 @@ function CompareTeamStats({ totalsA, totalsB, derivedA, derivedB, teamA, teamB, 
       rB: rankVal(derivedB?.atkSecPerGame, ra.allATKsec, true), hi: true },
     { label: 'DEF/G',
       vA: derivedA?.defPerGame, vB: derivedB?.defPerGame,
-      rA: rankVal(derivedA?.defSecPerGame, ra.allDEFsec, true),
-      rB: rankVal(derivedB?.defSecPerGame, ra.allDEFsec, true), hi: true },
+      rA: rankVal(derivedA?.defSecPerGame, ra.allDEFsec, false),
+      rB: rankVal(derivedB?.defSecPerGame, ra.allDEFsec, false),
+      hi: false },
   ];
 
   return (

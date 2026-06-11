@@ -402,7 +402,7 @@ export default function StreamOverlayPlayoff43() {
       teamStats  = ts || [];
     }
 
-    const { data: teamRows } = await supabase.from('teams').select('abr,coach').eq('lg', lg);
+    const { data: teamRows } = await supabase.from('teams').select('abr,coach,color_primary,color_secondary').eq('lg', lg);
     const coachA = norm((teamRows || []).find((t) => t.abr === tA)?.coach || tA);
     const coachB = norm((teamRows || []).find((t) => t.abr === tB)?.coach || tB);
 
@@ -463,8 +463,32 @@ export default function StreamOverlayPlayoff43() {
     const leftTeam  = seedA != null && seedB != null && seedA > seedB ? tA : tB;
     const rightTeam = leftTeam === tA ? tB : tA;
 
+    function hexToRgb(hex) {
+      const r = parseInt(hex.slice(1,3), 16);
+      const g = parseInt(hex.slice(3,5), 16);
+      const b = parseInt(hex.slice(5,7), 16);
+      return `${r}, ${g}, ${b}`;
+    }
+    function getLuminance(hex) {
+      const r = parseInt(hex.slice(1,3), 16) / 255;
+      const g = parseInt(hex.slice(3,5), 16) / 255;
+      const b = parseInt(hex.slice(5,7), 16) / 255;
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    }
+    const teamRowA = (teamRows || []).find(t => t.abr === tA);
+    const teamRowB = (teamRows || []).find(t => t.abr === tB);
+    const colorA = teamRowA?.color_primary || '#87CEEB';
+    const colorB = teamRowB?.color_primary || '#FF8C00';
+    const leftColor  = leftTeam === tA ? colorA : colorB;
+    const rightColor = leftTeam === tA ? colorB : colorA;
+    const leftTeamRow  = leftTeam === tA ? teamRowA : teamRowB;
+    const rightTeamRow = leftTeam === tA ? teamRowB : teamRowA;
+
     setData({
       teamA: tA, teamB: tB, leftTeam, rightTeam,
+      leftColor, rightColor,
+      leftColorRgb: hexToRgb(leftColor),
+      rightColorRgb: hexToRgb(rightColor),
       leftWins:  leftTeam  === tA ? aW : bW,
       rightWins: rightTeam === tA ? aW : bW,
       leftSeed:  leftTeam  === tA ? seedA : seedB,
@@ -507,7 +531,14 @@ export default function StreamOverlayPlayoff43() {
   }, [data, loadMatchup]);
 
   return (
-    <div className="po-root" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
+    <div className="po-root" style={{
+      transform: `scale(${scale})`,
+      transformOrigin: 'top left',
+      '--color-left': data?.leftColor || '#87CEEB',
+      '--color-right': data?.rightColor || '#FF8C00',
+      '--color-left-rgb': data?.leftColorRgb || '135, 206, 235',
+      '--color-right-rgb': data?.rightColorRgb || '255, 140, 0',
+    }}>
       {showPanel && (
         <SetupPanel allTeams={allTeams}
           pendingA={pendingA} setPendingA={setPendingA}
@@ -575,6 +606,8 @@ function PlayoffLayout({ data, loading }) {
           side="left"
           skaters={leftSkaters}
           teamStats={leftStats}
+          teamColor={data.leftColor}
+          teamColorRgb={data.leftColorRgb}
         />
       </div>
 
@@ -588,6 +621,8 @@ function PlayoffLayout({ data, loading }) {
           side="right"
           skaters={rightSkaters}
           teamStats={rightStats}
+          teamColor={data.rightColor}
+          teamColorRgb={data.rightColorRgb}
         />
       </div>
 
@@ -599,14 +634,14 @@ function PlayoffLayout({ data, loading }) {
 
 // ── Side Panel (4:3 version — hero block at top) ───────────────────────────
 // Hero block: logo + code + seed on one row; big wins number + dots on next row
-function SidePanel43({ team, wins, seed, winsNeeded, side, skaters, teamStats }) {
+function SidePanel43({ team, wins, seed, winsNeeded, side, skaters, teamStats, teamColor, teamColorRgb }) {
   const gp = teamStats?.gamesPlayed || 0;
 
   return (
     <div className="po-side-panel">
 
       {/* HERO BLOCK ─────────────────────────────────────────── */}
-      <div className="po-hero-block">
+      <div className="po-hero-block" style={teamColor ? { background: `linear-gradient(160deg, color-mix(in srgb, rgb(${teamColorRgb}) 60%, black) 0%, rgba(255,215,0,.04) 100%)` } : {}}>
         {/* Row 1: logo · team code · seed badge */}
         <div className="po-hero-identity">
           <img src={`/assets/teamLogos/${team}.png`} className="po-hero-logo" alt={team}
@@ -1054,7 +1089,7 @@ function Styles() {
     .po-stats-divider {
       height: 1px;
       background: linear-gradient(90deg, transparent, rgba(255,215,0,.28), transparent);
-      margin: .35rem .6rem;
+      margin: 1.4rem .6rem .35rem;
     }
 
     /* ── SKATERS + STATS ── */
@@ -1080,10 +1115,10 @@ function Styles() {
       color: #C8D8E8; padding: .03rem .3rem;
       text-align: center; line-height: 1.25;
     }
-    .po-td.al  { text-align: left; color: #EEF2F8; }
+    .po-td.al  { text-align: left; color: #EEF2F8; font-size: 1.38rem; }
     .po-td.pts { color: #FFD700; font-size: 1.38rem; font-weight: 700; }
-    .po-td.g   { color: #9DDDFF; }
-    .po-td.a   { color: #8AACCC; }
+    .po-td.g   { color: #9DDDFF; font-size: 1.38rem; }
+    .po-td.a   { color: #8AACCC; font-size: 1.38rem; }
     .po-no-data {
       font-family: 'Press Start 2P', monospace; font-size: .4rem;
       color: rgba(255,255,255,.13); text-align: center; padding: 2.5rem .5rem;
@@ -1096,11 +1131,11 @@ function Styles() {
     }
     .po-stat-row:nth-child(even) { background: rgba(255,255,255,.018); }
     .po-stat-label {
-        font-family: 'Press Start 2P', monospace; font-size: .50rem;
-        color: rgba(255,255,255,.85); letter-spacing: 1px;
-      }
+      font-family: 'Press Start 2P', monospace; font-size: .62rem;
+      color: rgba(255,255,255,.85); letter-spacing: 1px;
+    }
     .po-stat-val {
-      font-family: 'VT323', monospace; font-size: 1.28rem;
+      font-family: 'VT323', monospace; font-size: 1.55rem;
       color: #FFFFFF; text-align: left; line-height: 1;
     }
     .po-stat-val.accent-gold  { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.4); }
@@ -1108,8 +1143,8 @@ function Styles() {
     .po-stat-val.accent-blue  { color: #87CEEB; text-shadow: 0 0 8px rgba(135,206,235,.4); }
     .po-stat-val.accent-green { color: #4cff91; text-shadow: 0 0 8px rgba(76,255,145,.4); }
     .po-stat-sub {
-       font-family: 'Barlow Condensed', sans-serif; font-size: .96rem;
-       color: rgba(255,255,255,.36); text-align: right; white-space: nowrap;
+      font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;
+      color: rgba(255,255,255,.36); text-align: right; white-space: nowrap;
     }
 
     /* ── BOTTOM SCROLLER ── */

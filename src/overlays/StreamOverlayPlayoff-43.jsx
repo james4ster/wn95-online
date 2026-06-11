@@ -665,7 +665,7 @@ function SidePanel43({ team, wins, seed, winsNeeded, side, skaters, teamStats, t
 
       {/* SKATERS ────────────────────────────────────────────── */}
       {/* SKATERS — fixed height so series stats always align ── */}
-      <div style={{ minHeight: '228px' }}>
+      <div style={{ minHeight: '320px' }}>
       {skaters.length === 0 ? (
         <div className="po-no-data">SERIES UPCOMING</div>
       ) : (
@@ -1087,14 +1087,22 @@ function Styles() {
       background: linear-gradient(90deg, rgba(255,215,0,.4), rgba(255,215,0,.1), transparent);
     }
     .po-stats-divider {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255,215,0,.28), transparent);
-      margin: 1.4rem .6rem .35rem;
+      height: 2px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        rgba(255,215,0,.15) 10%,
+        rgba(255,215,0,.6) 30%,
+        rgba(255,255,255,.9) 50%,
+        rgba(255,215,0,.6) 70%,
+        rgba(255,215,0,.15) 90%,
+        transparent 100%);
+      box-shadow: 0 0 8px rgba(255,215,0,.4), 0 0 16px rgba(255,215,0,.15);
+      margin: 1.4rem 0 .35rem;
     }
 
     /* ── SKATERS + STATS ── */
     .po-section-label {
-        font-family: 'Press Start 2P', monospace; font-size: .52rem;
+        font-family: 'Press Start 2P', monospace; font-size: .84rem;
         color: #FF8C00; letter-spacing: 2px;
         padding: .35rem .6rem .18rem;
       background: rgba(255,140,0,.06);
@@ -1103,7 +1111,7 @@ function Styles() {
     }
     .po-table { width: 100%; border-collapse: collapse; }
     .po-th {
-      font-family: 'Press Start 2P', monospace; font-size: .64rem;
+      font-family: 'Press Start 2P', monospace; font-size: .74rem;
       color: rgba(255,255,255,.42); padding: .08rem .3rem;
       text-align: center; background: rgba(0,0,0,.2);
       border-bottom: 1px solid rgba(255,215,0,.06);
@@ -1111,31 +1119,31 @@ function Styles() {
     .po-th.al { text-align: left; }
     .po-tr-even { background: rgba(255,255,255,.018); }
     .po-td {
-      font-family: 'VT323', monospace; font-size: 1.15rem;
+      font-family: 'VT323', monospace; font-size: 1.84rem;
       color: #C8D8E8; padding: .03rem .3rem;
       text-align: center; line-height: 1.25;
     }
-    .po-td.al  { text-align: left; color: #EEF2F8; font-size: 1.38rem; }
-    .po-td.pts { color: #FFD700; font-size: 1.38rem; font-weight: 700; }
-    .po-td.g   { color: #9DDDFF; font-size: 1.38rem; }
-    .po-td.a   { color: #8AACCC; font-size: 1.38rem; }
+    .po-td.al  { text-align: left; color: #EEF2F8; font-size: 1.84rem; }
+    .po-td.pts { color: #FFD700; font-size: 1.84rem; font-weight: 700; }
+    .po-td.g   { color: #9DDDFF; font-size: 1.84rem; }
+    .po-td.a   { color: #8AACCC; font-size: 1.84rem; }
     .po-no-data {
       font-family: 'Press Start 2P', monospace; font-size: .4rem;
       color: rgba(255,255,255,.13); text-align: center; padding: 2.5rem .5rem;
     }
     .po-stats-grid { display: flex; flex-direction: column; padding: .08rem 0 .5rem; }
     .po-stat-row {
-      display: grid; grid-template-columns: 2.6rem 1fr auto;
+      display: grid; grid-template-columns: 5.4rem 1fr auto;
       align-items: center; padding: .1rem .5rem;
       border-bottom: 1px solid rgba(255,255,255,.04); gap: .3rem;
     }
     .po-stat-row:nth-child(even) { background: rgba(255,255,255,.018); }
     .po-stat-label {
-      font-family: 'Press Start 2P', monospace; font-size: .62rem;
+      font-family: 'Press Start 2P', monospace; font-size: .84rem; padding: .0rem, .64rem;
       color: rgba(255,255,255,.85); letter-spacing: 1px;
     }
     .po-stat-val {
-      font-family: 'VT323', monospace; font-size: 1.55rem;
+      font-family: 'VT323', monospace; font-size: 1.84rem;
       color: #FFFFFF; text-align: left; line-height: 1;
     }
     .po-stat-val.accent-gold  { color: #FFD700; text-shadow: 0 0 8px rgba(255,215,0,.4); }
@@ -1143,7 +1151,7 @@ function Styles() {
     .po-stat-val.accent-blue  { color: #87CEEB; text-shadow: 0 0 8px rgba(135,206,235,.4); }
     .po-stat-val.accent-green { color: #4cff91; text-shadow: 0 0 8px rgba(76,255,145,.4); }
     .po-stat-sub {
-      font-family: 'Barlow Condensed', sans-serif; font-size: 1.1rem;
+      font-family: 'Barlow Condensed', sans-serif; font-size: 1.84rem;
       color: rgba(255,255,255,.36); text-align: right; white-space: nowrap;
     }
 

@@ -539,6 +539,21 @@ export default function StreamOverlayPlayoff() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
+  // Utility to convert hex colors to rgb
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return `${r}, ${g}, ${b}`;
+  }
+
+  function getLuminance(hex) {
+    const r = parseInt(hex.slice(1,3), 16) / 255;
+    const g = parseInt(hex.slice(3,5), 16) / 255;
+    const b = parseInt(hex.slice(5,7), 16) / 255;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
   const loadMatchup = useCallback(async (tA, tB, lg, round, series) => {
     if (!tA || !tB || !lg || tA === tB) return;
     setLoading(true);
@@ -597,7 +612,7 @@ export default function StreamOverlayPlayoff() {
 
     const { data: teamRows } = await supabase
       .from('teams')
-      .select('abr,coach')
+      .select('abr,coach,color_primary,color_secondary')
       .eq('lg', lg);
     const coachA = norm(
       (teamRows || []).find((t) => t.abr === tA)?.coach || tA
@@ -727,11 +742,38 @@ export default function StreamOverlayPlayoff() {
     const leftTeam = seedA != null && seedB != null && seedA > seedB ? tA : tB;
     const rightTeam = leftTeam === tA ? tB : tA;
 
+    const teamRowA = (teamRows || []).find(t => t.abr === tA);
+    const teamRowB = (teamRows || []).find(t => t.abr === tB);
+    const colorA = teamRowA?.color_primary || '#87CEEB';
+    const colorB = teamRowB?.color_primary || '#FF8C00';
+    
+    const leftColor  = leftTeam === tA ? colorA : colorB;
+    const rightColor = leftTeam === tA ? colorB : colorA;
+
+    const LUMINANCE_THRESHOLD = 0.15;
+    const leftTeamRow  = leftTeam === tA ? teamRowA : teamRowB;
+    const rightTeamRow = leftTeam === tA ? teamRowB : teamRowA;
+
+    const leftNumberColor = getLuminance(leftColor) < LUMINANCE_THRESHOLD
+      ? (leftTeamRow?.color_secondary || '#FFD700')
+      : leftColor;
+    const rightNumberColor = getLuminance(rightColor) < LUMINANCE_THRESHOLD
+      ? (rightTeamRow?.color_secondary || '#FFD700')
+      : rightColor;
+
     setData({
       teamA: tA,
       teamB: tB,
       leftTeam,
       rightTeam,
+      leftColor,
+      rightColor,
+      leftColorRgb:  hexToRgb(leftColor),
+      rightColorRgb: hexToRgb(rightColor),
+      leftNumberColor,
+      rightNumberColor,
+      leftNumberColorRgb: hexToRgb(leftNumberColor),
+      rightNumberColorRgb: hexToRgb(rightNumberColor),
       leftWins: leftTeam === tA ? aW : bW,
       rightWins: rightTeam === tA ? aW : bW,
       leftSeed: leftTeam === tA ? seedA : seedB,
@@ -800,9 +842,20 @@ export default function StreamOverlayPlayoff() {
 
   return (
     <div
-      className="po-root"
-      style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}
-    >
+  className="po-root"
+  style={{
+    transform: `scale(${scale})`,
+    transformOrigin: 'top left',
+    '--color-left': data?.leftColor || '#87CEEB',
+    '--color-right': data?.rightColor || '#FF8C00',
+    '--color-left-rgb': data?.leftColorRgb || '135, 206, 235',
+    '--color-right-rgb': data?.rightColorRgb || '255, 140, 0',
+    '--color-left-num': data?.leftNumberColor || '#FFD700',
+    '--color-right-num': data?.rightNumberColor || '#FFD700',
+    '--color-left-num-rgb': data?.leftNumberColorRgb || '255, 215, 0',
+    '--color-right-num-rgb': data?.rightNumberColorRgb || '255, 215, 0',  
+  }}
+>
       {showPanel && (
         <SetupPanel
           allTeams={allTeams}
@@ -892,11 +945,13 @@ function PlayoffLayout({ data, loading }) {
         winsNeeded={winsNeeded}
       />
 
-      <div className="po-side-left">
+<div className="po-side-left">
         <SidePanel
           team={leftTeam}
           skaters={leftSkaters}
           teamStats={leftStats}
+          teamColor={data.leftColor}
+          teamColorRgb={data.leftColorRgb}
         />
       </div>
       <div className="po-side-right">
@@ -904,6 +959,8 @@ function PlayoffLayout({ data, loading }) {
           team={rightTeam}
           skaters={rightSkaters}
           teamStats={rightStats}
+          teamColor={data.rightColor}
+          teamColorRgb={data.rightColorRgb}
         />
       </div>
 
@@ -924,7 +981,7 @@ function SeriesHero({
   return (
     <div className="po-series-bar">
       <div className="po-hero-half left">
-        <span className="po-hero-wins">{leftWins}</span>
+      <span className="po-hero-wins">{leftWins}</span>
         <SeriesDots wins={leftWins} winsNeeded={winsNeeded} side="left" />
         <img
           src={`/assets/teamLogos/${leftTeam}.png`}
@@ -974,11 +1031,11 @@ const SKATER_ROW_H = 28;
 const SKATER_HEAD_H = 22;
 const SKATER_FIXED_H = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H + 20;
 
-function SidePanel({ team, skaters, teamStats }) {
+function SidePanel({ team, skaters, teamStats, teamColor, teamColorRgb }) {
   const gp = teamStats?.gamesPlayed || 0;
   return (
     <div className="po-side-panel">
-      <div className="po-side-header">
+      <div className="po-side-header" style={teamColor ? { background: `linear-gradient(90deg, color-mix(in srgb, rgb(${teamColorRgb}) 60%, black) 0%, transparent 100%)` } : {}}>
         <img
           src={`/assets/teamLogos/${team}.png`}
           className="po-side-logo"

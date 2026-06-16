@@ -693,7 +693,7 @@ export default function StreamOverlayPlayoff() {
 
     // ── Focused series games ────────────────────────────────────────────
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games').select('*')
+      .from('playoff_games_test').select('*')
       .ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 

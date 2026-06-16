@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import CenteredAd from '../components/CenteredAd';
+import { AD_DISPLAY_SECONDS, pickRandomAd } from '../utils/adUtils';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const POLL_INTERVAL = 60000;
-const AD_DISPLAY_SECONDS = 8; // how long corner ads stay visible
+const POLL_INTERVAL = 8000; // set to 5k for testing ads. //60000;
+//const AD_DISPLAY_SECONDS = 8; // how long ads stay visible
 
 const ROUND_LABELS = {
   1: 'QUARTERFINALS',
@@ -14,11 +16,26 @@ const ROUND_LABELS = {
 
 // Slot A = bottom-left, Slot B = bottom-right
 // Drop your ad image paths here (or leave null to hide that slot)
-const AD_SLOTS = {
-  left:  null, // e.g. '/assets/ads/sponsor-left.png'
-  right: null, // e.g. '/assets/ads/sponsor-right.png'
-};
+const AD_IMAGES = [
+  'bellnbell.jpg',
+  'blubber.jpg',
+  'cancast-rural.jpg',
+  'cancast.jpg',
+  'darkside.jpg',
+  'houdinisliquor.jpg',
+  'justbabes.jpg',
+  'knightswear.jpg',
+  'la-hanger.jpg',
+  'liv95.jpg',
+  'tanking.jpg',
+  'vaginat-9_v1.png',
+  'wolfncline.jpg',
+];
 
+/*function pickRandomAd() {
+  return AD_IMAGES[Math.floor(Math.random() * AD_IMAGES.length)];
+}
+*/
 const norm  = s => (s || '').trim().toLowerCase();
 const svPct = (saves, sa) => (sa > 0 ? (saves / sa).toFixed(3).replace('0.', '.') : '—');
 
@@ -405,6 +422,11 @@ function buildScrollItems(
   const completed = (playoffGames || []).filter(
     g => g.team_a_score != null && g.team_b_score != null
   );
+
+  console.log('COMPLETED COUNT', completed.length);
+  console.log('PLAYOFF GAMES LENGTH', playoffGames?.length);
+  console.log('SAMPLE GAME', playoffGames?.[0]);
+
   const isPostGame1 = completed.length >= 1;
   const items = [];
 
@@ -574,8 +596,10 @@ export default function StreamOverlayPlayoff() {
   const [pendingB,  setPendingB]  = useState('');
   const [data,      setData]      = useState(null);
   const [loading,   setLoading]   = useState(false);
-  // Ad state
+  // Ad states
   const [adVisible, setAdVisible]   = useState(false);
+  const [adImage, setAdImage] = useState(null);
+  const [adGameNum, setAdGameNum] = useState(null);
   const adTimerRef = useRef(null);
   const lastGameCountRef = useRef(null); // tracks completed game count across polls
 
@@ -594,11 +618,25 @@ export default function StreamOverlayPlayoff() {
   };
 
   // Trigger ad display for AD_DISPLAY_SECONDS
-  const triggerAd = useCallback(() => {
-    if (!AD_SLOTS.left && !AD_SLOTS.right) return; // no ads configured
+  const triggerAd = useCallback((playoffGames) => {
     clearTimeout(adTimerRef.current);
+  
+    const completed = playoffGames.filter(g =>
+      g.team_a_score != null && g.team_b_score != null
+    );
+  
+    const seriesLength = playoffGames?.[0]?.series_length || 7;
+  
+    const nextGameNum = Math.min(completed.length + 1, seriesLength);
+  
+    setAdGameNum(nextGameNum);     // 🔒 LOCK IT HERE
+    setAdImage(pickRandomAd());
     setAdVisible(true);
-    adTimerRef.current = setTimeout(() => setAdVisible(false), AD_DISPLAY_SECONDS * 1000);
+  
+    adTimerRef.current = setTimeout(() => {
+      setAdVisible(false);
+      setAdGameNum(null);          // optional cleanup
+    }, AD_DISPLAY_SECONDS * 1000);
   }, []);
 
   useEffect(() => {
@@ -653,7 +691,7 @@ export default function StreamOverlayPlayoff() {
 
     // ── Focused series games ────────────────────────────────────────────
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games').select('*')
+      .from('playoff_games_test').select('*')
       .ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 
@@ -681,7 +719,7 @@ export default function StreamOverlayPlayoff() {
     // ── Detect new completed game (for ad trigger on polls) ─────────────
     const newGameCount = completed.length;
     if (isPoll && lastGameCountRef.current !== null && newGameCount > lastGameCountRef.current) {
-      triggerAd();
+      triggerAd(playoffGames);
     }
     lastGameCountRef.current = newGameCount;
 
@@ -852,6 +890,8 @@ export default function StreamOverlayPlayoff() {
     return () => clearInterval(pollRef.current);
   }, [data, loadMatchup]);
 
+
+  console.log('AD STATE', { adVisible, adImage, gameCount: data?.totalGames });
   return (
     <div className="po-root" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
       {showPanel && (
@@ -863,31 +903,13 @@ export default function StreamOverlayPlayoff() {
       {!data && !loading && <EmptyState />}
       {loading && !data && <LoadingState />}
       {data && <PlayoffLayout data={data} loading={loading} />}
-      {/* Corner ads — only render when adVisible and slots are configured */}
-      <CornerAds visible={adVisible} />
+      {/* Center ads — only render when adVisible and slots are configured */}
+      <CenteredAd visible={adVisible} gameNum={adGameNum} adImage={adImage} />
       <Styles />
     </div>
   );
 }
 
-// ── Corner Ads ─────────────────────────────────────────────────────────────
-function CornerAds({ visible }) {
-  if (!AD_SLOTS.left && !AD_SLOTS.right) return null;
-  return (
-    <>
-      {AD_SLOTS.left && (
-        <div className={`po-corner-ad po-corner-ad-left${visible ? ' visible' : ''}`}>
-          <img src={AD_SLOTS.left} alt="Sponsor" onError={e => { e.target.style.display='none'; }} />
-        </div>
-      )}
-      {AD_SLOTS.right && (
-        <div className={`po-corner-ad po-corner-ad-right${visible ? ' visible' : ''}`}>
-          <img src={AD_SLOTS.right} alt="Sponsor" onError={e => { e.target.style.display='none'; }} />
-        </div>
-      )}
-    </>
-  );
-}
 
 // ── Playoff Layout ─────────────────────────────────────────────────────────
 function PlayoffLayout({ data, loading }) {
@@ -1874,30 +1896,63 @@ function Styles() {
       color: rgba(255,215,0,.2); font-size: 1rem; margin: 0 6px;
     }
 
-    /* ── CORNER ADS ── */
-    .po-corner-ad {
-      position: absolute; bottom: 40px; /* sits just above scroller */
-      width: 200px; height: 60px;
-      z-index: 20;
-      opacity: 0;
-      transform: translateY(8px);
-      transition: opacity .5s ease, transform .5s ease;
-      pointer-events: none;
-      overflow: hidden;
-      border: 1px solid rgba(255,215,0,.25);
-      border-radius: 4px;
-      background: rgba(2,1,8,.92);
-    }
-    .po-corner-ad.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    .po-corner-ad-left  { left: 210px; }
-    .po-corner-ad-right { right: 210px; }
-    .po-corner-ad img {
-      width: 100%; height: 100%;
-      object-fit: contain;
-    }
+    /* ── CENTERED AD ── */
+      .po-center-ad {
+        position: absolute;
+        left: 210px; right: 210px;
+        top: 44px; bottom: 36px;
+        z-index: 50;
+        display: flex; align-items: center; justify-content: center;
+        pointer-events: none;
+        opacity: 0;
+        transform: scale(0.92);
+        transition: opacity 0.45s ease, transform 0.45s ease;
+      }
+      .po-center-ad.visible {
+        opacity: 1;
+        transform: scale(1);
+      }
+      .po-center-ad-inner {
+        background: linear-gradient(160deg, rgba(4,2,20,.97), rgba(10,6,30,.97));
+        border: 2px solid rgba(255,215,0,.55);
+        border-radius: 10px;
+        padding: 1.4rem 2rem;
+        display: flex; flex-direction: column; align-items: center; gap: 1rem;
+        box-shadow: 0 0 60px rgba(255,140,0,.2), 0 0 120px rgba(0,0,0,.8);
+        width: 100%; max-width: 680px;
+      }
+      .po-center-ad-title {
+        font-family: 'Press Start 2P', monospace; font-size: .78rem;
+        color: #FFD700; letter-spacing: 3px;
+        text-shadow: 0 0 12px rgba(255,215,0,.5);
+        text-align: center;
+      }
+      .po-center-ad-presented {
+        color: rgba(255,255,255,.45);
+        font-size: .62rem;
+        letter-spacing: 2px;
+        margin-left: 8px;
+      }
+      .po-center-ad-img {
+        max-width: 520px; max-height: 260px;
+        width: auto; height: auto;
+        object-fit: contain;
+        border-radius: 6px;
+        border: 1px solid rgba(255,215,0,.18);
+        filter: drop-shadow(0 0 16px rgba(255,215,0,.15));
+      }
+      .po-center-ad-footer {
+        font-family: 'Barlow Condensed', sans-serif; font-weight: 600;
+        font-size: .95rem; color: rgba(255,255,255,.35);
+        letter-spacing: 1px; text-align: center;
+      }
+      .po-center-ad-brand {
+        color: #FF8C00;
+        font-weight: 800;
+      }
+      .po-center-ad-div {
+        color: rgba(255,255,255,.25);
+      }
 
     /* ── EMPTY / LOADING ── */
     .po-empty {

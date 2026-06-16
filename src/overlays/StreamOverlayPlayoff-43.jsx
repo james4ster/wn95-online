@@ -4,7 +4,7 @@ import CenteredAd from '../components/CenteredAd';
 import { AD_DISPLAY_SECONDS, pickRandomAd } from '../utils/adUtils';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const POLL_INTERVAL = 60000;
+const POLL_INTERVAL = 30000;
 
 const ROUND_LABELS = {
   1: 'QUARTERFINALS',

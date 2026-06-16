@@ -4,7 +4,7 @@ import CenteredAd from '../components/CenteredAd';
 import { AD_DISPLAY_SECONDS, pickRandomAd } from '../utils/adUtils';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const POLL_INTERVAL = 8000; // set to 5k for testing ads. //60000;
+const POLL_INTERVAL = 60000;
 
 const ROUND_LABELS = {
   1: 'QUARTERFINALS',
@@ -400,7 +400,7 @@ export default function StreamOverlayPlayoff43() {
     setLoading(true);
 
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games_test').select('*').ilike('lg', 'W%').eq('lg', lg).order('game_number');
+      .from('playoff_games').select('*').ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 
     let playoffGames = (allPgRows || []).filter(

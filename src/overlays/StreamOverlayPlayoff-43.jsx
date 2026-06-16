@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import CenteredAd from '../components/CenteredAd';
+import { AD_DISPLAY_SECONDS, pickRandomAd } from '../utils/adUtils';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const POLL_INTERVAL = 60000;
+const POLL_INTERVAL = 8000; // set to 5k for testing ads. //60000;
 
 const ROUND_LABELS = {
   1: 'QUARTERFINALS',
@@ -319,6 +321,13 @@ export default function StreamOverlayPlayoff43() {
   const [pendingB,  setPendingB]  = useState('');
   const [data,      setData]      = useState(null);
   const [loading,   setLoading]   = useState(false);
+  // Ad states
+  const [adVisible, setAdVisible]   = useState(false);
+  const [adImage, setAdImage] = useState(null);
+  const [adGameNum, setAdGameNum] = useState(null);
+  const adTimerRef = useRef(null);
+  const lastGameCountRef = useRef(null); // tracks completed game count across polls
+  //
   const pollRef = useRef(null);
   const scale   = useOverlayScale(ROOT_W, ROOT_H);
 
@@ -332,6 +341,29 @@ export default function StreamOverlayPlayoff43() {
       series: p.get('series') ? parseInt(p.get('series')) : null,
     };
   };
+
+  // Trigger ad display for AD_DISPLAY_SECONDS
+  const triggerAd = useCallback((playoffGames) => {
+    clearTimeout(adTimerRef.current);
+  
+    const completed = playoffGames.filter(g =>
+      g.team_a_score != null && g.team_b_score != null
+    );
+  
+    const seriesLength = playoffGames?.[0]?.series_length || 7;
+  
+    const nextGameNum = Math.min(completed.length + 1, seriesLength);
+  
+    setAdGameNum(nextGameNum);     // 🔒 LOCK IT HERE
+    setAdImage(pickRandomAd());
+    setAdVisible(true);
+  
+    adTimerRef.current = setTimeout(() => {
+      setAdVisible(false);
+      setAdGameNum(null);          // optional cleanup
+    }, AD_DISPLAY_SECONDS * 1000);
+  }, []);
+
 
   useEffect(() => {
     async function bootstrap() {
@@ -363,8 +395,8 @@ export default function StreamOverlayPlayoff43() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
-  const loadMatchup = useCallback(async (tA, tB, lg, round, series) => {
-    if (!tA || !tB || !lg || tA === tB) return;
+  const loadMatchup = useCallback(async (tA, tB, lg, round, series, isPoll = false) => {
+        if (!tA || !tB || !lg || tA === tB) return;
     setLoading(true);
 
     const { data: allPgRows, error: pgErr } = await supabase
@@ -390,6 +422,13 @@ export default function StreamOverlayPlayoff43() {
     const derivedSeries = playoffGames[0]?.series_number || 1;
     const seriesLength  = playoffGames[0]?.series_length || 7;
     const winsNeeded    = Math.ceil(seriesLength / 2);
+
+    // ── Detect new completed game (for ad trigger on polls) ─────────────
+    const newGameCount = completed.length;
+    if (isPoll && lastGameCountRef.current !== null && newGameCount > lastGameCountRef.current) {
+      triggerAd(playoffGames);
+    }
+    lastGameCountRef.current = newGameCount;
 
     let rawScoring = [], teamStats = [];
     if (pgIds.length > 0) {
@@ -522,13 +561,15 @@ export default function StreamOverlayPlayoff43() {
       const params = getParams();
       loadMatchup(
         params.teamA || data.teamA, params.teamB || data.teamB,
-        params.lg    || data.lg,
+        params.lg || data.lg,
         params.round  != null ? params.round  : data.roundNum,
-        params.series != null ? params.series : data.seriesNum
+        params.series != null ? params.series : data.seriesNum,
+        true, // isPoll = true — enables ad trigger
       );
     }, POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
   }, [data, loadMatchup]);
+
 
   return (
     <div className="po-root" style={{
@@ -548,6 +589,8 @@ export default function StreamOverlayPlayoff43() {
       {!data && !loading && <EmptyState />}
       {loading && !data && <LoadingState />}
       {data && <PlayoffLayout data={data} loading={loading} />}
+      {/* Center ads — only render when adVisible and slots are configured */}
+      <CenteredAd visible={adVisible} gameNum={adGameNum} adImage={adImage} />
       <Styles />
     </div>
   );
@@ -1157,26 +1200,43 @@ function Styles() {
 
     /* ── BOTTOM SCROLLER ── */
     .po-scroller {
-      position: absolute; bottom: 0; left: 0; right: 0; height: ${SCROLL_H}px;
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: ${SCROLL_H}px;
       background: linear-gradient(90deg,
         rgba(2,1,8,.99) 0%, rgba(6,3,18,.99) 15%,
         rgba(6,3,18,.99) 85%, rgba(2,1,8,.99) 100%);
-      border-top: 2px solid rgba(255,215,0,.32); overflow: hidden;
+      border-top: 2px solid rgba(255,215,0,.32);
+      overflow: hidden;
+    
+      font-size: 18px; /* << SINGLE SOURCE OF TRUTH */
     }
+    
     .po-scroller-inner {
-      display: flex; align-items: center;
-      height: 100%; white-space: nowrap; will-change: transform;
+      display: flex;
+      align-items: center;
+      height: 100%;
+      white-space: nowrap;
+      will-change: transform;
+    }
+    
+    /* EVERYTHING IN SCROLLER INHERITS 32px */
+    .po-scroller * {
+      font-size: inherit;
+      line-height: 1.1;
     }
     .sc-item {
         display: inline-flex; align-items: center; gap: 8px; padding: 0 30px;
         font-family: 'Barlow Condensed', sans-serif;
-        font-size: .95rem; font-weight: 600; letter-spacing: .4px;
+        font-weight: 600; letter-spacing: .4px; font-size: 34px;
       border-right: 2px solid rgba(255,215,0,.08);
     }
     .sc-section-hdr {
         display: inline-flex; align-items: center; gap: 10px;
         padding: 0 26px; margin: 0 4px;
-        font-family: 'Press Start 2P', monospace; font-size: .52rem;
+        font-family: 'Press Start 2P', monospace; 
       color: #FFD700; letter-spacing: 3px;
       text-shadow: 0 0 10px rgba(255,215,0,.6);
       background: rgba(255,215,0,.08);
@@ -1188,28 +1248,28 @@ function Styles() {
     .sc-sub-hdr {
       display: inline-flex; align-items: center;
       padding: 0 18px; margin: 0 8px;
-      font-family: 'Press Start 2P', monospace; font-size: .48rem;
+      font-family: 'Press Start 2P', monospace; font-size: 16px !important;;
       color: rgba(255,140,0,.55); letter-spacing: 2px;
       border-left: 1px solid rgba(255,140,0,.22);
       border-right: 1px solid rgba(255,140,0,.22);
       height: 100%;
     }
     .sc-pill {
-      font-family: 'Press Start 2P', monospace; font-size: .58rem;
+      font-family: 'Press Start 2P', monospace; font-size: 16px !important;
       color: #FF8C00; background: rgba(255,140,0,.14);
       border: 1px solid rgba(255,140,0,.3); border-radius: 2px; padding: .1rem .32rem;
     }
-    .sc-team  { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.1rem; color: rgba(255,255,255,.65); letter-spacing: 1px; }
-    .sc-team.win { color: #FFD700; text-shadow: 0 0 7px rgba(255,215,0,.4); }
-    .sc-score { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 1.3rem; color: #E8F0F8; }
+    .sc-team  { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 34px; color: rgba(255,255,255,.65); letter-spacing: 1px; }
+    .sc-team.win { color: #FFD700; text-shadow: 0 0 7px rgba(255,215,0,.4); font-size: 34px }
+    .sc-score { font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 34px; color: #E8F0F8; }
     .sc-bullet { color: rgba(255,215,0,.28); font-size: .9rem; }
-    .sc-stat   { color: rgba(255,255,255,.42); font-size: 1rem; font-weight: 600; }
-    .sc-val    { color: #87CEEB; font-weight: 700; }
+    .sc-stat   { color: rgba(255,255,255,.42); font-size: 34px}
+    .sc-val    { color: #87CEEB; font-weight: 700; font-size: 34px }
     .sc-val.accent-gold  { color: #FFD700; }
     .sc-val.accent-red   { color: #ff8a8a; }
     .sc-val.accent-green { color: #4cff91; }
     .sc-val.accent-blue  { color: #87CEEB; }
-    .sc-muted  { color: rgba(255,255,255,.28); font-size: .95rem; }
+    .sc-muted  { color: rgba(255,255,255,.28); font-size: 18px; }
     .sc-ot     { font-family: 'Press Start 2P', monospace; font-size: .48rem; color: rgba(255,140,0,.6); }
 
     /* ── EMPTY / LOADING ── */
@@ -1268,6 +1328,8 @@ function Styles() {
     .csel-opt { font-family: 'VT323', monospace; font-size: 1.15rem; color: #D0D8E0; padding: .22rem .55rem; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.04); }
     .csel-opt:hover { background: rgba(255,215,0,.11); color: #FFD700; }
     .csel-opt.sel   { background: rgba(255,140,0,.17); color: #FF8C00; }
+}
+
   `}</style>
   );
 }

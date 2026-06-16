@@ -19,5 +19,16 @@ export default async function handler(req, res) {
   });
   const rankingsData = await rankingsRes.json();
 
+  // 🔥 POST POWER RANKINGS NOTIFICATION TO DISCORD (BLUBBER)
+  const discordRes = await fetch(process.env.DISCORD_BLUBBER_WEBHOOK, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      content: `📊 Updated Weekly Power Rankings Now Available!\n👉 https://wn95-online.vercel.app/league/W/power-rankings`
+    })
+  });
+  
+  console.log("Discord status:", discordRes.status);
+
   return res.status(200).json({ rankings: rankingsData });
 }

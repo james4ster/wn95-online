@@ -14,6 +14,7 @@ const ROUND_LABELS = {
   4: 'BRULE CHAMPIONSHIP',
 };
 
+/* MOVED THESE TO adUtils.js
 // Slot A = bottom-left, Slot B = bottom-right
 // Drop your ad image paths here (or leave null to hide that slot)
 const AD_IMAGES = [
@@ -31,6 +32,7 @@ const AD_IMAGES = [
   'vaginat-9_v1.png',
   'wolfncline.jpg',
 ];
+*/
 
 /*function pickRandomAd() {
   return AD_IMAGES[Math.floor(Math.random() * AD_IMAGES.length)];
@@ -691,7 +693,7 @@ export default function StreamOverlayPlayoff() {
 
     // ── Focused series games ────────────────────────────────────────────
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games_test').select('*')
+      .from('playoff_games').select('*')
       .ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 

@@ -547,7 +547,7 @@ function buildScrollItems(
     if (leaders.pts.length > 0)     items.push({ type: 'leaders', category: 'PTS',  entries: leaders.pts,     accent: 'blue',     teamA, teamB });
     if (leaders.goals.length > 0)   items.push({ type: 'leaders', category: 'G',    entries: leaders.goals,   accent: 'blue',     teamA, teamB });
     if (leaders.assists.length > 0) items.push({ type: 'leaders', category: 'A',    entries: leaders.assists, accent: 'blue',     teamA, teamB });
-    //if (leaders.hits.length > 0)    items.push({ type: 'leaders', category: 'HITS', entries: leaders.hits,    accent: 'blue',     teamA, teamB });
+    if (leaders.hits.length > 0)    items.push({ type: 'leaders', category: 'HITS', entries: leaders.hits,    accent: 'blue',     teamA, teamB });
   }
 
   return items;
@@ -632,6 +632,21 @@ export default function StreamOverlayPlayoff() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
+  // Helpers to display personalized banner colors on side panels
+  function hexToRgb(hex) {
+    const r = parseInt(hex.slice(1,3), 16);
+    const g = parseInt(hex.slice(3,5), 16);
+    const b = parseInt(hex.slice(5,7), 16);
+    return `${r}, ${g}, ${b}`;
+  }
+  
+  function getLuminance(hex) {
+    const r = parseInt(hex.slice(1,3), 16) / 255;
+    const g = parseInt(hex.slice(3,5), 16) / 255;
+    const b = parseInt(hex.slice(5,7), 16) / 255;
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
   const loadMatchup = useCallback(async (tA, tB, lg, round, series, isPoll = false) => {
     if (!tA || !tB || !lg || tA === tB) return;
     setLoading(true);
@@ -704,7 +719,7 @@ export default function StreamOverlayPlayoff() {
     }
 
     // ── H2H data ────────────────────────────────────────────────────────
-    const { data: teamRows } = await supabase.from('teams').select('abr,coach').eq('lg', lg);
+    const { data: teamRows } = await supabase.from('teams').select('abr,coach,color_primary,color_secondary').eq('lg', lg);
     const coachA = norm((teamRows || []).find(t => t.abr === tA)?.coach || tA);
     const coachB = norm((teamRows || []).find(t => t.abr === tB)?.coach || tB);
 
@@ -774,6 +789,7 @@ export default function StreamOverlayPlayoff() {
       allTimeStatsA, allTimeStatsB,
     };
 
+
     const { aW, bW } = getSeriesScore(playoffGames, tA, tB);
     const leftTeam  = (seedA != null && seedB != null && seedA > seedB) ? tA : tB;
     const rightTeam = leftTeam === tA ? tB : tA;
@@ -782,8 +798,15 @@ export default function StreamOverlayPlayoff() {
     const leftSeed  = leftTeam === tA ? seedA : seedB;
     const rightSeed = rightTeam === tA ? seedA : seedB;
 
+    const teamRowA = (teamRows || []).find(t => t.abr === tA);
+    const teamRowB = (teamRows || []).find(t => t.abr === tB);
+    const colorA = teamRowA?.color_primary || '#1a1a2e';
+    const colorB = teamRowB?.color_primary || '#1a1a2e';
+    const leftColor  = leftTeam === tA ? colorA : colorB;
+    const rightColor = leftTeam === tA ? colorB : colorA;
+
     setData({
-      teamA: tA, teamB: tB,
+      teamA: tA, teamB: tB, 
       leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed,
       winsNeeded, seriesLength, totalGames: completed.length,
       nextGameNum: Math.min(completed.length + 1, seriesLength),
@@ -800,7 +823,7 @@ export default function StreamOverlayPlayoff() {
         allRoundGames,
         allRoundRawScoring, allRoundSkaterStats
       ),
-      lg, season: lg,
+      leftColor,rightColor,lg, season: lg,
     });
     setLoading(false);
   }, [triggerAd]);
@@ -920,10 +943,12 @@ function PlayoffLayout({ data, loading }) {
 
       {/* Side Panels */}
       <div className="po-side-left">
-        <SidePanel team={leftTeam} skaters={leftSkaters} teamStats={leftStats} />
+        <SidePanel team={leftTeam} skaters={leftSkaters} teamStats={leftStats}
+          teamColor={data.leftColor} />
       </div>
       <div className="po-side-right">
-        <SidePanel team={rightTeam} skaters={rightSkaters} teamStats={rightStats} />
+        <SidePanel team={rightTeam} skaters={rightSkaters} teamStats={rightStats}
+          teamColor={data.rightColor} />
       </div>
 
       {/* Bottom Scroller */}
@@ -974,11 +999,13 @@ const SKATER_ROW_H    = 28;
 const SKATER_HEAD_H   = 22;
 const SKATER_FIXED_H  = SKATER_HEAD_H + SKATER_ROWS * SKATER_ROW_H;
 
-function SidePanel({ team, skaters, teamStats }) {
+function SidePanel({ team, skaters, teamStats, teamColor }) {
   const gp = teamStats?.gamesPlayed || 0;
   return (
     <div className="po-side-panel">
-      <div className="po-side-header">
+      <div className="po-side-header" style={teamColor ? {
+        background: `linear-gradient(90deg, color-mix(in srgb, ${teamColor} 50%, black) 0%, transparent 100%)`
+      } : {}}>
         <img src={`/assets/teamLogos/${team}.png`} className="po-side-logo" alt={team}
           onError={e => e.target.style.display='none'} />
         <span className="po-side-code">{team}</span>
@@ -1126,13 +1153,13 @@ function renderScrollRow(row) {
           : `${leader} leads ${leaderW}-${trailerW}`;
       return (
         <span className="vsc-row">
-          <span className="vsc-seed">{ls != null ? `#${ls}` : ''}</span>
+          <span className="vsc-seed">{ls != null ? `(${ls})` : ''}</span>
           <span className={`vsc-team${lw >= winsNeeded ? ' win' : ''}`}>{lt}</span>
           <span className="vsc-series-score">{lw}</span>
           <span className="vsc-series-dash">–</span>
           <span className="vsc-series-score">{rw}</span>
           <span className={`vsc-team${rw >= winsNeeded ? ' win' : ''}`}>{rt}</span>
-          <span className="vsc-seed">{rs != null ? `#${rs}` : ''}</span>
+          <span className="vsc-seed">{rs != null ? `(${rs})` : ''}</span>
           <span className="vsc-bullet">·</span>
           <span className="vsc-muted">{statusStr}</span>
         </span>
@@ -1261,7 +1288,7 @@ function renderScrollRow(row) {
             return (
               <React.Fragment key={si}>
                 {si > 0 && <span className="vsc-round-sep">│</span>}
-                <span className="vsc-seed">{ls != null ? `#${ls}` : ''}</span>
+                <span className="vsc-seed">{ls != null ? `(${ls})` : ''}</span>
                 <span className={`vsc-team${lw >= winsNeeded ? ' win' : ''}`}>{lt}</span>
                 {notStarted
                   ? <span className="vsc-muted">vs</span>
@@ -1270,7 +1297,7 @@ function renderScrollRow(row) {
                     <span className="vsc-series-score">{rw}</span></>
                 }
                 <span className={`vsc-team${rw >= winsNeeded ? ' win' : ''}`}>{rt}</span>
-                <span className="vsc-seed">{rs != null ? `#${rs}` : ''}</span>
+                <span className="vsc-seed">{rs != null ? `(${rs})` : ''}</span>
               </React.Fragment>
             );
           })}
@@ -1793,12 +1820,13 @@ function Styles() {
       font-size: 1rem; color: rgba(255,255,255,.3);
     }
     .vsc-seed {
-      font-family: 'Press Start 2P', monospace; font-size: .48rem;
-      color: rgba(255,215,0,.55);
+      font-family: 'Press Start 2P', monospace;
+      font-size: .62rem;
+      color: rgba(255, 215, 0, 0.95);
     }
     .vsc-bullet { color: rgba(255,215,0,.28); font-size: .85rem; }
-    .vsc-stat   { color: rgba(255,255,255,.42); font-size: .95rem; font-weight: 600; }
-    .vsc-val    { color: #87CEEB; font-weight: 700; }
+    .vsc-stat   { color: rgba(255,255,255,.42); font-size: 1.25rem; font-weight: 600; }
+    .vsc-val    { color: #87CEEB; font-weight: 700; font-size: 1.25rem}
     .vsc-val.accent-gold  { color: #FFD700; }
     .vsc-val.accent-red   { color: #ff8a8a; }
     .vsc-val.accent-green { color: #4cff91; }

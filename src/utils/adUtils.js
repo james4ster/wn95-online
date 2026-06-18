@@ -14,6 +14,7 @@ export const AD_IMAGES = [
   'tanking.jpg',
   'vaginat-9_v1.png',
   'wolfncline.jpg',
+  'sumter-book.png',
 ];
 
 export function pickRandomAd() {

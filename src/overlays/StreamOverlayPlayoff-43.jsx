@@ -4,7 +4,7 @@ import CenteredAd from '../components/CenteredAd';
 import { AD_DISPLAY_SECONDS, pickRandomAd } from '../utils/adUtils';
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const POLL_INTERVAL = 8000; // set to 5k for testing ads. //60000;
+const POLL_INTERVAL = 30000;
 
 const ROUND_LABELS = {
   1: 'QUARTERFINALS',
@@ -400,7 +400,7 @@ export default function StreamOverlayPlayoff43() {
     setLoading(true);
 
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games_test').select('*').ilike('lg', 'W%').eq('lg', lg).order('game_number');
+      .from('playoff_games').select('*').ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
 
     let playoffGames = (allPgRows || []).filter(
@@ -885,7 +885,7 @@ function BottomScroller({ items }) {
             <span className="sc-stat">GA/G <span className="sc-val accent-red">{s.gapg}</span></span>
             <span className="sc-bullet">·</span>
             <span className="sc-stat">SV% <span className="sc-val accent-green">{s.seriesSvPct}</span></span>
-            {s.sh > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">SH <span className="sc-val">{(s.sh/s.gp).toFixed(1)}</span></span></>}
+            {s.sh > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">SH/G <span className="sc-val">{(s.sh/s.gp).toFixed(1)}</span></span></>}
             {s.brA > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">BRK <span className="sc-val">{s.brPct}</span></span></>}
             {s.ppAmt > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">PP <span className="sc-val accent-blue">{s.ppPct}</span></span></>}
             {s.atkAvg !== '—' && <><span className="sc-bullet">·</span><span className="sc-stat">ATK <span className="sc-val">{s.atkAvg}</span></span></>}

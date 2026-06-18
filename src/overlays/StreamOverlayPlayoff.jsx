@@ -49,6 +49,33 @@ function secToMMSS(totalSec) {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
+//Color helpers
+function getLuminance(hex) {
+  if (!hex || hex.length < 7) return 0;
+  const r = parseInt(hex.slice(1,3), 16) / 255;
+  const g = parseInt(hex.slice(3,5), 16) / 255;
+  const b = parseInt(hex.slice(5,7), 16) / 255;
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const getAccentColor = (row) => {
+  const p = row?.color_primary || '#FF8C00';
+  const s = row?.color_secondary || '#FF8C00';
+  return getLuminance(p) >= getLuminance(s) ? p : s;
+};
+
+function pillStyle(hex) {
+  const c = hex || '#FF8C00';
+  const r = parseInt(c.slice(1,3), 16);
+  const g = parseInt(c.slice(3,5), 16);
+  const b = parseInt(c.slice(5,7), 16);
+  return {
+    color: c,
+    borderColor: `rgba(${r},${g},${b},0.5)`,
+    background: `rgba(${r},${g},${b},0.15)`,
+  };
+}
+
 // ── ATK parsing ────────────────────────────────────────────────────────────
 function parseTimeToSeconds(raw) {
   if (raw == null || raw === '') return 0;
@@ -308,12 +335,7 @@ function buildScoringLeaders(allRoundRawScoring, allRoundSkaterStats, topN = 5) 
     }
   });
 
-  console.log(
-    'SKATER STATS ENTERING LEADERS',
-    allRoundSkaterStats?.length,
-    allRoundSkaterStats?.slice(0,5)
-  );
-
+  
   // Hits from game_stats_skater.chk
   const hMap = {};
   (allRoundSkaterStats || []).forEach(r => {
@@ -677,13 +699,6 @@ export default function StreamOverlayPlayoff() {
     return `${r}, ${g}, ${b}`;
   }
   
-  function getLuminance(hex) {
-    const r = parseInt(hex.slice(1,3), 16) / 255;
-    const g = parseInt(hex.slice(3,5), 16) / 255;
-    const b = parseInt(hex.slice(5,7), 16) / 255;
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  }
-
   const loadMatchup = useCallback(async (tA, tB, lg, round, series, isPoll = false) => {
     if (!tA || !tB || !lg || tA === tB) return;
     setLoading(true);
@@ -837,14 +852,18 @@ export default function StreamOverlayPlayoff() {
 
     const teamRowA = (teamRows || []).find(t => t.abr === tA);
     const teamRowB = (teamRows || []).find(t => t.abr === tB);
+
+    const accentColorA = getAccentColor(teamRowA);
+    const accentColorB = getAccentColor(teamRowB);
+
     const colorA = teamRowA?.color_primary || '#1a1a2e';
     const colorB = teamRowB?.color_primary || '#1a1a2e';
     const leftColor  = leftTeam === tA ? colorA : colorB;
     const rightColor = leftTeam === tA ? colorB : colorA;
 
     setData({
-      teamA: tA, teamB: tB, 
-      leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed,
+      teamA: tA, teamB: tB, accentColors: { [tA]: accentColorA, [tB]: accentColorB },
+      leftTeam, rightTeam, leftWins, rightWins, leftSeed, rightSeed, 
       winsNeeded, seriesLength, totalGames: completed.length,
       nextGameNum: Math.min(completed.length + 1, seriesLength),
       roundLabel: ROUND_LABELS[derivedRound] || `ROUND ${derivedRound}`,
@@ -978,7 +997,7 @@ function PlayoffLayout({ data, loading }) {
       </div>
 
       {/* Bottom Scroller */}
-      <BottomScroller items={stableScrollItems} />
+      <BottomScroller items={stableScrollItems} accentColors={data.accentColors || {}} />
     </>
   );
 }
@@ -1120,9 +1139,6 @@ function flattenToRows(items) {
   let currentSection = '';
   let currentRound   = null;
 
-  console.log('FLATTEN INPUT', items?.length, '→ types:', items?.map(i => i.type));
-
-
   items.forEach(item => {
     switch (item.type) {
       case 'section-header':
@@ -1141,12 +1157,10 @@ function flattenToRows(items) {
     }
   });
 
-  console.log('FLATTEN OUTPUT', rows.length, '→', rows.map(r => r.type + ':' + r._section));
-
   return rows;
 }
 
-function renderScrollRow(row) {
+function renderScrollRow(row, accentColors = {}) {
   if (!row) return null;
 
   switch (row.type) {
@@ -1155,9 +1169,9 @@ function renderScrollRow(row) {
       return (
         <span className="vsc-row">
           <span className="vsc-pill">GM{row.gameNum}</span>
-          <span className={`vsc-team${row.winner === row.teamA ? ' win' : ''}`}>{row.teamA}</span>
+          <span className="vsc-pill" style={pillStyle(accentColors[row.teamA])}>{row.teamA}</span>
           <span className="vsc-score">{row.aScore} – {row.bScore}</span>
-          <span className={`vsc-team${row.winner === row.teamB ? ' win' : ''}`}>{row.teamB}</span>
+          <span className="vsc-pill" style={pillStyle(accentColors[row.teamB])}>{row.teamB}</span>
           <span className="vsc-bullet">·</span>
           <span className="vsc-stat">PTS <span className="vsc-val">{row.ptsLeaders}</span></span>
           <span className="vsc-bullet">·</span>
@@ -1231,12 +1245,12 @@ function renderScrollRow(row) {
       return (
         <span className="vsc-row">
           <span className="vsc-pill">RECORD</span>
-          <span className="vsc-team">{row.teamA}</span>
+          <span className="vsc-pill" style={pillStyle(accentColors[row.teamA])}>{row.teamA}</span>
           <span className="vsc-score">{row.aW}W</span>
           <span className="vsc-muted">–</span>
           <span className="vsc-score">{row.bW}W</span>
           {row.ties > 0 && <span className="vsc-muted">{row.ties}T</span>}
-          <span className="vsc-team">{row.teamB}</span>
+          <span className="vsc-pill" style={pillStyle(accentColors[row.teamB])}>{row.teamB}</span>
           <span className="vsc-bullet">·</span>
           <span className="vsc-muted">{row.gp} GP</span>
         </span>
@@ -1246,12 +1260,12 @@ function renderScrollRow(row) {
       return (
         <span className="vsc-row">
           <span className="vsc-pill">H2H</span>
-          <span className="vsc-team">{row.teamA}</span>
+          <span className="vsc-pill" style={pillStyle(accentColors[row.teamA])}>{row.teamA}</span>
           <span className="vsc-score">{row.aW}W</span>
           <span className="vsc-muted">–</span>
           <span className="vsc-score">{row.bW}W</span>
           {row.ties > 0 && <span className="vsc-muted">{row.ties}T</span>}
-          <span className="vsc-team">{row.teamB}</span>
+          <span className="vsc-pill" style={pillStyle(accentColors[row.teamB])}>{row.teamB}</span>
           {row.games.length > 0 && <span className="vsc-round-sep">│</span>}
           {row.games.map((g, i) => (
             <React.Fragment key={i}>
@@ -1271,7 +1285,7 @@ function renderScrollRow(row) {
         if (!s) return null;
         return (
           <>
-            <span className="vsc-pill">{team}</span>
+            <span className="vsc-pill" style={pillStyle(accentColors[team])}>{team}</span>
             <span className="vsc-stat">GF/G <span className="vsc-val accent-gold">{s.gfpg}</span></span>
             <span className="vsc-bullet">·</span>
             <span className="vsc-stat">GA/G <span className="vsc-val accent-red">{s.gapg}</span></span>
@@ -1279,8 +1293,6 @@ function renderScrollRow(row) {
             <span className="vsc-stat">SV% <span className="vsc-val accent-green">{s.seriesSvPct}</span></span>
             {s.brA > 0 && (<><span className="vsc-bullet">·</span><span className="vsc-stat">BRK <span className="vsc-val">{s.brPct}</span></span></>)}
             {s.ppAmt > 0 && (<><span className="vsc-bullet">·</span><span className="vsc-stat">PP <span className="vsc-val accent-blue">{s.ppPct}</span></span></>)}
-         {/* COMMENTING OUT TEMPORARITLY AS CALCULATION IS OFF?
-           {s.atkAvg !== '—' && (<><span className="vsc-bullet">·</span><span className="vsc-stat">ATK <span className="vsc-val">{s.atkAvg}</span></span></>)} */ }
           </>
         );
       };
@@ -1296,10 +1308,16 @@ function renderScrollRow(row) {
       return (
         <span className="vsc-row">
           <span className="vsc-pill">G{row.idx}</span>
-          <span className={`vsc-team${row.winner === row.teamA ? ' win' : ''}`}>{row.teamA}</span>
+          <span className={`vsc-team${row.winner === row.teamA ? ' win' : ''}`}
+            style={row.winner !== row.teamA ? { color: accentColors[row.teamA] } : {}}>
+            {row.teamA}
+          </span>
           <span className="vsc-score">{row.aScore} – {row.bScore}</span>
-          <span className={`vsc-team${row.winner === row.teamB ? ' win' : ''}`}>{row.teamB}</span>
-          {g.ot ? <span className="vsc-muted vsc-ot">OT</span> : null}
+          <span className={`vsc-team${row.winner === row.teamB ? ' win' : ''}`}
+            style={row.winner !== row.teamB ? { color: accentColors[row.teamB] } : {}}>
+            {row.teamB}
+          </span>
+          {row.ot ? <span className="vsc-muted vsc-ot">OT</span> : null}
         </span>
       );
 
@@ -1351,7 +1369,7 @@ function BugLabel({ section, round }) {
   );
 }
 
-function BottomScroller({ items }) {
+function BottomScroller({ items, accentColors = {} }) {
   const rows = React.useMemo(() => flattenToRows(items || []), [items]);
   const [bugLabel, setBugLabel] = useState({ section: '', round: null });
   const [cells, setCells] = useState({ top: null, bottom: null });
@@ -1413,8 +1431,8 @@ function BottomScroller({ items }) {
       <BugLabel section={bugLabel.section} round={bugLabel.round} />
       <div className="vsc-stage">
         <div className="vsc-column" ref={columnRef}>
-          <div className="vsc-cell">{renderScrollRow(cells.top)}</div>
-          <div className="vsc-cell">{renderScrollRow(cells.bottom)}</div>
+          <div className="vsc-cell">{renderScrollRow(cells.top, accentColors)}</div>
+          <div className="vsc-cell">{renderScrollRow(cells.bottom, accentColors)}</div>
         </div>
       </div>
     </div>

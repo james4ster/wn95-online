@@ -336,9 +336,6 @@ function buildScoringLeaders(allRoundRawScoring, allRoundSkaterStats, topN = 5) 
 
   const hitsRanked = rank(hMap);
 
-  console.log('HITS MAP', Object.values(hMap).slice(0,20));
-  console.log('HITS RANKED', hitsRanked);
-
   return {
     pts:     rank(ptMap),
     goals:   rank(gMap),
@@ -361,7 +358,7 @@ function buildOtherSeriesItems(allRoundGames, focusTeamA, focusTeamB) {
     const roundGames = allRoundGames.filter(g => g.round === roundNum);
     const bySeriesNum = {};
     roundGames.forEach(g => {
-      const key = g.series_number ?? `${g.team_code_a}-${g.team_code_b}`;
+      const key = `${g.round}-${g.series_number ?? `${g.team_code_a}-${g.team_code_b}`}`;
       if (!bySeriesNum[key]) bySeriesNum[key] = [];
       bySeriesNum[key].push(g);
     });
@@ -425,10 +422,6 @@ function buildScrollItems(
     g => g.team_a_score != null && g.team_b_score != null
   );
 
-  console.log('COMPLETED COUNT', completed.length);
-  console.log('PLAYOFF GAMES LENGTH', playoffGames?.length);
-  console.log('SAMPLE GAME', playoffGames?.[0]);
-
   const isPostGame1 = completed.length >= 1;
   const items = [];
 
@@ -489,8 +482,10 @@ function buildScrollItems(
       if (leadersEarly.pts.length > 0)     items.push({ type: 'leaders', category: 'PTS',  entries: leadersEarly.pts,     accent: 'blue',    teamA, teamB });
       if (leadersEarly.goals.length > 0)   items.push({ type: 'leaders', category: 'G',    entries: leadersEarly.goals,   accent: 'blue',    teamA, teamB });
       if (leadersEarly.assists.length > 0) items.push({ type: 'leaders', category: 'A',    entries: leadersEarly.assists, accent: 'blue', teamA, teamB });
-      if (leadersEarly.hits.length > 0)    items.push({ type: 'leaders', category: 'HITS', entries: leadersEarly.hits,    accent: 'red',     teamA, teamB });
+      if (leadersEarly.hits.length > 0)    items.push({ type: 'leaders', category: 'HITS', entries: leadersEarly.hits,    accent: 'blue',     teamA, teamB });
     }
+    console.log('PRE-GAME-1 ITEMS', items.map(i => i.type + (i.label ? ':'+i.label : '') + (i.category ? ':'+i.category : '')));
+
     return items;
   }
 
@@ -753,7 +748,7 @@ export default function StreamOverlayPlayoff() {
     if (completedRoundIds.length > 0) {
       const [{ data: ars }, { data: ask }] = await Promise.all([
         supabase.from('game_raw_scoring').select('*').in('playoff_game_id', completedRoundIds),
-        supabase.from('game_stats_skater').select('player_name,team_code,chk,playoff_game_id')
+        supabase.from('game_stats_skaters').select('player_name,team_code,chk,playoff_game_id')
           .in('playoff_game_id', completedRoundIds),
       ]);
       allRoundRawScoring  = ars || [];
@@ -894,8 +889,6 @@ export default function StreamOverlayPlayoff() {
     return () => clearInterval(pollRef.current);
   }, [data, loadMatchup]);
 
-
-  console.log('AD STATE', { adVisible, adImage, gameCount: data?.totalGames });
   return (
     <div className="po-root" style={{ transform: `scale(${scale})`, transformOrigin: 'top left' }}>
       {showPanel && (
@@ -924,6 +917,13 @@ function PlayoffLayout({ data, loading }) {
     teamSeriesStatsA, teamSeriesStatsB,
     teamA, teamB, scrollItems, season,
   } = data;
+
+
+  const stableScrollItems = React.useMemo(
+    () => scrollItems,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(scrollItems)]
+  );
 
   const leftIsA      = leftTeam === teamA;
   const leftSkaters  = leftIsA ? skaterStatsA : skaterStatsB;
@@ -978,7 +978,7 @@ function PlayoffLayout({ data, loading }) {
       </div>
 
       {/* Bottom Scroller */}
-      <BottomScroller items={scrollItems} />
+      <BottomScroller items={stableScrollItems} />
     </>
   );
 }
@@ -1120,6 +1120,9 @@ function flattenToRows(items) {
   let currentSection = '';
   let currentRound   = null;
 
+  console.log('FLATTEN INPUT', items?.length, '→ types:', items?.map(i => i.type));
+
+
   items.forEach(item => {
     switch (item.type) {
       case 'section-header':
@@ -1137,6 +1140,8 @@ function flattenToRows(items) {
         break;
     }
   });
+
+  console.log('FLATTEN OUTPUT', rows.length, '→', rows.map(r => r.type + ':' + r._section));
 
   return rows;
 }
@@ -1349,39 +1354,28 @@ function BugLabel({ section, round }) {
 function BottomScroller({ items }) {
   const rows = React.useMemo(() => flattenToRows(items || []), [items]);
   const [bugLabel, setBugLabel] = useState({ section: '', round: null });
+  const [cells, setCells] = useState({ top: null, bottom: null });
 
-  const topCellRef    = useRef(null);
-  const bottomCellRef = useRef(null);
   const columnRef     = useRef(null);
   const idxRef        = useRef(0);
   const timerRef      = useRef(null);
-  const rafRef        = useRef(null);
   const rowsRef       = useRef(rows);
+  const runLoopRef    = useRef(null);  // ← ADD THIS
 
-  // Keep rowsRef current without restarting the loop
   useEffect(() => { rowsRef.current = rows; }, [rows]);
 
-  // Render a row's JSX into a DOM cell via React portal-style injection
-  // We do this by keeping two React-rendered cells and swapping their content
-  // via state lifted to a sibling — actually simpler: we track two display slots
-  const [cells, setCells] = useState({ top: null, bottom: null });
-
-  const runLoop = useCallback(() => {
+  // Define runLoop as a ref so it always calls the latest version of itself
+  runLoopRef.current = () => {
     const rows = rowsRef.current;
     if (!rows.length) return;
 
     const idx     = idxRef.current;
-    const isLast = idx === rows.length - 1;
-    const nextIdx = isLast ? 0 : idx + 1;
+    const nextIdx = idx === rows.length - 1 ? 0 : idx + 1;
 
-    // Set bug label for CURRENT row immediately (already in position)
     const row = rows[idx];
     setBugLabel({ section: row._section || '', round: row._round || null });
-
-    // Load top = current, bottom = next
     setCells({ top: rows[idx], bottom: rows[nextIdx] });
 
-    // Reset column position instantly (no transition)
     if (columnRef.current) {
       columnRef.current.style.transition = 'none';
       columnRef.current.style.transform  = 'translateY(0)';
@@ -1389,8 +1383,6 @@ function BottomScroller({ items }) {
 
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
-      // Kick off the slide — update bug label for the INCOMING row
-      // at the exact same moment the animation starts, so they move together
       const incomingRow = rows[nextIdx];
       setBugLabel({ section: incomingRow._section || '', round: incomingRow._round || null });
 
@@ -1401,20 +1393,18 @@ function BottomScroller({ items }) {
 
       timerRef.current = setTimeout(() => {
         idxRef.current = nextIdx;
-        runLoop();
+        runLoopRef.current();  // ← always calls the latest version
       }, SLIDE_MS);
     }, ROW_HOLD_MS);
-  }, []);
+  };
 
   useEffect(() => {
     if (!rows.length) return;
     idxRef.current = 0;
-    runLoop();
-    return () => {
-      clearTimeout(timerRef.current);
-      cancelAnimationFrame(rafRef.current);
-    };
-  }, [rows, runLoop]);
+    clearTimeout(timerRef.current);
+    runLoopRef.current();
+    return () => clearTimeout(timerRef.current);
+  }, [rows]);
 
   if (!rows.length) return null;
 
@@ -1423,8 +1413,8 @@ function BottomScroller({ items }) {
       <BugLabel section={bugLabel.section} round={bugLabel.round} />
       <div className="vsc-stage">
         <div className="vsc-column" ref={columnRef}>
-          <div className="vsc-cell" ref={topCellRef}>{renderScrollRow(cells.top)}</div>
-          <div className="vsc-cell" ref={bottomCellRef}>{renderScrollRow(cells.bottom)}</div>
+          <div className="vsc-cell">{renderScrollRow(cells.top)}</div>
+          <div className="vsc-cell">{renderScrollRow(cells.bottom)}</div>
         </div>
       </div>
     </div>

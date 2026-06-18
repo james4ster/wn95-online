@@ -482,7 +482,7 @@ function buildScrollItems(
       if (leadersEarly.pts.length > 0)     items.push({ type: 'leaders', category: 'PTS',  entries: leadersEarly.pts,     accent: 'blue',    teamA, teamB });
       if (leadersEarly.goals.length > 0)   items.push({ type: 'leaders', category: 'G',    entries: leadersEarly.goals,   accent: 'blue',    teamA, teamB });
       if (leadersEarly.assists.length > 0) items.push({ type: 'leaders', category: 'A',    entries: leadersEarly.assists, accent: 'blue', teamA, teamB });
-      if (leadersEarly.hits.length > 0)    items.push({ type: 'leaders', category: 'HITS', entries: leadersEarly.hits,    accent: 'red',     teamA, teamB });
+      if (leadersEarly.hits.length > 0)    items.push({ type: 'leaders', category: 'HITS', entries: leadersEarly.hits,    accent: 'blue',     teamA, teamB });
     }
     console.log('PRE-GAME-1 ITEMS', items.map(i => i.type + (i.label ? ':'+i.label : '') + (i.category ? ':'+i.category : '')));
 

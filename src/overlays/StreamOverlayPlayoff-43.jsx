@@ -885,7 +885,7 @@ function BottomScroller({ items }) {
             <span className="sc-stat">GA/G <span className="sc-val accent-red">{s.gapg}</span></span>
             <span className="sc-bullet">·</span>
             <span className="sc-stat">SV% <span className="sc-val accent-green">{s.seriesSvPct}</span></span>
-            {s.sh > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">SH <span className="sc-val">{(s.sh/s.gp).toFixed(1)}</span></span></>}
+            {s.sh > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">SH/G <span className="sc-val">{(s.sh/s.gp).toFixed(1)}</span></span></>}
             {s.brA > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">BRK <span className="sc-val">{s.brPct}</span></span></>}
             {s.ppAmt > 0 && <><span className="sc-bullet">·</span><span className="sc-stat">PP <span className="sc-val accent-blue">{s.ppPct}</span></span></>}
             {s.atkAvg !== '—' && <><span className="sc-bullet">·</span><span className="sc-stat">ATK <span className="sc-val">{s.atkAvg}</span></span></>}

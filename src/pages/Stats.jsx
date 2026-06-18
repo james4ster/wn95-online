@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from '../components/LeagueContext';
+import Dashboard from './Dashboard';
 
 const lgPrefix = (lg) => (lg || '').replace(/[0-9]/g, '').trim();
 const norm = (s) => (s || '').toString().trim().toLowerCase();
@@ -1434,7 +1435,7 @@ function buildAdvancedStats(games) {
     const ot = !!g.ot;
     const isPlayoff = !!g._isPlayoff || PLAYOFF_VALS.has((g.mode || '').trim().toUpperCase());
     const gameNum = g.game_number != null ? Number(g.game_number) : null;
-    if (isPlayoff) console.log('gameNum raw:', g.game_number, '→', gameNum, 'round:', g.round);
+    if (isPlayoff); //console.log('gameNum raw:', g.game_number, '→', gameNum, 'round:', g.round);
 
 
     const h1 = Number(g.home_1p_g ?? -1);
@@ -1497,7 +1498,7 @@ function buildAdvancedStats(games) {
       }
 
       if (isPlayoff && gameNum) {
-        console.log('storing po_by_game', rec.normKey, 'gameNum:', gameNum, typeof gameNum);
+        //console.log('storing po_by_game', rec.normKey, 'gameNum:', gameNum, typeof gameNum);
 
         if (!rec.po_by_game[gameNum]) rec.po_by_game[gameNum] = { w: 0, l: 0 };
         if (won) rec.po_by_game[gameNum].w++;
@@ -2879,6 +2880,8 @@ export default function Stats() {
   const [teamSort, dispatchTeamSort] = useState({ key: 'gf', dir: 'desc' });
 
   const [playerTeamGPMap, setPlayerTeamGPMap] = useState(new Map());
+  const [playoffGamesData, setPlayoffGamesData] = useState([]);
+  const [allTimeTeamStatsRows, setAllTimeTeamStatsRows] = useState([]);
   
   const sortKey = sort.key;
   const sortDir = sort.dir;
@@ -2925,11 +2928,19 @@ export default function Stats() {
         .select('abr,lg,manager_id')
         .not('manager_id', 'is', null)
         .order('lg', { ascending: false }),
-        supabase
+      supabase
         .from('game_raw_scoring')
         .select('game_id, playoff_game_id, period, g_team, goal_num'),
-    ]).then(([gamesRes, playoffRes, managersRes, teamsRes, scoringRes]) => {
-      
+      supabase
+        .from('game_stats_team')
+        .select('*'),
+      supabase
+        .from('teams')
+        .select('abr,lg,coach,manager_id'),
+    ]) 
+    .then(([gamesRes, playoffRes, managersRes, teamsRes, scoringRes, allTeamStatsRes, allTeamsRes]) => {
+            
+            
       // Build period goal counts keyed by game
       // reg: game_id, po: playoff_game_id
       // Need home/away team per game to split goals by side
@@ -2987,13 +2998,76 @@ export default function Stats() {
         }
       }
 
+      // Build (abr|lg) → coach map for ALL seasons (Dashboard all-time/season-record use)
+        const teamSeasonCoachMap = new Map();
+        for (const t of allTeamsRes.data || []) {
+          const abr = (t.abr || '').trim().toUpperCase();
+          const lg = t.lg;
+          if (!abr || !lg) continue;
+          const coachName = t.coach || mgrIdToName.get(t.manager_id) || '';
+          if (coachName) teamSeasonCoachMap.set(`${abr}|${lg}`, coachName.trim());
+        }
+        console.log('[CoachMap] sample keys:', [...teamSeasonCoachMap.keys()].slice(0, 5));
+        console.log('[StatsRows] full first row keys:', Object.keys((allTeamStatsRes.data || [])[0] || {}));
+        console.log('[StatsRows] sample:', (allTeamStatsRes.data || []).slice(0, 3).map(r => ({
+          team_code: r.team_code,
+          code: r.code,
+          lg: r.lg,
+          season: r.season,
+        }))); 
+        
+        // Enrich raw game_stats_team rows with coach + lg for Dashboard's advanced-stat builders
+        // Explode game_stats_team rows into per-team rows for Dashboard
+const enrichedAllTimeTeamStats = [];
+for (const row of (allTeamStatsRes.data || [])) {
+  const lg = row.season;
+  
+  for (const side of ['home', 'away']) {
+        const abr = (row[side] || '').trim().toUpperCase();
+        if (!abr) continue;
+        const coach = teamSeasonCoachMap.get(`${abr}|${lg}`) || '';
+        
+        enrichedAllTimeTeamStats.push({
+          lg,
+          coach,
+          team_code: abr,
+          gp: 1,
+          goals:    row[`${side}_score`],
+          goals_ag: row[side === 'home' ? 'away_score' : 'home_score'],
+          shots:    row[`${side}_shots`],
+          shots_ag: row[side === 'home' ? 'away_shots' : 'home_shots'],
+          pp_g:     row[`${side}_pp_g`],
+          pp_amt:   row[`${side}_pp_amt`],
+          pp_shots: row[`${side}_pp_shots`],
+          sh_g:     row[`${side}_shg`],
+          ot_g:     row[`${side}_ot_g`],
+          ps_att:   row[`${side}_ps`],
+          ps_g:     row[`${side}_psg`],
+          fo_won:   row[`${side}_fow`],
+          fo_total: row.fo_total,
+          pass_att:  row[`${side}_pass_attempts`],
+          pass_comp: row[`${side}_pass_complete`],
+          chk:      row[`${side}_chk`],
+          chk_ag:   row[side === 'home' ? 'away_chk' : 'home_chk'],
+          break_att: row[`${side}_break_attempts`],
+          break_g:   row[`${side}_break_goals`],
+          xa_shots:  row[`${side}_1xa`],
+          xg:        row[`${side}_1xg`],
+          pp_time_avg:  row[`${side}_pp_mins`],
+          sh_time_avg:  row[side === 'home' ? 'away_pp_mins' : 'home_pp_mins'],
+          atk_time_avg: row[`${side}_attack`],
+          def_time_avg: row[side === 'home' ? 'away_attack' : 'home_attack'],
+        });
+      }
+    }
+setAllTimeTeamStatsRows(enrichedAllTimeTeamStats);
+
       // Determine which seasons have data in playoff_games
       const seasonsInPlayoffTable = new Set(
         (playoffRes.data || []).map((g) => g.lg).filter(Boolean)
       );
 
-       
-
+  
       // Normalize playoff rows from playoff_games
       const playoffRows = (playoffRes.data || []).map((g) => {
         const pg = periodGoals.get(`po-${g.id}`) || {};
@@ -3020,13 +3094,7 @@ export default function Stats() {
         };
       });
 
-      console.log('playoffRows sample:', playoffRows.slice(0, 3).map(r => ({
-        lg: r.lg, home: r.home, away: r.away,
-        coach_home: r.coach_home, coach_away: r.coach_away,
-        game_number: r.game_number
-      })));
-
-      // Strip playoff rows from games table for seasons covered by playoff_games
+    // Strip playoff rows from games table for seasons covered by playoff_games
       const filteredSeasonRows = seasonRows.filter((g) => {
         const isPlayoffMode = PLAYOFF_VALS.has(
           (g.mode || '').trim().toUpperCase()
@@ -3049,6 +3117,7 @@ export default function Stats() {
 
       const allRows = [...enrichedSeasonRows, ...playoffRows];
 
+      setPlayoffGamesData(playoffRes.data || []);
       setAllGames(allRows);
       setManagers(managersRes.data || []);
       setModeValues([
@@ -3534,6 +3603,9 @@ export default function Stats() {
           >
             🔬 ADVANCED
           </button>
+          <button className={`sp-tab ${tab === 'dashboard' ? 'on' : ''}`} onClick={() => setTab('dashboard')}>
+            📊 DASHBOARD
+          </button>
         </div>
         {((tab === 'managers' && sortedManagerRows.length > 0) ||
           (tab === 'h2h' && sortedH2hRows.length > 0) ||
@@ -3889,6 +3961,17 @@ export default function Stats() {
             />
           )}
         </div>
+        ) : tab === 'dashboard' ? (
+          <Dashboard
+            allGames={allGames}
+            allSeasons={allSeasons}
+            leagueGames={leagueGames}
+            managers={managers}
+            mgrMeta={mgrMeta}
+            teamStatsRows={allTimeTeamStatsRows}
+            playoffGames={playoffGamesData}
+          />
+          
       ) : tab === 'advanced' ? (
         <div className="sp-table-outer">
           {loading ? (

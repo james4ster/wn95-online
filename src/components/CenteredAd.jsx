@@ -1,6 +1,12 @@
 import React from 'react';
 
+
 export default function CenteredAd({ visible, gameNum, adImage, style = {} }) {
+
+  const safeImage = adImage?.trim();
+
+  if (!visible || !safeImage) return null;
+
   return (
     <>
       <div className={`po-center-ad${visible ? ' visible' : ''}`} style={style}>
@@ -9,12 +15,12 @@ export default function CenteredAd({ visible, gameNum, adImage, style = {} }) {
           Game {gameNum} Coming Up
             <span className="po-center-ad-presented">PRESENTED BY</span>
           </div>
-          {adImage && (
+          {visible && adImage?.trim() && (
             <img
               src={`/assets/ads/${adImage}`}
               alt="Sponsor"
               className="po-center-ad-img"
-              onError={e => { e.target.style.display = 'none'; }}
+              //onError={e => { e.target.style.display = 'none'; }}
             />
           )}
           <div className="po-center-ad-footer">

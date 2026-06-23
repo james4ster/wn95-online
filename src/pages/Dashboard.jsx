@@ -2,7 +2,7 @@
 // Props: allGames, allSeasons, leagueGames, managers, mgrMeta, teamStatsRows,
 //        computedStandings, champData, allSeasonsData
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 
 // ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
@@ -24,6 +24,30 @@ const norm = s => (s || '').toString().trim().toLowerCase();
 const seasonNum = lg => { const n = parseInt((lg || '').replace(/\D/g, ''), 10); return isNaN(n) ? 0 : n; };
 const PLAYOFF_VALS = new Set(['PO', 'PLAYOFF', 'PLAYOFFS', 'P', 'POST', 'POSTSEASON']);
 const rsOnly = g => !g._isPlayoff && !PLAYOFF_VALS.has((g.mode || '').trim().toUpperCase());
+
+
+// Preload images so Dashboard logos display in Safari
+function usePreloadedImages(urls) {
+  const [loaded, setLoaded] = useState(false);
+  const cache = useRef({});
+
+  useEffect(() => {
+    if (!urls?.length) { setLoaded(true); return; }
+    let remaining = urls.length;
+    urls.forEach(url => {
+      if (cache.current[url]) { remaining--; if (!remaining) setLoaded(true); return; }
+      const img = new Image();
+      img.onload = img.onerror = () => {
+        cache.current[url] = img;
+        remaining--;
+        if (!remaining) setLoaded(true);
+      };
+      img.src = url;  // no crossOrigin needed for same-origin
+    });
+  }, [urls?.join(',')]);
+
+  return { loaded, cache: cache.current };
+}
 
 function gameResult(sh, sa, ot, side) {
   const ms = side === 'home' ? sh : sa, os = side === 'home' ? sa : sh;
@@ -593,6 +617,9 @@ function ScatterVisualization({ rows, cat, scope }) {
     return s.slice(0, 20);
   }, [rows, cat]);
 
+  const logoUrls = useMemo(() => [...new Set(points.map(p => p.code).filter(Boolean).map(c => `/assets/teamLogos/${c}.png`))], [points]);
+  const { cache } = usePreloadedImages(logoUrls);
+
   if (!points.length) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 16, color: C.textDim }}>
@@ -741,9 +768,11 @@ function ScatterVisualization({ rows, cat, scope }) {
                     )}
                     {/* backing disc so logos with transparent bg still read clearly */}
                     <circle r={r} fill={C.bg} stroke={isHover ? cat.color : 'rgba(255,255,255,.15)'} strokeWidth={isHover ? 2.5 : 1.5} />
-                    <foreignObject x={-r * 0.78} y={-r * 0.78} width={r * 1.56} height={r * 1.56} style={{ pointerEvents: 'none' }}>
-                      <TeamLogo code={p.code} size={r * 1.56} color={cat.color} style={{ borderRadius: 0, background: 'transparent', border: 'none' }} />
-                    </foreignObject>
+                    {cache[`/assets/teamLogos/${p.code}.png`]?.complete
+                        ? <image href={`/assets/teamLogos/${p.code}.png`} x={-r * 0.78} y={-r * 0.78} width={r * 1.56} height={r * 1.56} style={{ pointerEvents: 'none' }} />
+                        : <text x={0} y={4} textAnchor="middle" fontSize={r * 0.5} fill={cat.color} style={{ pointerEvents: 'none' }}>{(p.code || '?').slice(0,3)}</text>
+                    }
+
                     {p._rank === 0 && (
                       <text x={0} y={-r - 12} textAnchor="middle" fontSize={18}>👑</text>
                     )}

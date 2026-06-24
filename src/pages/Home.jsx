@@ -2,6 +2,29 @@ import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import TwitchLiveWidget from '../components/TwitchLiveWidget';
 import { useLeague } from '../components/LeagueContext';
+import SeasonalFlair from '../components/HomeFlair';
+import ChampionshipFlair from '../components/HomeConfetti';
+import { createPortal } from 'react-dom';
+
+/*
+=====================
+Homepage Flair Options
+  - Holiday (i.e. Fireworks)
+  - Championship (i.e. Confetti)
+*/
+function FireworksOverlay() {
+  return createPortal(
+    <SeasonalFlair fullscreen />,
+    document.body
+  );
+}
+
+function ChampionshipOverlay({ teamCode, teamName, seasonLabel, active }) {
+  return createPortal(
+    <ChampionshipFlair active={active} teamCode={teamCode} teamName={teamName} seasonLabel={seasonLabel} fullscreen />,
+    document.body
+  );
+}
 
 const lgPrefix = (lg) => (lg || '').replace(/[0-9]/g, '').trim();
 const LEAGUE_CONFIG = [
@@ -829,7 +852,10 @@ function LeagueGazette({
 
       {/* ══ BODY ══════════════════════════════════════════════ */}
       {loading && !edition ? (
+        <>
+        <SeasonalFlair />
         <GazetteSkeleton />
+      </>
       ) : error ? (
         <div className="si-error">
           <span>📡</span>
@@ -1747,6 +1773,44 @@ export default function Home() {
   const [championTeam, setChampionTeam] = useState(null);
   const stableSeasonTeams = useMemo(() => seasonTeams, [currentSeason?.lg]);
 
+  const [showFireworks, setShowFireworks] = useState(true);
+
+/*=======================================
+ Homepage Flair
+*/
+useEffect(() => {
+  const timer = setTimeout(() => {
+    setShowFireworks(false);
+  }, 10000);
+
+  return () => clearTimeout(timer);
+}, []);
+
+/*=======================================
+ Homepage Confetti
+*/
+const CHAMPIONSHIP_WINDOW_DAYS = 3; // how many days after season end to show confetti
+
+// ── TEMP TEST TOGGLE — set to true to preview championship confetti, delete when done ──
+const FORCE_CHAMPIONSHIP_TEST = false;
+const TEST_TEAM_CODE = 'TBP'; // swap to any real abr you have logo/banner assets for
+
+const isChampionshipWindow = useMemo(() => {
+  if (FORCE_CHAMPIONSHIP_TEST) return true;
+  if (!championTeam || currentSeason?.status !== 'offseason' || !currentSeason?.end_date) return false;
+  const daysSince = (Date.now() - new Date(currentSeason.end_date).getTime()) / 86400000;
+  return daysSince >= 0 && daysSince <= CHAMPIONSHIP_WINDOW_DAYS;
+}, [championTeam, currentSeason?.status, currentSeason?.end_date]);
+
+const [showChampionship, setShowChampionship] = useState(true);
+useEffect(() => {
+  if (!isChampionshipWindow) return;
+  setShowChampionship(true);
+  const timer = setTimeout(() => setShowChampionship(false), 15000);
+  return () => clearTimeout(timer);
+}, [isChampionshipWindow]);
+
+
   useEffect(() => {
     if (!beltRef.current || !newsItems.length) return;
     requestAnimationFrame(() => {
@@ -2416,6 +2480,15 @@ export default function Home() {
 
   return (
     <div className="hp">
+      {showFireworks && <FireworksOverlay />}
+      {isChampionshipWindow && showChampionship && (
+        <ChampionshipOverlay
+          teamCode={championTeam || TEST_TEAM_CODE}
+          teamName={teamNameMap[championTeam || TEST_TEAM_CODE]?.full || TEST_TEAM_CODE}
+          seasonLabel={currentSeason?.lg}
+          active={isChampionshipWindow}
+        />
+      )}
       <div className="scanlines" aria-hidden />
 
       <div className="cg">

@@ -65,6 +65,14 @@ function getSeriesScore(playoffGames, teamA, teamB) {
   return { aW, bW };
 }
 
+// ── Helper to check if playoff_games was updated since last poll ───────
+function buildPlayoffFingerprint(rows) {
+  return (rows || [])
+    .map(r => `${r.id}:${r.team_a_score ?? ''}:${r.team_b_score ?? ''}`)
+    .sort()
+    .join('|');
+}
+
 function buildCumulativeSkaterStatsFromRaw(rawScoring, teamCode) {
   const map = {};
   const ensure = (name) => {
@@ -330,6 +338,8 @@ export default function StreamOverlayPlayoff43() {
   //
   const pollRef = useRef(null);
   const scale   = useOverlayScale(ROOT_W, ROOT_H);
+  const h2hCacheRef = useRef(null); // { key: 'tA-tB-lg', teamRows, h2h } — only refetched when matchup changes
+  const lastFingerprintRef = useRef(null); // tiny snapshot of bracket scores — skips full poll when unchanged
 
   const getParams = () => {
     const p = new URLSearchParams(window.location.search);
@@ -395,13 +405,32 @@ export default function StreamOverlayPlayoff43() {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
+  const checkForBracketChanges = useCallback(async (lg) => {
+    const { data: rows, error } = await supabase
+      .from('playoff_games')
+      .select('id,team_a_score,team_b_score')
+      .eq('lg', lg);
+    if (error) {
+      console.error('fingerprint check error:', error);
+      return true; // fail safe — if the check itself fails, do the real fetch
+    }
+    return buildPlayoffFingerprint(rows) !== lastFingerprintRef.current;
+  }, []);
+
   const loadMatchup = useCallback(async (tA, tB, lg, round, series, isPoll = false) => {
         if (!tA || !tB || !lg || tA === tB) return;
     setLoading(true);
 
+
     const { data: allPgRows, error: pgErr } = await supabase
-      .from('playoff_games').select('*').ilike('lg', 'W%').eq('lg', lg).order('game_number');
+      .from('playoff_games')
+      .select('id,lg,round,series_number,series_length,game_number,team_code_a,team_code_b,team_a_score,team_b_score,seed_a,seed_b')
+      .ilike('lg', 'W%').eq('lg', lg).order('game_number');
     if (pgErr) console.error('playoff_games error:', pgErr);
+
+    // Snapshot scores so the poll loop can skip a full refresh next time
+    // when nothing in the bracket has actually changed.
+    lastFingerprintRef.current = buildPlayoffFingerprint(allPgRows);
 
     let playoffGames = (allPgRows || []).filter(
       (g) => (g.team_code_a === tA && g.team_code_b === tB) || (g.team_code_a === tB && g.team_code_b === tA)
@@ -441,61 +470,80 @@ export default function StreamOverlayPlayoff43() {
       teamStats  = ts || [];
     }
 
-    const { data: teamRows } = await supabase.from('teams').select('abr,coach,color_primary,color_secondary').eq('lg', lg);
-    const coachA = norm((teamRows || []).find((t) => t.abr === tA)?.coach || tA);
-    const coachB = norm((teamRows || []).find((t) => t.abr === tB)?.coach || tB);
+    const matchupKey = `${tA}-${tB}-${lg}`;
+    let teamRows, h2h;
 
-    const { data: allRsGames } = await supabase
-      .from('games').select('id,lg,score_home,score_away,ot,coach_home,coach_away')
-      .ilike('lg', 'W%').ilike('mode', 'season').not('score_home', 'is', null);
+    if (isPoll && h2hCacheRef.current?.key === matchupKey) {
+      // Reuse cached H2H + team rows on polls — saves a full-season fetch every 30s
+      teamRows = h2hCacheRef.current.teamRows;
+      h2h = h2hCacheRef.current.h2h;
+    } else {
+      const { data: tr } = await supabase
+        .from('teams')
+        .select('abr,coach,color_primary,color_secondary')
+        .eq('lg', lg);
+      teamRows = tr || [];
 
-    const h2hGames = (allRsGames || []).filter((g) => {
-      const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
-      return (h === coachA && a === coachB) || (h === coachB && a === coachA);
-    });
+      const coachA = norm(teamRows.find((t) => t.abr === tA)?.coach || tA);
+      const coachB = norm(teamRows.find((t) => t.abr === tB)?.coach || tB);
 
-    const h2hGameIds = h2hGames.map((g) => g.id).filter(Boolean);
-    let rsTeamStats = [];
-    if (h2hGameIds.length > 0) {
-      const { data: rts } = await supabase.from('game_stats_team').select('*').in('game_id', h2hGameIds);
-      rsTeamStats = rts || [];
+      // Scoped to this matchup's coaches only, not the whole season
+      const { data: allRsGames } = await supabase
+        .from('games')
+        .select('id,lg,score_home,score_away,ot,coach_home,coach_away')
+        .ilike('lg', 'W%').ilike('mode', 'season').not('score_home', 'is', null)
+        .or(`coach_home.eq.${coachA},coach_away.eq.${coachA}`);
+
+      const h2hGames = (allRsGames || []).filter((g) => {
+        const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
+        return (h === coachA && a === coachB) || (h === coachB && a === coachA);
+      });
+
+      const h2hGameIds = h2hGames.map((g) => g.id).filter(Boolean);
+      let rsTeamStats = [];
+      if (h2hGameIds.length > 0) {
+        const { data: rts } = await supabase.from('game_stats_team').select('*').in('game_id', h2hGameIds);
+        rsTeamStats = rts || [];
+      }
+
+      let atAW = 0, atBW = 0, atTies = 0;
+      h2hGames.forEach((g) => {
+        const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
+        const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
+        const hIsA = h === coachA;
+        const gfA = hIsA ? sh : sa, gaA = hIsA ? sa : sh;
+        if (sh === sa) atTies++;
+        else if (gfA > gaA) atAW++;
+        else atBW++;
+      });
+
+      const seasonGames = h2hGames.filter((g) => g.lg === lg);
+      let sAW = 0, sBW = 0, sTies = 0;
+      const seasonGameScores = [];
+      seasonGames.forEach((g) => {
+        const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
+        const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
+        const hIsA = h === coachA;
+        const aScore = hIsA ? sh : sa, bScore = hIsA ? sa : sh;
+        let winner = null;
+        if (sh === sa) sTies++;
+        else if (aScore > bScore) { sAW++; winner = tA; }
+        else { sBW++; winner = tB; }
+        seasonGameScores.push({ aScore, bScore, winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
+      });
+
+      h2h = {
+        seasonGP: sAW + sBW + sTies, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
+        seasonGames: seasonGameScores,
+        seasonStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg),
+        seasonStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, lg),
+        allTimeGP: atAW + atBW + atTies, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
+        allTimeStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null),
+        allTimeStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, null),
+      };
+
+      h2hCacheRef.current = { key: matchupKey, teamRows, h2h };
     }
-
-    let atAW = 0, atBW = 0, atTies = 0;
-    h2hGames.forEach((g) => {
-      const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
-      const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
-      const hIsA = h === coachA;
-      const gfA = hIsA ? sh : sa, gaA = hIsA ? sa : sh;
-      if (sh === sa) atTies++;
-      else if (gfA > gaA) atAW++;
-      else atBW++;
-    });
-
-    const seasonGames = h2hGames.filter((g) => g.lg === lg);
-    let sAW = 0, sBW = 0, sTies = 0;
-    const seasonGameScores = [];
-    seasonGames.forEach((g) => {
-      const h = norm(g.coach_home || ''), a = norm(g.coach_away || '');
-      const sh = Number(g.score_home ?? 0), sa = Number(g.score_away ?? 0);
-      const hIsA = h === coachA;
-      const aScore = hIsA ? sh : sa, bScore = hIsA ? sa : sh;
-      let winner = null;
-      if (sh === sa) sTies++;
-      else if (aScore > bScore) { sAW++; winner = tA; }
-      else { sBW++; winner = tB; }
-      seasonGameScores.push({ aScore, bScore, winner, ot: g.ot && g.ot !== '0' && g.ot !== 0 ? g.ot : null });
-    });
-
-    const h2h = {
-      seasonGP: sAW + sBW + sTies, seasonAW: sAW, seasonBW: sBW, seasonTies: sTies,
-      seasonGames: seasonGameScores,
-      seasonStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, lg),
-      seasonStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, lg),
-      allTimeGP: atAW + atBW + atTies, allTimeAW: atAW, allTimeBW: atBW, allTimeTies: atTies,
-      allTimeStatsA: buildH2HTeamStats(h2hGames, rsTeamStats, coachA, coachB, tA, tB, null),
-      allTimeStatsB: buildH2HTeamStats(h2hGames, rsTeamStats, coachB, coachA, tB, tA, null),
-    };
 
     const { aW, bW } = getSeriesScore(playoffGames, tA, tB);
     // Higher seed = lower number = right side (challenger); lower seed = left side (home)
@@ -552,23 +600,27 @@ export default function StreamOverlayPlayoff43() {
     const p = new URLSearchParams({ lg: currentLg, teamA: pendingA, teamB: pendingB });
     window.history.replaceState(null, '', `?${p.toString()}`);
     setShowPanel(false);
+    h2hCacheRef.current = null; // force fresh H2H fetch for the new matchup
     loadMatchup(pendingA, pendingB, currentLg, null, null);
   }, [pendingA, pendingB, currentLg, loadMatchup]);
 
   useEffect(() => {
     if (!data) return;
-    pollRef.current = setInterval(() => {
+    pollRef.current = setInterval(async () => {
       const params = getParams();
+      const lg = params.lg || data.lg;
+      const changed = await checkForBracketChanges(lg);
+      if (!changed) return; // nothing in the bracket moved — skip the full poll entirely
       loadMatchup(
         params.teamA || data.teamA, params.teamB || data.teamB,
-        params.lg || data.lg,
+        lg,
         params.round  != null ? params.round  : data.roundNum,
         params.series != null ? params.series : data.seriesNum,
         true, // isPoll = true — enables ad trigger
       );
     }, POLL_INTERVAL);
     return () => clearInterval(pollRef.current);
-  }, [data, loadMatchup]);
+  }, [data, loadMatchup, checkForBracketChanges]);
 
 
   return (

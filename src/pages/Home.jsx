@@ -1792,7 +1792,7 @@ useEffect(() => {
 const CHAMPIONSHIP_WINDOW_DAYS = 3; // how many days after season end to show confetti
 
 // ── TEMP TEST TOGGLE — set to true to preview championship confetti, delete when done ──
-const FORCE_CHAMPIONSHIP_TEST = false;
+const FORCE_CHAMPIONSHIP_TEST = true;
 const TEST_TEAM_CODE = 'TBP'; // swap to any real abr you have logo/banner assets for
 
 const isChampionshipWindow = useMemo(() => {

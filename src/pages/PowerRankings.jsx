@@ -1,12 +1,68 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
 const CURRENT_LG = 'W17';
 
-const RankArrow = ({ change }) => {
-  if (change === null || change === undefined) return (
-    <span className="pr-new">NEW</span>
-  );
+const ROUND_NAMES = {
+  1: 'Round 1',
+  2: 'Round 2',
+  3: 'Conference Finals',
+  4: 'Championship',
+};
+
+// ─── Derive playoff status for every team from raw playoff_games rows ─────────
+function buildPlayoffStatus(games, asOfDate) {
+  const filtered = asOfDate
+    ? games.filter(g => g.game_date <= asOfDate)
+    : games;
+
+  const seriesMap = {};
+  for (const g of filtered) {
+    const key = `${g.round}-${g.series_number}`;
+    if (!seriesMap[key]) seriesMap[key] = { games: [], round: g.round, series_length: g.series_length, teamA: g.team_code_a, teamB: g.team_code_b };
+    seriesMap[key].games.push(g);
+  }
+
+  const teamMap = {};
+  const ensure = (code) => { if (!teamMap[code]) teamMap[code] = {}; };
+  const eliminated = {};
+  const stillActive = new Set();
+
+  for (const [, series] of Object.entries(seriesMap)) {
+    const { games: sg, round, series_length, teamA, teamB } = series;
+    ensure(teamA); ensure(teamB);
+    let winsA = 0, winsB = 0;
+    for (const g of sg) { if (g.team_a_score > g.team_b_score) winsA++; else winsB++; }
+    const needed = Math.ceil(series_length / 2);
+    if (winsA >= needed) {
+      eliminated[teamB] = { round, games: winsA + winsB };
+      teamMap[teamA] = teamMap[teamA] || {};
+    } else if (winsB >= needed) {
+      eliminated[teamA] = { round, games: winsA + winsB };
+      teamMap[teamB] = teamMap[teamB] || {};
+    } else {
+      stillActive.add(teamA);
+      stillActive.add(teamB);
+    }
+  }
+
+  const status = {};
+  for (const code of Object.keys(teamMap)) {
+    const isElim = !!eliminated[code];
+    status[code] = {
+      inPlayoffs: true,
+      isEliminated: isElim,
+      isActive: stillActive.has(code) && !isElim,
+      eliminatedRound: isElim ? eliminated[code].round : null,
+      eliminatedIn: isElim ? eliminated[code].games : null,
+    };
+  }
+  return status;
+}
+
+const RankArrow = ({ change, locked }) => {
+  if (locked) return <span style={{ color: '#444', fontSize: '1rem' }}>—</span>;
+  if (change === null || change === undefined) return <span className="pr-new">NEW</span>;
   if (change === 0) return <span style={{ color: '#888', fontSize: '1rem' }}>—</span>;
   if (change > 0) return <span className="pr-up">▲{change}</span>;
   return <span className="pr-dn">▼{Math.abs(change)}</span>;
@@ -19,17 +75,62 @@ export default function PowerRankings() {
   const [selectedWeek, setSelectedWeek] = useState(null);
   const [loading, setLoading]         = useState(true);
   const [teamLogos, setTeamLogos]     = useState({});
+  const [allPlayoffGames, setAllPlayoffGames] = useState([]);
+
+const playoffStatus = useMemo(
+  () => buildPlayoffStatus(allPlayoffGames, selectedWeek),
+  [allPlayoffGames, selectedWeek]
+);
+
+
+const playoffParticipants = useMemo(
+  () => new Set(allPlayoffGames.flatMap(g => [g.team_code_a, g.team_code_b])),
+  [allPlayoffGames]
+);
+
+const sortedRankings = useMemo(() => {
+  if (!rankings.length) return rankings;
+
+  const active = [];
+  const elim = [];
+  const locked = [];
+
+  for (const r of rankings) {
+    const ps = playoffStatus[r.team_code];
+    if (ps?.isEliminated) {
+      elim.push({ ...r, _elimRound: ps.eliminatedRound });
+    } else if (!ps && playoffParticipants.size > 0 && !playoffParticipants.has(r.team_code)) {
+      locked.push(r);
+    } else {
+      active.push(r);
+    }
+  }
+
+  elim.sort((a, b) =>
+    (b._elimRound ?? 0) - (a._elimRound ?? 0) || a.rank - b.rank
+  );
+
+  return [...active, ...elim, ...locked].map((r, i) => ({ ...r, _displayRank: i + 1 }));
+}, [rankings, playoffStatus, playoffParticipants]);
 
   useEffect(() => {
     async function load() {
-      const { data: rankData, error } = await supabase
-        .from('power_rankings')
-        .select('*')
-        .eq('lg', CURRENT_LG)
-        .order('week_of', { ascending: false })
-        .order('rank',    { ascending: true });
+      const [{ data: rankData, error }, { data: playoffGames, error: pgError }] = await Promise.all([
+        supabase
+          .from('power_rankings')
+          .select('*')
+          .eq('lg', CURRENT_LG)
+          .order('week_of', { ascending: false })
+          .order('rank',    { ascending: true }),
+        supabase
+          .from('playoff_games')
+          .select('*')
+          .eq('lg', CURRENT_LG),
+      ]);
 
-      if (error) { console.error(error); setLoading(false); return; }
+      if (error)   { console.error(error);   setLoading(false); return; }
+      if (pgError) { console.error(pgError); }
+
       if (!rankData?.length) { setLoading(false); return; }
 
       const uniqueWeeks = [...new Set(rankData.map(r => r.week_of))];
@@ -40,17 +141,17 @@ export default function PowerRankings() {
       setSelectedWeek(latestWeek);
       setRankings(rankData.filter(r => r.week_of === latestWeek));
 
+      // Build playoff status map
+      setAllPlayoffGames(playoffGames || []);
+
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
         .select('abr, team')
         .eq('lg', CURRENT_LG);
 
       if (teamsError) console.error('Teams error:', teamsError);
-
       const logoMap = {};
-      for (const t of teamsData || []) {
-        logoMap[t.abr] = t;
-      }
+      for (const t of teamsData || []) logoMap[t.abr] = t;
       setTeamLogos(logoMap);
       setLoading(false);
     }
@@ -68,12 +169,38 @@ export default function PowerRankings() {
     return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   };
 
-  const isPlayoff = (r) => r.composite_score > 2.0;
+  // A team is "playoff-tier" if their composite_score crosses the threshold
+  // (kept as a fallback for weeks before playoff_games existed)
+  const isPlayoffTier = (r) => r.composite_score > 2.0;
 
   const getStreakLabel = (r) => {
     if (r.current_streak === null || r.current_streak === undefined) return '—';
     if (r.current_streak === 0) return '—';
     return r.current_streak > 0 ? `W${r.current_streak}` : `L${Math.abs(r.current_streak)}`;
+  };
+
+  // Determine lock state + override blurb for a ranking row
+  const getPlayoffMeta = (r) => {
+    const ps = playoffStatus[r.team_code];
+  
+    if (ps?.isActive)     return { locked: false, playoff: true,  badge: null,     blurb: r.blurb };
+    if (ps?.isEliminated) {
+      const roundName = ROUND_NAMES[ps.eliminatedRound] ?? `Round ${ps.eliminatedRound}`;
+      return { locked: true, playoff: false, badge: 'ELIM', blurb: `Eliminated in ${roundName} (${ps.eliminatedIn} games)` };
+    }
+    if (ps?.inPlayoffs)   return { locked: false, playoff: true,  badge: null,     blurb: r.blurb };
+  
+    // Only lock as "didn't make playoffs" if they NEVER appear in playoff_games at all
+    if (playoffParticipants.size > 0 && !playoffParticipants.has(r.team_code)) {
+      return { locked: true, playoff: false, badge: 'LOCKED', blurb: r.blurb };
+    }
+  
+    // playoff data exists but this team hasn't played yet (pre-series week) — treat as active/unlocked
+    if (playoffParticipants.has(r.team_code)) {
+      return { locked: false, playoff: true, badge: null, blurb: r.blurb };
+    }
+  
+    return { locked: false, playoff: isPlayoffTier(r), badge: null, blurb: r.blurb };
   };
 
   return (
@@ -186,6 +313,10 @@ export default function PowerRankings() {
           --stripe: #334155;
           --glow: rgba(255,255,255,.02);
         }
+        .pr-card.locked {
+          opacity: .62;
+          filter: saturate(.5);
+        }
         @keyframes prIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
         .pr-row {
@@ -203,7 +334,6 @@ export default function PowerRankings() {
           line-height: 1;
           text-align: center;
         }
-       
 
         /* Arrow */
         .pr-arrow { text-align: center; }
@@ -239,15 +369,43 @@ export default function PowerRankings() {
           margin-left: 6px;
           vertical-align: middle;
         }
+        .pr-elim-badge {
+          display: inline-block;
+          font-family: 'Press Start 2P', monospace;
+          font-size: .38rem;
+          letter-spacing: 1px;
+          color: #fcd34d;
+          background: rgba(251,191,36,.15);
+          border: 1px solid rgba(251,191,36,.35);
+          border-radius: 3px;
+          padding: 2px 5px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
+        .pr-locked-badge {
+          display: inline-block;
+          font-family: 'Press Start 2P', monospace;
+          font-size: .38rem;
+          letter-spacing: 1px;
+          color: #64748b;
+          background: rgba(100,116,139,.12);
+          border: 1px solid rgba(100,116,139,.25);
+          border-radius: 3px;
+          padding: 2px 5px;
+          margin-left: 6px;
+          vertical-align: middle;
+        }
         .pr-blurb {
           font-family: 'VT323', monospace;
           font-size: 1.05rem;
-         
           margin-top: 3px;
           white-space: normal;
           overflow: visible;
           text-overflow: unset;
           font-style: italic;
+        }
+        .pr-blurb.elim {
+          color: #92400e;
         }
 
         /* Stats */
@@ -383,29 +541,29 @@ export default function PowerRankings() {
       ) : (
         <>
           <div className="pr-list">
-            {rankings.map((r, i) => {
-              const playoff    = isPlayoff(r);
-              const team       = teamLogos[r.team_code];
-              const streakLbl  = getStreakLabel(r);
-              const rankClass  = r.rank === 1 ? 'gold' : r.rank <= 3 ? 'silver' : 'rest';
+            {sortedRankings.map((r, i) => {
+              const { locked, playoff, badge, blurb } = getPlayoffMeta(r);
+              const team        = teamLogos[r.team_code];
+              const streakLbl   = getStreakLabel(r);
+              const rankClass   = r.rank === 1 ? 'gold' : r.rank <= 3 ? 'silver' : 'rest';
               const streakClass = r.current_streak < 0 ? 'danger'
                   : r.current_streak > 0 ? 'win'
-                  : 'neutral';  
+                  : 'neutral';
 
               return (
                 <div
                   key={r.id}
-                  className={`pr-card ${playoff ? 'playoff' : 'regular'}`}
+                  className={`pr-card ${playoff ? 'playoff' : 'regular'}${locked ? ' locked' : ''}`}
                   style={{ animationDelay: `${i * 0.04}s` }}
                 >
                   <div className="pr-row">
 
                     {/* Rank */}
-                    <div className={`pr-rank ${rankClass}`}>{r.rank}</div>
+                    <div className={`pr-rank ${rankClass}`}>{r._displayRank ?? r.rank}</div>
 
                     {/* Arrow */}
                     <div className="pr-arrow">
-                      <RankArrow change={r.rank_change} />
+                      <RankArrow change={r.rank_change} locked={locked} />
                     </div>
 
                     {/* Logo */}
@@ -421,10 +579,20 @@ export default function PowerRankings() {
                     <div className="pr-info">
                       <div className="pr-name">
                         {team?.team || r.team_code}
-                        {playoff && <span className="pr-playoff-badge">PLAYOFFS</span>}
+                        {playoff && !locked && (
+                          <span className="pr-playoff-badge">PLAYOFFS</span>
+                        )}
+                        {badge === 'ELIM' && (
+                          <span className="pr-elim-badge">ELIM</span>
+                        )}
+                        {badge === 'LOCKED' && (
+                          <span className="pr-locked-badge">LOCKED</span>
+                        )}
                       </div>
-                      {r.blurb && (
-                        <div className="pr-blurb">{r.blurb}</div>
+                      {blurb && (
+                        <div className={`pr-blurb${badge === 'ELIM' ? ' elim' : ''}`}>
+                          {blurb}
+                        </div>
                       )}
                     </div>
 

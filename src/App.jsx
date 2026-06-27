@@ -24,6 +24,7 @@ import PodcastOverlay from './overlays/PodcastOverlay';
 import PodcastCtrl from './overlays/PodcastCtrl';
 import PowerRankings from './pages/PowerRankings';
 import GettingStarted from './pages/GettingStarted';
+import Champions from './pages/Champions'
 
 
 const OVERLAY_PATHS = [
@@ -72,6 +73,7 @@ function AppShell() {
         <Route path="/league/:leagueId/transactions" element={<Transactions />} />
         <Route path="/media" element={<Media />} />
         <Route path="/getting-started" element={<GettingStarted />} />
+        <Route path="/champions" element={<Champions />} />
       </Routes>
       <Analytics />
     </div>

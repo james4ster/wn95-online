@@ -2837,6 +2837,276 @@ function StatsTable({
   );
 }
 
+//────Playoff History ───────────────────────────────────────────────────────
+function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta }) {
+  const [sortKey, setSortKey] = useState('finals');
+  const [sortDir, setSortDir] = useState('desc');
+
+  const handleSort = (key) => {
+    if (sortKey === key) setSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setSortKey(key); setSortDir('desc'); }
+  };
+
+  const rows = useMemo(() => {
+    if (!playoffGames.length) return [];
+
+    // Max round per season
+    const seasonMaxRound = {};
+    playoffGames.forEach(g => {
+      if (!seasonMaxRound[g.lg] || g.round > seasonMaxRound[g.lg])
+        seasonMaxRound[g.lg] = g.round;
+    });
+
+    // Build team+lg → coach from leagueGames (coach_home/coach_away already resolved)
+    const teamLgToCoach = new Map();
+    leagueGames.forEach(g => {
+      if (g.home && g.coach_home) teamLgToCoach.set(`${g.home.trim().toUpperCase()}|${g.lg}`, g.coach_home.trim());
+      if (g.away && g.coach_away) teamLgToCoach.set(`${g.away.trim().toUpperCase()}|${g.lg}`, g.coach_away.trim());
+    });
+
+    // Resolve coach for each playoff game team
+    const resolveCoach = (teamCode, lg) => {
+      if (!teamCode) return null;
+      return teamLgToCoach.get(`${teamCode.trim().toUpperCase()}|${lg}`) || null;
+    };
+
+    // Find champions per season
+    const seasonChampionCoach = {};
+    const grouped = {};
+    playoffGames.forEach(g => {
+      const key = `${g.lg}|${g.round}|${g.series_number}`;
+      if (!grouped[key]) grouped[key] = { ...g, wins_a: 0, wins_b: 0 };
+      if ((g.team_a_score ?? 0) > (g.team_b_score ?? 0)) grouped[key].wins_a++;
+      else grouped[key].wins_b++;
+    });
+    Object.values(grouped).forEach(s => {
+      const maxR = seasonMaxRound[s.lg];
+      if (s.round !== maxR || s.series_number !== 1) return;
+      const needed = Math.ceil((s.series_length ?? 7) / 2);
+      let champTeam = null;
+      if (s.wins_a >= needed) champTeam = s.team_code_a;
+      else if (s.wins_b >= needed) champTeam = s.team_code_b;
+      if (champTeam) {
+        const coach = resolveCoach(champTeam, s.lg);
+        if (coach) seasonChampionCoach[s.lg] = norm(coach);
+      }
+    });
+
+    // Build coach → { seasonLg: maxRound } from playoff games
+    const coachSeasonRound = {};
+    playoffGames.forEach(g => {
+      for (const teamCode of [g.team_code_a, g.team_code_b]) {
+        const coach = resolveCoach(teamCode, g.lg);
+        if (!coach) continue;
+        const key = norm(coach);
+        if (!coachSeasonRound[key]) coachSeasonRound[key] = { _display: coach, seasons: {} };
+        const cur = coachSeasonRound[key].seasons[g.lg] || 0;
+        if (g.round > cur) coachSeasonRound[key].seasons[g.lg] = g.round;
+      }
+    });
+
+    // Count total seasons per coach from leagueGames
+    const coachTotalSeasons = {};
+    leagueGames.forEach(g => {
+      for (const coach of [g.coach_home, g.coach_away]) {
+        if (!coach) continue;
+        const key = norm(coach.trim());
+        if (!coachTotalSeasons[key]) coachTotalSeasons[key] = { _display: coach.trim(), seasons: new Set() };
+        coachTotalSeasons[key].seasons.add(g.lg);
+      }
+    });
+
+    const globalMax = Math.max(...Object.values(seasonMaxRound), 1);
+
+    // Build rows per coach
+    const allCoaches = new Set([
+      ...Object.keys(coachSeasonRound),
+      ...Object.keys(coachTotalSeasons),
+    ]);
+
+    return [...allCoaches].filter(Boolean).map(coachNorm => {
+      const seasonMap = coachSeasonRound[coachNorm]?.seasons || {};
+      const totalSeasonsSet = coachTotalSeasons[coachNorm]?.seasons || new Set();
+      const displayName = coachSeasonRound[coachNorm]?._display || coachTotalSeasons[coachNorm]?._display || coachNorm;
+      const totalSeasons = totalSeasonsSet.size;
+      const playoffSeasons = Object.keys(seasonMap).length;
+      const missedPlayoffs = Math.max(0, totalSeasons - playoffSeasons);
+
+      let r1 = 0, r2 = 0, r3 = 0, finals = 0, champs = 0;
+        Object.entries(seasonMap).forEach(([lg, maxRound]) => {
+          const maxR = seasonMaxRound[lg] || globalMax;
+          // Cumulative — if you reached round N, you also reached all rounds below it
+          if (maxRound >= 1) r1++;
+          if (maxRound >= 2) r2++;
+          if (maxR >= 3 && maxRound >= maxR - 1) r3++;
+          if (maxRound >= maxR) finals++;
+          if (seasonChampionCoach[lg] === coachNorm) champs++;
+        });
+
+      return { coachNorm, displayName, totalSeasons, playoffSeasons, missedPlayoffs, r1, r2, r3, finals, champs, globalMax };
+    }).filter(r => r.totalSeasons > 0);
+  }, [playoffGames, leagueGames]);
+
+  const globalMax = rows[0]?.globalMax || 4;
+
+  const roundCols = useMemo(() => {
+    const cols = [{ key: 'r1', label: '1ST RND', tip: 'Reached Round 1' }];
+    if (globalMax >= 2) cols.push({ key: 'r2', label: '2ND RND', tip: 'Reached Round 2' });
+    if (globalMax >= 3) cols.push({ key: 'r3', label: globalMax >= 4 ? 'CONF FINALS' : 'SEMIS', tip: globalMax >= 4 ? 'Reached Conference Finals' : 'Reached Semifinals' });
+    cols.push({ key: 'finals', label: 'FINALS', tip: 'Reached the Finals' });
+    cols.push({ key: 'champs', label: '🏆', tip: 'Championships Won' });
+    cols.push({ key: 'missedPlayoffs', label: 'MISSED', tip: 'Seasons without a playoff appearance' });
+    return cols;
+  }, [globalMax]);
+
+  const colDef = [
+    { key: 'rank', label: '#', tip: 'Rank', sortable: false },
+    { key: 'coach', label: 'COACH', tip: 'Manager', sortable: true },
+    { key: 'totalSeasons', label: 'SEASONS', tip: 'Total seasons', sortable: true },
+    { key: 'playoffSeasons', label: 'PO APP', tip: 'Total playoff appearances', sortable: true },
+    ...roundCols.map(c => ({ ...c, sortable: true })),
+  ];
+
+  const sorted = useMemo(() => {
+    return [...rows].sort((a, b) => {
+      const av = a[sortKey] ?? 0;
+      const bv = b[sortKey] ?? 0;
+      if (av === bv) return (b.finals ?? 0) - (a.finals ?? 0);
+      return sortDir === 'desc' ? bv - av : av - bv;
+    });
+  }, [rows, sortKey, sortDir]);
+
+  if (!rows.length) return (
+    <div className="sp-state">
+      <span style={{ fontSize: 44, opacity: 0.18 }}>🏅</span>
+      <span className="sp-state-txt">NO PLAYOFF DATA FOUND</span>
+    </div>
+  );
+
+  const SortIcon = ({ col }) => col.key === 'rank' ? null : (
+    <span className="sort-icon">{sortKey === col.key ? (sortDir === 'desc' ? ' ▼' : ' ▲') : ' ⇅'}</span>
+  );
+
+  return (
+    <table className="sp-table">
+      <thead>
+        <tr>
+          <th colSpan={2} className="sp-gh sticky-gh" style={{ position: 'sticky', left: 0, zIndex: 12, background: '#07071a' }} />
+          <th colSpan={2} className="sp-gh" style={{ background: 'rgba(160,170,255,.17)', color: 'rgba(185,195,255,.9)', borderLeft: '3px solid rgba(140,150,255,.5)' }}>PARTICIPATION</th>
+          <th colSpan={roundCols.length - 1} className="sp-gh" style={{ background: 'rgba(255,140,0,.2)', color: 'rgba(255,175,75,.95)', borderLeft: '3px solid rgba(255,140,0,.6)' }}>PLAYOFF ROUND APPEARANCES</th>
+          <th className="sp-gh" style={{ background: 'rgba(255,80,80,.18)', color: 'rgba(255,150,150,.9)', borderLeft: '3px solid rgba(255,80,80,.5)' }}>MISSED</th>
+        </tr>
+        <tr>
+          {colDef.map((col, ci) => {
+            const isSticky = ci <= 1;
+            const stickyLeft = ci === 0 ? 0 : ci === 1 ? 42 : undefined;
+            const active = sortKey === col.key;
+            const isMissed = col.key === 'missedPlayoffs';
+            const isChamp = col.key === 'champs';
+            const headerBg = isMissed ? 'rgba(255,80,80,.11)' :
+              isChamp ? 'rgba(255,215,0,.11)' :
+              ['r1','r2','r3','finals'].includes(col.key) ? 'rgba(255,140,0,.11)' :
+              ['totalSeasons','playoffSeasons'].includes(col.key) ? 'rgba(160,170,255,.09)' : '#07071a';
+            const borderLeft = ci === 2 ? '3px solid rgba(140,150,255,.5)' :
+              ci === 4 ? '3px solid rgba(255,140,0,.6)' :
+              col.key === 'missedPlayoffs' ? '3px solid rgba(255,80,80,.5)' :
+              col.key === 'champs' ? '3px solid rgba(255,215,0,.5)' : 'none';
+            return (
+              <th key={col.key}
+                className={`sp-th${col.sortable ? ' sortable' : ''}${active ? ' active' : ''}${isSticky ? ' sticky-col' : ''}`}
+                style={{
+                  background: active ? 'rgba(255,180,0,.18)' : headerBg,
+                  textAlign: ci <= 1 ? 'left' : 'center',
+                  borderLeft,
+                  minWidth: col.key === 'coach' ? 160 : col.key === 'rank' ? 42 : 80,
+                  ...(isSticky ? { position: 'sticky', left: stickyLeft, zIndex: 11 } : {}),
+                }}
+                onClick={() => col.sortable && handleSort(col.key)}
+                title={col.tip}
+              >
+                {col.label}<SortIcon col={col} />
+              </th>
+            );
+          })}
+        </tr>
+      </thead>
+      <tbody>
+        {sorted.map((row, idx) => (
+          <tr key={row.coachNorm} className={`sp-row ${idx % 2 === 0 ? 'sp-even' : 'sp-odd'}`}>
+            {colDef.map((col, ci) => {
+              const isSticky = ci <= 1;
+              const stickyLeft = ci === 0 ? 0 : ci === 1 ? 42 : undefined;
+              const active = sortKey === col.key;
+              const isMissed = col.key === 'missedPlayoffs';
+              const isChamp = col.key === 'champs';
+              const cellBg = isMissed ? 'rgba(255,80,80,.055)' :
+                isChamp ? 'rgba(255,215,0,.05)' :
+                ['r1','r2','r3','finals'].includes(col.key) ? 'rgba(255,120,0,.065)' :
+                ['totalSeasons','playoffSeasons'].includes(col.key) ? 'rgba(100,110,200,.055)' : undefined;
+              const borderLeft = ci === 2 ? '3px solid rgba(140,150,255,.5)' :
+                ci === 4 ? '3px solid rgba(255,140,0,.6)' :
+                col.key === 'missedPlayoffs' ? '3px solid rgba(255,80,80,.5)' :
+                col.key === 'champs' ? '3px solid rgba(255,215,0,.5)' : 'none';
+
+              let content;
+              if (col.key === 'rank') {
+                content = <span className="td-rank">{idx + 1}</span>;
+              } else if (col.key === 'coach') {
+                const meta = mgrMeta.get(row.coachNorm);
+                content = (
+                  <div className="td-mgr">
+                    {meta?.avatar_url
+                      ? <img src={meta.avatar_url} alt="" className="td-avatar" onError={e => e.currentTarget.style.display = 'none'} />
+                      : <div className="td-avatar-fb">{row.displayName.replace(/\s+/g, '').slice(0, 2).toUpperCase()}</div>
+                    }
+                    <div className="td-mgr-names">
+                      <span className="td-mgrname">{meta?.displayName || row.displayName}</span>
+                    </div>
+                  </div>
+                );
+              } else if (col.key === 'champs') {
+                const v = row.champs;
+                content = v > 0
+                  ? <span className="td-val" style={{ color: '#FFD700', textShadow: '0 0 10px rgba(255,215,0,.5)', fontSize: 20 }}>{v > 3 ? `🏆×${v}` : '🏆'.repeat(v)}</span>
+                  : <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+              } else if (col.key === 'missedPlayoffs') {
+                const v = row.missedPlayoffs;
+                content = v > 0
+                  ? <span className="td-val" style={{ color: '#FF7777' }}>{v}</span>
+                  : <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+              } else if (col.key === 'finals') {
+                const v = row.finals;
+                content = v > 0
+                  ? <span className="td-val" style={{ color: '#87CEEB', textShadow: '0 0 8px rgba(135,206,235,.35)' }}>{v}</span>
+                  : <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+              } else {
+                const v = row[col.key] ?? 0;
+                content = v > 0
+                  ? <span className="td-val" style={{ color: 'rgba(255,255,255,.75)' }}>{v}</span>
+                  : <span className="td-val" style={{ color: 'rgba(255,255,255,.18)' }}>—</span>;
+              }
+
+              return (
+                <td key={col.key}
+                  className={`sp-td${active ? ' sorted' : ''}${isSticky ? ' sticky-col sticky-td' : ''}`}
+                  style={{
+                    textAlign: ci <= 1 ? 'left' : 'center',
+                    background: active ? 'rgba(255,215,0,.05)' : isSticky ? undefined : cellBg,
+                    borderLeft,
+                    ...(isSticky ? { position: 'sticky', left: stickyLeft, zIndex: 2 } : {}),
+                  }}
+                >
+                  {content}
+                </td>
+              );
+            })}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────
 export default function Stats() {
   const { selectedLeague } = useLeague();
@@ -3603,6 +3873,9 @@ setAllTimeTeamStatsRows(enrichedAllTimeTeamStats);
           >
             🔬 ADVANCED
           </button>
+          <button className={`sp-tab ${tab === 'playoff-history' ? 'on' : ''}`} onClick={() => setTab('playoff-history')}>
+            🏅 PO HISTORY
+          </button>
           <button className={`sp-tab ${tab === 'dashboard' ? 'on' : ''}`} onClick={() => setTab('dashboard')}>
             📊 DASHBOARD
           </button>
@@ -3988,6 +4261,22 @@ setAllTimeTeamStatsRows(enrichedAllTimeTeamStats);
             <AdvancedStatsTable rows={advancedRows} mgrMeta={mgrMeta} />
           )}
         </div>
+        ) : tab === 'playoff-history' ? (
+          <div className="sp-table-outer">
+            {loading ? (
+              <div className="sp-state">
+                <div className="sp-spinner" />
+                <span className="sp-state-txt">CRUNCHING NUMBERS…</span>
+              </div>
+            ) : (
+              <PlayoffHistoryTable
+                playoffGames={playoffGamesData.filter(g => allSeasons.includes(g.lg))}
+                allSeasons={allSeasons}
+                leagueGames={leagueGames}
+                mgrMeta={mgrMeta}
+              />
+            )}
+          </div>
       ) : (
         <div className="sp-table-outer">
           {loading ? (
@@ -4110,9 +4399,9 @@ setAllTimeTeamStatsRows(enrichedAllTimeTeamStats);
 
         .sp-tabs{display:flex;align-items:flex-end;gap:.5rem;padding:0 2rem;max-width:1600px;margin:0 auto;position:relative;}
         .sp-tabs-line{position:absolute;bottom:0;left:2rem;right:2rem;height:2px;background:rgba(255,140,0,.2);}
-        .sp-tab{font-family:'Press Start 2P',monospace;font-size:14px;letter-spacing:2px;padding:.8rem 1.6rem;background:rgba(255,255,255,.03);border:2px solid rgba(255,255,255,.1);border-bottom:none;border-radius:10px 10px 0 0;color:rgba(255,255,255,.32);cursor:pointer;transition:all .18s;position:relative;z-index:1;}
+        .sp-tab{font-family:'Press Start 2P',monospace;font-size:11px;letter-spacing:1px;padding:.7rem 1rem;background:rgba(255,255,255,.03);border:2px solid rgba(255,255,255,.1);border-bottom:none;border-radius:10px 10px 0 0;color:rgba(255,255,255,.32);cursor:pointer;transition:all .18s;position:relative;z-index:1;white-space:nowrap;}
         .sp-tab:hover{background:rgba(255,140,0,.07);color:rgba(255,140,0,.7);border-color:rgba(255,140,0,.3);}
-        .sp-tab.on{background:rgba(255,140,0,.11);border-color:rgba(255,140,0,.6);color:#FF8C00;text-shadow:0 0 14px rgba(255,140,0,.45);margin-bottom:-2px;padding-bottom:calc(.8rem + 2px);}
+        .sp-tab.on{background:rgba(255,140,0,.11);border-color:rgba(255,140,0,.6);color:#FF8C00;text-shadow:0 0 14px rgba(255,140,0,.45);margin-bottom:-2px;padding-bottom:calc(.7rem + 2px);}
         .sp-legend-inline{display:flex;align-items:center;gap:.8rem;padding:.4rem .8rem;margin-bottom:4px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.07);border-radius:6px;position:relative;z-index:1;}
 
         .sp-filters{background:rgba(0,0,12,.75);border-bottom:1px solid rgba(255,255,255,.06);padding:.9rem 2rem;}

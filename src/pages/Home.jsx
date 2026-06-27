@@ -5,6 +5,8 @@ import { useLeague } from '../components/LeagueContext';
 import SeasonalFlair from '../components/HomeFlair';
 import ChampionshipFlair from '../components/HomeConfetti';
 import { createPortal } from 'react-dom';
+import { ChampionsHomePanel } from '../pages/Champions'
+import { useNavigate } from 'react-router-dom'
 
 /*
 =====================
@@ -43,6 +45,7 @@ const getFullTeamName = (teamCode, teams) => {
   const t = teams.find((t) => t.code === teamCode);
   return t ? t.team : teamCode;
 };
+
 
 // ─── Parse team row into display name parts ───────────────────────────────────
 // e.g. { team:"Barrie Dolts", coach:"Dasri" }
@@ -1775,6 +1778,9 @@ export default function Home() {
 
   const [showFireworks, setShowFireworks] = useState(true);
 
+  const navigate = useNavigate()
+
+
 /*=======================================
  Homepage Flair
 */
@@ -2511,10 +2517,14 @@ useEffect(() => {
             teamNameMap={teamNameMap}
             seasonTeams={seasonTeams}
           />
+          <div style={{ marginTop: '.4rem' }}>
+            <ChampionsHomePanel
+              onNavigateToChampions={() => navigate('/champions')}
+            />
+          </div>
           {/* ======== UNCOMMENTING THIS WILL DISPLAY TRANSACTIONS PANEL ==================== 
             <section className="panel">
             <PanelHeader icon="🔄" title="TRANSACTIONS" />
-
             <div className="tx-body">
               {recentTrades.length === 0 ? (
                 <div className="tx-ph">

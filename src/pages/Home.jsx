@@ -2545,7 +2545,7 @@ useEffect(() => {
 
         {/* ── CENTER COLUMN — GAZETTE ── */}
         <div className="cg-b">
-          {isPlayoffActive && (
+        {isPlayoffActive && currentSeason?.status === 'playoffs' && (
             <PlayoffEliminationBoard
             playoffSeriesData={playoffSeriesData}
             playoffTeamCodes={playoffTeamCodes}

@@ -2838,7 +2838,8 @@ function StatsTable({
 }
 
 //────Playoff History ───────────────────────────────────────────────────────
-function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta }) {
+function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta, champData }) {
+
   const [sortKey, setSortKey] = useState('finals');
   const [sortDir, setSortDir] = useState('desc');
 
@@ -2850,9 +2851,15 @@ function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta })
   const rows = useMemo(() => {
     if (!playoffGames.length) return [];
 
+  const completedSeasons = new Set(
+    allSeasons.filter(lg => champData.perSeasonMap.has(lg))
+  );
+
+  const completedPlayoffGames = playoffGames.filter(g => completedSeasons.has(g.lg));
+
     // Max round per season
     const seasonMaxRound = {};
-    playoffGames.forEach(g => {
+    completedPlayoffGames.forEach(g => {
       if (!seasonMaxRound[g.lg] || g.round > seasonMaxRound[g.lg])
         seasonMaxRound[g.lg] = g.round;
     });
@@ -2873,7 +2880,7 @@ function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta })
     // Find champions per season
     const seasonChampionCoach = {};
     const grouped = {};
-    playoffGames.forEach(g => {
+    completedPlayoffGames.forEach(g => {
       const key = `${g.lg}|${g.round}|${g.series_number}`;
       if (!grouped[key]) grouped[key] = { ...g, wins_a: 0, wins_b: 0 };
       if ((g.team_a_score ?? 0) > (g.team_b_score ?? 0)) grouped[key].wins_a++;
@@ -2894,7 +2901,7 @@ function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta })
 
     // Build coach → { seasonLg: maxRound } from playoff games
     const coachSeasonRound = {};
-    playoffGames.forEach(g => {
+    completedPlayoffGames.forEach(g => {
       for (const teamCode of [g.team_code_a, g.team_code_b]) {
         const coach = resolveCoach(teamCode, g.lg);
         if (!coach) continue;
@@ -2907,7 +2914,7 @@ function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta })
 
     // Count total seasons per coach from leagueGames
     const coachTotalSeasons = {};
-    leagueGames.forEach(g => {
+    leagueGames.filter(g => completedSeasons.has(g.lg)).forEach(g => {
       for (const coach of [g.coach_home, g.coach_away]) {
         if (!coach) continue;
         const key = norm(coach.trim());
@@ -2933,15 +2940,16 @@ function PlayoffHistoryTable({ playoffGames, allSeasons, leagueGames, mgrMeta })
       const missedPlayoffs = Math.max(0, totalSeasons - playoffSeasons);
 
       let r1 = 0, r2 = 0, r3 = 0, finals = 0, champs = 0;
-        Object.entries(seasonMap).forEach(([lg, maxRound]) => {
-          const maxR = seasonMaxRound[lg] || globalMax;
-          // Cumulative — if you reached round N, you also reached all rounds below it
-          if (maxRound >= 1) r1++;
-          if (maxRound >= 2) r2++;
-          if (maxR >= 3 && maxRound >= maxR - 1) r3++;
-          if (maxRound >= maxR) finals++;
-          if (seasonChampionCoach[lg] === coachNorm) champs++;
-        });
+const isDebug = coachNorm.includes('unholy') || coachNorm.includes('grail');
+Object.entries(seasonMap).forEach(([lg, maxRound]) => {
+  const maxR = seasonMaxRound[lg] || globalMax;
+  if (isDebug) console.log('[PO HISTORY]', coachNorm, '| season:', lg, '| maxRound reached:', maxRound, '| bracket maxR:', maxR);
+  if (maxRound >= 1) r1++;
+  if (maxRound >= 2) r2++;
+  if (maxR >= 3 && maxRound >= maxR - 1) r3++;
+  if (maxR >= 2 && maxRound >= maxR) finals++;
+  if (seasonChampionCoach[lg] === coachNorm) champs++;
+});
 
       return { coachNorm, displayName, totalSeasons, playoffSeasons, missedPlayoffs, r1, r2, r3, finals, champs, globalMax };
     }).filter(r => r.totalSeasons > 0);
@@ -4274,6 +4282,7 @@ setAllTimeTeamStatsRows(enrichedAllTimeTeamStats);
                 allSeasons={allSeasons}
                 leagueGames={leagueGames}
                 mgrMeta={mgrMeta}
+                champData={champData}
               />
             )}
           </div>

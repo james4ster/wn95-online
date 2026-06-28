@@ -1803,8 +1803,12 @@ const TEST_TEAM_CODE = 'TBP'; // swap to any real abr you have logo/banner asset
 
 const isChampionshipWindow = useMemo(() => {
   if (FORCE_CHAMPIONSHIP_TEST) return true;
-  if (!championTeam || currentSeason?.status !== 'offseason' || !currentSeason?.end_date) return false;
+  if (!championTeam || currentSeason?.status !== 'offseason' || !currentSeason?.end_date) {
+    console.log('[confetti] early exit', { championTeam, status: currentSeason?.status, end_date: currentSeason?.end_date });
+    return false;
+  }
   const daysSince = (Date.now() - new Date(currentSeason.end_date).getTime()) / 86400000;
+  console.log('[confetti] daysSince:', daysSince, 'window:', CHAMPIONSHIP_WINDOW_DAYS);
   return daysSince >= 0 && daysSince <= CHAMPIONSHIP_WINDOW_DAYS;
 }, [championTeam, currentSeason?.status, currentSeason?.end_date]);
 
@@ -1868,7 +1872,7 @@ useEffect(() => {
       setLoading(false);
       return;
     }
-    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
+    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2, complete: 3 };
 
     const latest = ps.reduce((b, s) => {
       const sPri = STATUS_PRIORITY[s.status] ?? 1;

@@ -1803,12 +1803,8 @@ const TEST_TEAM_CODE = 'TBP'; // swap to any real abr you have logo/banner asset
 
 const isChampionshipWindow = useMemo(() => {
   if (FORCE_CHAMPIONSHIP_TEST) return true;
-  if (!championTeam || currentSeason?.status !== 'offseason' || !currentSeason?.end_date) {
-    console.log('[confetti] early exit', { championTeam, status: currentSeason?.status, end_date: currentSeason?.end_date });
-    return false;
-  }
+  if (!championTeam || currentSeason?.status !== 'offseason' || !currentSeason?.end_date) return false;
   const daysSince = (Date.now() - new Date(currentSeason.end_date).getTime()) / 86400000;
-  console.log('[confetti] daysSince:', daysSince, 'window:', CHAMPIONSHIP_WINDOW_DAYS);
   return daysSince >= 0 && daysSince <= CHAMPIONSHIP_WINDOW_DAYS;
 }, [championTeam, currentSeason?.status, currentSeason?.end_date]);
 
@@ -1872,7 +1868,7 @@ useEffect(() => {
       setLoading(false);
       return;
     }
-    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2, complete: 3 };
+    const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2 };
 
     const latest = ps.reduce((b, s) => {
       const sPri = STATUS_PRIORITY[s.status] ?? 1;
@@ -1910,10 +1906,10 @@ useEffect(() => {
     setChampionTeam(resolvedChampion);
 
     /* Capture Season for Countdown */
-    const nextSeason =
-      (seasons || []).find((s) => s.idx === latest.idx + 1) || null;
-
-    setNextSeason(nextSeason);
+    const futureSeasons = (seasons || [])
+      .filter((s) => lgPrefix(s.lg) === prefix && s.lg !== latest.lg)
+      .sort((a, b) => new Date(a.end_date) - new Date(b.end_date));
+    setNextSeason(futureSeasons[0] || null);
 
     // ── Teams for this season → build name map (includes coach) ──────────
     // teams table uses `abr` as the team code that matches games.home/away
@@ -2549,7 +2545,7 @@ useEffect(() => {
 
         {/* ── CENTER COLUMN — GAZETTE ── */}
         <div className="cg-b">
-        {isPlayoffActive && currentSeason?.status === 'playoffs' && (
+          {isPlayoffActive && (
             <PlayoffEliminationBoard
             playoffSeriesData={playoffSeriesData}
             playoffTeamCodes={playoffTeamCodes}

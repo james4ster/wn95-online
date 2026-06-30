@@ -28,7 +28,7 @@ function buildTeamStats(rows) {
       map[team] = {
         team,
         totals: {
-          gp: 0, shots: 0, goals: 0, chk: 0, pim: 0,
+          gp: 0, shots: 0, chk: 0, pim: 0,
           pp_g: 0, pp_amt: 0, opp_pp_g: 0, opp_pp_amt: 0,
           fow: 0, fo_total: 0, shg: 0,
           brk_g: 0, brk_amt: 0,
@@ -46,7 +46,6 @@ function buildTeamStats(rows) {
     const h = ensure(home).totals;
     const a = ensure(away).totals;
     h.gp += 1; a.gp += 1;
-    h.goals      += r.home_score          || 0;  a.goals     += r.away_score          || 0;
     h.shots      += r.home_shots          || 0; a.shots      += r.away_shots          || 0;
     h.chk        += r.home_chk            || 0; a.chk        += r.away_chk            || 0;
     h.pim        += r.home_pim            || 0; a.pim        += r.away_pim            || 0;
@@ -84,7 +83,7 @@ function deriveStats(t) {
     shotsPerGame: t.gp          ? (t.shots / t.gp).toFixed(1)                            : null,
     hitsPerGame:  t.gp          ? (t.chk   / t.gp).toFixed(1)                            : null,
     pimPerGame:   t.gp          ? (t.pim   / t.gp).toFixed(1)                            : null,
-    shPct:        t.shots       ? ((t.goals / t.shots) * 100).toFixed(1)                : null,
+    shPct:        t.brk_amt     ? ((t.brk_g / t.brk_amt) * 100).toFixed(1)              : null,
     brkPct:       t.brk_amt     ? ((t.brk_g / t.brk_amt) * 100).toFixed(1)              : null,
     atkPerGame:   fmtTime(t.gp  ? t.atk_secs / t.gp : null),
     defPerGame:   fmtTime(t.gp  ? t.def_secs / t.gp : null),
@@ -535,7 +534,7 @@ function SingleTeamStats({ totals, derived, standing, allTeamTotals, computedSta
       val:  derived?.hitsPerGame,
       rank: rankVal(derived?.hitsPerGame, ra.allHPG, true) },
     { label: 'ATK/G',   val: derived?.atkPerGame,  rank: rankVal(derived?.atkSecPerGame, ra.allATKsec, true) },
-    { label: 'DEF/G',   val: derived?.defPerGame,  rank: rankVal(derived?.defSecPerGame, ra.allDEFsec, false) },
+    { label: 'DEF/G',   val: derived?.defPerGame,  rank: rankVal(derived?.defSecPerGame, ra.allDEFsec, true) },
     { label: 'PIM/G',   val: derived?.pimPerGame,  rank: rankVal(derived?.pimPerGame, ra.allPIM, true) },
   ];
 
@@ -635,9 +634,8 @@ function CompareTeamStats({ totalsA, totalsB, derivedA, derivedB, teamA, teamB, 
       rB: rankVal(derivedB?.atkSecPerGame, ra.allATKsec, true), hi: true },
     { label: 'DEF/G',
       vA: derivedA?.defPerGame, vB: derivedB?.defPerGame,
-      rA: rankVal(derivedA?.defSecPerGame, ra.allDEFsec, false),
-      rB: rankVal(derivedB?.defSecPerGame, ra.allDEFsec, false),
-      hi: false },
+      rA: rankVal(derivedA?.defSecPerGame, ra.allDEFsec, true),
+      rB: rankVal(derivedB?.defSecPerGame, ra.allDEFsec, true), hi: true },
   ];
 
   return (

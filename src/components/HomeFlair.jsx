@@ -32,26 +32,22 @@ function FireworksCanvas() {
     const ctx = canvas.getContext('2d');
 
     const resize = () => {
-        const dpr = window.devicePixelRatio || 1;
-      
-        canvas.width = canvas.offsetWidth * dpr;
-        canvas.height = canvas.offsetHeight * dpr;
-      
-        canvas.style.width = canvas.offsetWidth + 'px';
-        canvas.style.height = canvas.offsetHeight + 'px';
-      
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      };
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.offsetWidth || window.innerWidth;
+      const h = canvas.offsetHeight || window.innerHeight;
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
+      canvas.style.width = w + 'px';
+      canvas.style.height = h + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
 
-    resize();
-    const ro = new ResizeObserver(resize);
-    ro.observe(canvas);
+    window.addEventListener('resize', resize);
 
-    // Palette: on-brand gold/orange plus classic July 4th red/white/blue
     const COLORS = [
-      '#FFD700', '#FF8C00', '#FF4500',  // gold, orange, red-orange
-      '#FF3B3B', '#FFFFFF', '#87CEEB',  // red, white, sky blue
-      '#4488FF', '#FF69B4',             // blue, pink accent
+      '#FFD700', '#FF8C00', '#FF4500',
+      '#FF3B3B', '#FFFFFF', '#87CEEB',
+      '#4488FF', '#FF69B4',
     ];
 
     class Particle {
@@ -73,12 +69,11 @@ function FireworksCanvas() {
         if (this.trail.length > 6) this.trail.shift();
         this.x  += this.vx;
         this.y  += this.vy;
-        this.vy += 0.055; // gravity
+        this.vy += 0.055;
         this.vx *= 0.98;
         this.alpha -= this.decay;
       }
       draw(ctx) {
-        // Trail
         this.trail.forEach((t, i) => {
           const a = (i / this.trail.length) * t.alpha * 0.4;
           ctx.beginPath();
@@ -86,12 +81,10 @@ function FireworksCanvas() {
           ctx.fillStyle = this.color + Math.round(a * 255).toString(16).padStart(2, '0');
           ctx.fill();
         });
-        // Head
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.fillStyle = this.color + Math.round(this.alpha * 255).toString(16).padStart(2, '0');
         ctx.fill();
-        // Glow
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius * 2.5, 0, Math.PI * 2);
         ctx.fillStyle = this.color + Math.round(this.alpha * 0.18 * 255).toString(16).padStart(2, '0');
@@ -104,22 +97,15 @@ function FireworksCanvas() {
       constructor() { this.reset(); }
       reset() {
         this.x = canvas.width * (0.1 + Math.random() * 0.8);
-      
-        // launch slightly ABOVE bottom edge randomness (not fixed bottom)
         this.y = canvas.height * (0.95 + Math.random() * 0.05);
-      
-        // bias targets toward upper 35% of screen
         this.tx = canvas.width * (0.1 + Math.random() * 0.8);
         this.ty = canvas.height * (0.0 + Math.random() * 0.22);
-      
         const dx = this.tx - this.x;
         const dy = this.ty - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         const speed = 6 + Math.random() * 4;
-      
         this.vx = (dx / dist) * speed;
         this.vy = (dy / dist) * speed;
-      
         this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
         this.trail = [];
         this.alive = true;
@@ -135,11 +121,10 @@ function FireworksCanvas() {
       draw(ctx) {
         this.trail.forEach((t, i) => {
           const a = (i / this.trail.length) * 0.55;
-         // Glow
-            ctx.beginPath();
-            ctx.arc(this.x, this.y, this.radius * 1.7, 0, Math.PI * 2);
-            ctx.fillStyle = this.color + Math.round(this.alpha * 0.12 * 255).toString(16).padStart(2, '0');
-            ctx.fill();
+          ctx.beginPath();
+          ctx.arc(this.x, this.y, this.radius * 1.7, 0, Math.PI * 2);
+          ctx.fillStyle = this.color + Math.round(this.alpha * 0.12 * 255).toString(16).padStart(2, '0');
+          ctx.fill();
         });
         ctx.beginPath();
         ctx.arc(this.x, this.y, 2.5, 0, Math.PI * 2);
@@ -151,7 +136,6 @@ function FireworksCanvas() {
         for (let i = 0; i < count; i++) {
           particles.push(new Particle(this.x, this.y, this.color));
         }
-        // Optional: second color ring
         if (Math.random() > 0.45) {
           const c2 = COLORS[Math.floor(Math.random() * COLORS.length)];
           for (let i = 0; i < 30; i++) {
@@ -169,36 +153,26 @@ function FireworksCanvas() {
     let raf;
 
     const launchShell = () => {
-        const s = new Shell();
-
-        // bias target upward slightly more
-        s.ty = s.ty * 0.55;
-        
-        shells.push(s);
-      // Occasionally launch a pair for a bigger burst
+      const s = new Shell();
+      s.ty = s.ty * 0.55;
+      shells.push(s);
       if (Math.random() > 0.65) {
         setTimeout(() => {
-            if (canvas) {
-              const s2 = new Shell();
-              s2.ty = s2.ty * 0.7;
-              shells.push(s2);
-            }
-          }, 180);
+          if (canvas) {
+            const s2 = new Shell();
+            s2.ty = s2.ty * 0.7;
+            shells.push(s2);
+          }
+        }, 180);
       }
       nextShell = Date.now() + 1400 + Math.random() * 2200;
     };
 
-    launchShell(); // start immediately
-
     const loop = () => {
       raf = requestAnimationFrame(loop);
-
-         // Fade trail — semi-transparent clear so trails linger
-        ctx.fillStyle = 'rgba(0,0,0,0.16)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+      ctx.fillStyle = 'rgba(0,0,0,0.16)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       if (Date.now() > nextShell) launchShell();
-
       for (let i = shells.length - 1; i >= 0; i--) {
         shells[i].draw(ctx);
         shells[i].update();
@@ -207,7 +181,6 @@ function FireworksCanvas() {
           shells.splice(i, 1);
         }
       }
-
       for (let i = particles.length - 1; i >= 0; i--) {
         particles[i].draw(ctx);
         particles[i].update();
@@ -215,11 +188,17 @@ function FireworksCanvas() {
       }
     };
 
-    loop();
+    // ← KEY CHANGE: delay init so fixed/fullscreen parent has laid out on mobile
+    const initTimer = setTimeout(() => {
+      resize();
+      launchShell();
+      loop();
+    }, 50);
 
     return () => {
+      clearTimeout(initTimer);
       cancelAnimationFrame(raf);
-      ro.disconnect();
+      window.removeEventListener('resize', resize);
     };
   }, []);
 

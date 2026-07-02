@@ -28,20 +28,22 @@ function FireworksCanvas() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
+    console.log('[fw] canvas ref:', canvas);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-
+    console.log('[fw] ctx:', ctx);
+    if (!ctx) return;
+  
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
-      const w = canvas.offsetWidth || window.innerWidth;
-      const h = canvas.offsetHeight || window.innerHeight;
-      canvas.width = w * dpr;
-      canvas.height = h * dpr;
-      canvas.style.width = w + 'px';
-      canvas.style.height = h + 'px';
+      logicalW = window.innerWidth;
+      logicalH = window.innerHeight;
+      canvas.width = logicalW * dpr;
+      canvas.height = logicalH * dpr;
+      canvas.style.width = logicalW + 'px';
+      canvas.style.height = logicalH + 'px';
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
-
     window.addEventListener('resize', resize);
 
     const COLORS = [
@@ -96,10 +98,10 @@ function FireworksCanvas() {
     class Shell {
       constructor() { this.reset(); }
       reset() {
-        this.x = canvas.width * (0.1 + Math.random() * 0.8);
-        this.y = canvas.height * (0.95 + Math.random() * 0.05);
-        this.tx = canvas.width * (0.1 + Math.random() * 0.8);
-        this.ty = canvas.height * (0.0 + Math.random() * 0.22);
+        this.x = logicalW * (0.1 + Math.random() * 0.8);
+        this.y = logicalH * (0.95 + Math.random() * 0.05);
+        this.tx = logicalW * (0.1 + Math.random() * 0.8);
+        this.ty = logicalH * (0.0 + Math.random() * 0.22);
         const dx = this.tx - this.x;
         const dy = this.ty - this.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -147,6 +149,8 @@ function FireworksCanvas() {
       }
     }
 
+    let logicalW = window.innerWidth;
+    let logicalH = window.innerHeight;
     const shells = [];
     const particles = [];
     let nextShell = 0;
@@ -171,7 +175,7 @@ function FireworksCanvas() {
     const loop = () => {
       raf = requestAnimationFrame(loop);
       ctx.fillStyle = 'rgba(0,0,0,0.16)';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, logicalW, logicalH);
       if (Date.now() > nextShell) launchShell();
       for (let i = shells.length - 1; i >= 0; i--) {
         shells[i].draw(ctx);
@@ -190,6 +194,8 @@ function FireworksCanvas() {
 
     // ← KEY CHANGE: delay init so fixed/fullscreen parent has laid out on mobile
     const initTimer = setTimeout(() => {
+      console.log('[fw] init firing, window:', window.innerWidth, window.innerHeight);
+    
       resize();
       launchShell();
       loop();

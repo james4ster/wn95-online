@@ -312,27 +312,47 @@ export default function SeasonalFlair({ fullscreen = false }) {
             pointerEvents: 'none',
             }}>
         <span style={{
-                display: 'inline-block',
-                fontFamily: "'Press Start 2P', monospace",
-                fontSize: 'clamp(9px, 1.5vw, 13px)',
-                color: label.color,
-                letterSpacing: '3px',
-                textShadow: `0 0 16px ${label.color}, 0 0 32px ${label.color}88`,
-                textAlign: 'center',
-                lineHeight: 1.6,
-                padding: '18px 24px',
-                borderRadius: '12px',
-                background: 'rgba(0,0,0,0.15)',
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)',
-                border: `1px solid ${label.color}55`,
-                }}>
-          {label.text}
-          <br />
-          <span style={{ fontSize: '0.65em', color: 'rgba(255,255,255,.35)', letterSpacing: '2px' }}>
-            FROM THE WN95HL
-          </span>
-        </span>
+  display: 'inline-flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  gap: '8px',
+  fontFamily: "'Press Start 2P', monospace",
+  fontSize: 'clamp(9px, 1.5vw, 13px)',
+  letterSpacing: '3px',
+  textAlign: 'center',
+  lineHeight: 1.6,
+  padding: '18px 28px',
+  borderRadius: '10px',
+  background: 'rgba(0,0,0,0.18)',
+  backdropFilter: 'blur(6px)',
+  WebkitBackdropFilter: 'blur(6px)',
+  border: '2px solid rgba(178,34,52,0.6)',
+  position: 'relative',
+  overflow: 'hidden',
+}}>
+  {/* Top stripe */}
+  <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,#B22234 0%,#B22234 33%,#FFFFFF 33%,#FFFFFF 66%,#3C3B6E 66%,#3C3B6E 100%)' }} />
+  
+  <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6 }}>
+    <span style={{ fontSize:20 }}>🎆</span>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
+      <span style={{ color:'#FFFFFF', textShadow:'0 0 12px #B22234, 0 0 24px #B22234' }}>HAPPY BIRTHDAY</span>
+      <span style={{ color:'#FFFFFF', textShadow:'0 0 12px #3C3B6E, 0 0 24px #3C3B6E' }}>AMERICA</span>
+    </div>
+    <span style={{ fontSize:20 }}>🎇</span>
+  </div>
+
+  <div style={{ display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center' }}>
+    <div style={{ height:1, flex:1, background:'linear-gradient(90deg,transparent,#B22234)' }} />
+    <span style={{ fontSize:12, color:'rgba(255,255,255,0.6)', letterSpacing:2 }}>★ ★ ★</span>
+    <div style={{ height:1, flex:1, background:'linear-gradient(90deg,#3C3B6E,transparent)' }} />
+  </div>
+
+  <span style={{ fontSize:'0.65em', color:'rgba(255,255,255,.35)', letterSpacing:'2px' }}>FROM THE WN95HL</span>
+
+  {/* Bottom stripe */}
+  <div style={{ position:'absolute', bottom:0, left:0, right:0, height:4, background:'linear-gradient(90deg,#3C3B6E 0%,#3C3B6E 33%,#FFFFFF 33%,#FFFFFF 66%,#B22234 66%,#B22234 100%)' }} />
+</span>
       </div>
     </div>
   );

@@ -25,6 +25,9 @@ import PodcastCtrl from './overlays/PodcastCtrl';
 import PowerRankings from './pages/PowerRankings';
 import GettingStarted from './pages/GettingStarted';
 import Champions from './pages/Champions'
+import ZamboniOffseasonBar from './components/ZamboniSeasonBar'
+
+//import TickleBot from "./components/TickleBot";
 
 
 const OVERLAY_PATHS = [
@@ -57,7 +60,8 @@ function AppShell() {
 
   return (
     <div className="app">
-      <ScoresBar />
+      <ZamboniOffseasonBar variant="classic" championLogoUrl="/assets/teamLogos/TBP.png" />      { /* }=== CHANGE TO CHAMPION FOR OFFSEASON ZAMBONI VISUAL */ }
+      { /* <ScoresBar />  */ } 
       <MainNavigation />
       <LeagueSubNav />
       <Routes>
@@ -75,6 +79,8 @@ function AppShell() {
         <Route path="/getting-started" element={<GettingStarted />} />
         <Route path="/champions" element={<Champions />} />
       </Routes>
+      
+      {/* NOT READY YET: <TickleBot /> */}
       <Analytics />
     </div>
   );

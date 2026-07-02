@@ -217,7 +217,7 @@ function RinkBackground({ championLogoUrl }) {
       viewBox="0 0 1360 96"
       width="100%"
       height="100%"
-      preserveAspectRatio="none"
+      preserveAspectRatio="xMidYMid slice"
       shapeRendering="crispEdges"
       style={{ position: "absolute", inset: 0 }}
       aria-hidden="true"
@@ -252,7 +252,7 @@ function RinkBackground({ championLogoUrl }) {
           style={{ imageRendering: "auto" }}
           //style={{ imageRendering: "pixelated" }}
           opacity="0.9"
-          preserveAspectRatio="xMidYMid slice"
+          preserveAspectRatio="xMidYMid meet"
         />
       ) : (
         <circle cx="680" cy="48" r="2" fill="#3f6fb0" opacity="0.6" />

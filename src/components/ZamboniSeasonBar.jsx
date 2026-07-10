@@ -236,10 +236,10 @@ function RinkBackground({ championLogoUrl }) {
       <rect width="1360" height="96" fill="url(#wn95-ice)" />
       <line x1="0" y1="8" x2="1360" y2="8" stroke="#1c2740" strokeWidth="2" />
       <line x1="0" y1="88" x2="1360" y2="88" stroke="#1c2740" strokeWidth="2" />
-      <line x1="120" y1="8" x2="120" y2="88" stroke="#c0483f" strokeWidth="3" opacity="0.55" />
-      <line x1="1240" y1="8" x2="1240" y2="88" stroke="#c0483f" strokeWidth="3" opacity="0.55" />
-      <line x1="680" y1="8" x2="680" y2="88" stroke="#3f6fb0" strokeWidth="3" opacity="0.55" />
-      <circle cx="680" cy="48" r="28" fill="none" stroke="#3f6fb0" strokeWidth="2" opacity="0.5" />
+      <line x1="120" y1="8" x2="120" y2="88" stroke="#3f6fb0" strokeWidth="3" opacity="0.55" />
+      <line x1="1240" y1="8" x2="1240" y2="88" stroke="#3f6fb0" strokeWidth="3" opacity="0.55" />
+      <line x1="680" y1="8" x2="680" y2="88" stroke="#c0483f" strokeWidth="3" opacity="0.55" />
+      <circle cx="680" cy="48" r="28" fill="none" stroke="#c0483f" strokeWidth="2" opacity="0.5" />
 
       {championLogoUrl ? (
         <image
@@ -255,7 +255,7 @@ function RinkBackground({ championLogoUrl }) {
           preserveAspectRatio="xMidYMid meet"
         />
       ) : (
-        <circle cx="680" cy="48" r="2" fill="#3f6fb0" opacity="0.6" />
+        <circle cx="680" cy="48" r="2" fill="#c0483f" opacity="0.6" />
       )}
     </svg>
   );

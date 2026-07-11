@@ -1496,6 +1496,8 @@ function LeagueGazette({
           .si-cover-line { font-size:11px; }
           .si-skel-grid { grid-template-columns:1fr; }
           .si-skel-hero { min-height:130px; }
+          .si-hero-featured {
+            object-position: center 25%;
         }
       `}</style>
     </div>

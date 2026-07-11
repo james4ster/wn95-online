@@ -741,8 +741,12 @@ function LeagueGazette({
         if (OFFSEASON_ART_FILES.length > 0) {
           // Seed with today's date string + league label so all clients
           // pick the same image for the full calendar day
+
+          // ── Change this string any time you want to force a new daily pick for everyone
+          const ART_CACHE_BUST = 'v1';
+
           const today = new Date().toISOString().slice(0, 10); // "2026-07-10"
-          const seed = `${today}-${leagueLabel}`;
+          const seed = `${today}-${leagueLabel}-${ART_CACHE_BUST}`;
           // Simple deterministic hash → index
           const hash = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 0);
           const pick = OFFSEASON_ART_FILES[hash % OFFSEASON_ART_FILES.length];

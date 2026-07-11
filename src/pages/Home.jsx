@@ -731,10 +731,6 @@ function LeagueGazette({
         ? (Date.now() - new Date(currentSeason.end_date).getTime()) / 86400000
         : null;
       const inDiscordWindow = isOffseason && daysSinceEnd != null && daysSinceEnd >= 3;
-      console.log('[gazette-art]', { isOffseason, daysSinceEnd, inDiscordWindow, teamCode });
-      console.log('[gazette-art-files]', OFFSEASON_ART_FILES);
-
-
     
       if (edition?.champion_team && currentSeason?.status === 'playoffs') {
         setFeaturedSrc(`/assets/team-art/champ/${teamCode}.png`);
@@ -743,7 +739,13 @@ function LeagueGazette({
     
       if (inDiscordWindow) {
         if (OFFSEASON_ART_FILES.length > 0) {
-          const pick = OFFSEASON_ART_FILES[Math.floor(Math.random() * OFFSEASON_ART_FILES.length)];
+          // Seed with today's date string + league label so all clients
+          // pick the same image for the full calendar day
+          const today = new Date().toISOString().slice(0, 10); // "2026-07-10"
+          const seed = `${today}-${leagueLabel}`;
+          // Simple deterministic hash → index
+          const hash = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 0);
+          const pick = OFFSEASON_ART_FILES[hash % OFFSEASON_ART_FILES.length];
           setFeaturedSrc(pick);
         } else {
           setUseBanner(true);
@@ -751,7 +753,7 @@ function LeagueGazette({
         return;
       }
     
-      // Existing team-keyed random art (in-season / early-offseason)
+      // In-season / early-offseason: team-keyed random art probe
       let cancelled = false;
       const found = [];
       const check = (n) => {
@@ -770,7 +772,7 @@ function LeagueGazette({
       };
       check(1);
       return () => { cancelled = true; };
-    }, [teamCode, edition?.champion_team, currentSeason?.status, currentSeason?.end_date]);
+    }, [teamCode, edition?.champion_team, currentSeason?.status, currentSeason?.end_date, leagueLabel]);
 
   const load = useCallback(async () => {
     setLoading(true);

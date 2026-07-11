@@ -96,6 +96,7 @@ function useLeagueCountdown(season, nextSeason) {
         mode: season.status || 'season',
         seasonLabel: season.lg,
         nextSeasonLabel: nextSeason?.lg || null, // ← e.g. "W17"
+        targetDate, // ← NEW: the exact date we're counting toward
         d: Math.floor(diff / 86400000),
         h: Math.floor((diff % 86400000) / 3600000),
         m: Math.floor((diff % 3600000) / 60000),
@@ -159,7 +160,48 @@ function ClockDisplay() {
 }
 
 function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
-  const uc = tick?.urgent ? '#FF3B3B' : tick?.warning ? '#FFB800' : cfg.color;
+  const mode = tick?.mode || 'season';
+
+  const STATUS_THEMES = {
+    season: {
+      accent: cfg.color,
+      bg: 'linear-gradient(135deg, color-mix(in srgb, var(--ic) 9%, rgba(10,14,24,.78)) 0%, rgba(7,9,16,.9) 100%)',
+      border: 'color-mix(in srgb, var(--ic) 36%, transparent)',
+    },
+    offseason: {
+      accent: '#4FC3F7',
+      bg: 'linear-gradient(135deg, rgba(79,195,247,.10) 0%, rgba(5,18,30,.9) 100%)',
+      border: 'rgba(79,195,247,.34)',
+    },
+    playoffs: {
+      accent: '#FFD700',
+      bg: 'linear-gradient(135deg, rgba(255,196,0,.12) 0%, rgba(32,18,0,.9) 100%)',
+      border: 'rgba(255,196,0,.4)',
+    },
+    done: {
+      accent: '#00BFA5',
+      bg: 'linear-gradient(135deg, rgba(0,191,165,.10) 0%, rgba(5,24,20,.9) 100%)',
+      border: 'rgba(0,191,165,.34)',
+    },
+  };
+  const theme = STATUS_THEMES[mode] || STATUS_THEMES.season;
+  const uc = tick?.urgent ? '#FF3B3B' : tick?.warning ? '#FFB800' : theme.accent;
+
+  const fmtDate = (iso) =>
+    new Date(iso).toLocaleDateString('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+    });
+
+  // Counting to a start date (offseason) → show START date.
+  // Counting to an end date (in-season) → show END date.
+  const dateLabel =
+    tick?.targetDate && mode === 'offseason'
+      ? `${tick.nextSeasonLabel || tick.seasonLabel} STARTS: ${fmtDate(tick.targetDate)}`
+      : tick?.targetDate && mode !== 'playoffs' && mode !== 'done'
+      ? `${tick.seasonLabel} ENDS: ${fmtDate(tick.targetDate)}`
+      : null;
 
   const renderRight = () => {
     if (!tick) return <span className="icd-awaiting">AWAITING</span>;
@@ -177,7 +219,6 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
 
     if (tick.mode === 'offseason') {
       if (!tick.d && tick.d !== 0) {
-        // No start_date on next season — just show offseason badge
         return (
           <div className="icd-complete">
             <span style={{ fontSize: 15 }}>☀️</span>
@@ -185,7 +226,6 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
           </div>
         );
       }
-      // Has a countdown — show it
       return (
         <div className="icd-clock">
           {[
@@ -212,7 +252,6 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
       );
     }
 
-    // Default: season countdown
     return (
       <div className="icd-clock">
         {[
@@ -230,86 +269,70 @@ function InlineCountdown({ cfg, tick, seasonPace, currentSeason }) {
     );
   };
 
-  // Eyebrow label changes by mode
   const eyebrow =
-    tick?.mode === 'offseason'
+    mode === 'offseason'
       ? `☀️ OFFSEASON`
-      : tick?.mode === 'playoffs'
+      : mode === 'playoffs'
       ? '🏒 PLAYOFFS ACTIVE'
       : '⏱ SEASON COUNTDOWN';
 
   return (
-    <div className="icd" style={{ '--ic': uc }}>
+    <div
+      className="icd"
+      style={{ '--ic': uc, background: theme.bg, borderColor: theme.border }}
+    >
       <div className="icd-left">
         <span className="icd-eyebrow">{eyebrow}</span>
         <div className="icd-meta">
           <span className="icd-dot" />
           <span className="icd-league">{cfg.label}</span>
-          {tick?.mode === 'offseason' && tick?.nextSeasonLabel ? (
-            <span className="icd-season">{tick.nextSeasonLabel} STARTS</span>
-          ) : tick?.seasonLabel ? (
+          {tick?.seasonLabel && (
             <span className="icd-season">{tick.seasonLabel}</span>
-          ) : null}
-        </div>
-        {tick?.mode !== 'offseason' &&
-          tick?.mode !== 'playoffs' &&
-          tick?.mode !== 'done' &&
-          currentSeason?.end_date && (
-            <div className="icd-enddate">
-              ENDS{' '}
-              {new Date(currentSeason.end_date)
-                .toLocaleDateString('en-US', {
-                  month: '2-digit',
-                  day: '2-digit',
-                  year: 'numeric',
-                })
-                .replace(/\//g, '.')}{' '}
-              {new Date(currentSeason.end_date).toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                timeZone: 'America/New_York',
-              })}{' '}
-              EST
-            </div>
           )}
+        </div>
+        {dateLabel && <div className="icd-enddate">{dateLabel}</div>}
       </div>
 
       <div className="icd-right">{renderRight()}</div>
-      {seasonPace && tick?.mode !== 'offseason' && tick?.mode !== 'done' && tick?.mode !== 'playoffs' && (
-           <div className="icd-pace">
-          {[
-            { label: 'GP', value: seasonPace.totalGP },
-            {
-              label: 'GP/DAY',
-              value:
-                seasonPace.gpPerDay != null
-                  ? seasonPace.gpPerDay.toFixed(1)
+
+      {seasonPace &&
+        mode !== 'offseason' &&
+        mode !== 'done' &&
+        mode !== 'playoffs' && (
+          <div className="icd-pace">
+            {[
+              { label: 'GP', value: seasonPace.totalGP },
+              {
+                label: 'GP/DAY',
+                value:
+                  seasonPace.gpPerDay != null
+                    ? seasonPace.gpPerDay.toFixed(1)
+                    : '—',
+              },
+              {
+                label: 'LEFT',
+                value: seasonPace.isComplete
+                  ? '✓'
+                  : seasonPace.remaining != null
+                  ? seasonPace.remaining
                   : '—',
-            },
-            {
-              label: 'LEFT',
-              value: seasonPace.isComplete
-                ? '✓'
-                : seasonPace.remaining != null
-                ? seasonPace.remaining
-                : '—',
-            },
-            {
-              label: 'NEED/DAY',
-              value: seasonPace.isComplete
-                ? '—'
-                : seasonPace.paceNeeded != null
-                ? seasonPace.paceNeeded.toFixed(1)
-                : '—',
-            },
-          ].map(({ label, value }) => (
-            <div key={label} className="icd-pace-cell">
-              <span className="icd-pace-val">{value}</span>
-              <span className="icd-pace-lbl">{label}</span>
-            </div>
-          ))}
-        </div>
-      )}
+              },
+              {
+                label: 'NEED/DAY',
+                value: seasonPace.isComplete
+                  ? '—'
+                  : seasonPace.paceNeeded != null
+                  ? seasonPace.paceNeeded.toFixed(1)
+                  : '—',
+              },
+            ].map(({ label, value }) => (
+              <div key={label} className="icd-pace-cell">
+                <span className="icd-pace-val">{value}</span>
+                <span className="icd-pace-lbl">{label}</span>
+              </div>
+            ))}
+          </div>
+        )}
     </div>
   );
 }

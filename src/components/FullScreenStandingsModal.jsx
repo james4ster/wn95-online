@@ -516,11 +516,10 @@ export default function FullScreenStandingsModal({
   eliminated,
   tiedPtsSet,
   rawGames,
-  showPerGame,
-  showCoach,
-  gfPerG,
+  showPerGame,   
+  showCoach,    
+  gfPerG,        
   gaPerG,
-  sosData = {},
 }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'default',
@@ -788,10 +787,8 @@ export default function FullScreenStandingsModal({
                             </div>
                           </td>
 
-                          {/* Coach */}
-                          {showCoach && (
-                            <td className="fsm-td fsm-td-coach">{s.coach}</td>
-                          )}
+                          {/* Coach — conditional */}
+                          {showCoach && <td className="fsm-td fsm-td-coach">{s.coach}</td>}
 
                           {/* GP */}
                           <td
@@ -856,57 +853,25 @@ export default function FullScreenStandingsModal({
                             {s.pts}
                           </td>
                           {/* Pts% */}
-                          <td
-                            className={`fsm-td fsm-stat ${
-                              activeSortKey === 'pts_pct'
-                                ? 'fsm-sorted-cell'
-                                : ''
-                            }`}
-                          >
-                            {s.gp > 0
-                              ? (s.pts / (s.gp * 2)).toFixed(3)
-                              : '.000'}
+                          <td className={`fsm-td fsm-stat ${activeSortKey === 'pts_pct' ? 'fsm-sorted-cell' : ''}`}>
+                            {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
                           </td>
                           {/* GF */}
-                          <td
-                            className={`fsm-td fsm-stat ${
-                              activeSortKey === 'gf' ? 'fsm-sorted-cell' : ''
-                            }`}
-                          >
-                            {s.gf}
-                          </td>
+                          <td className={`fsm-td fsm-stat ${activeSortKey === 'gf' ? 'fsm-sorted-cell' : ''}`}>{s.gf}</td>
                           {/* GF/G */}
-                          {showPerGame && (
-                            <td
-                              className={`fsm-td fsm-stat ${
-                                activeSortKey === 'gf_per_g'
-                                  ? 'fsm-sorted-cell'
-                                  : ''
-                              }`}
-                            >
-                              {gfPerG(s)}
-                            </td>
-                          )}
+                            {showPerGame && (
+                              <td className={`fsm-td fsm-stat ${activeSortKey === 'gf_per_g' ? 'fsm-sorted-cell' : ''}`}>
+                                {gfPerG(s)}
+                              </td>
+                            )}
                           {/* GA */}
-                          <td
-                            className={`fsm-td fsm-stat ${
-                              activeSortKey === 'ga' ? 'fsm-sorted-cell' : ''
-                            }`}
-                          >
-                            {s.ga}
-                          </td>
+                          <td className={`fsm-td fsm-stat ${activeSortKey === 'ga' ? 'fsm-sorted-cell' : ''}`}>{s.ga}</td>
                           {/* GA/G */}
-                          {showPerGame && (
-                            <td
-                              className={`fsm-td fsm-stat ${
-                                activeSortKey === 'ga_per_g'
-                                  ? 'fsm-sorted-cell'
-                                  : ''
-                              }`}
-                            >
-                              {gaPerG(s)}
-                            </td>
-                          )}
+                              {showPerGame && (
+                                <td className={`fsm-td fsm-stat ${activeSortKey === 'ga_per_g' ? 'fsm-sorted-cell' : ''}`}>
+                                  {gaPerG(s)}
+                                </td>
+                              )}
                           {/* GD */}
                           <td
                             className={`fsm-td fsm-stat ${

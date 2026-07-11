@@ -2,7 +2,7 @@ import React, { useRef, useState, useLayoutEffect, useCallback, useEffect, useMe
 import { supabase } from '../../utils/supabaseClient'
 
 /* ═══════════════════════════════════════════════════════════════
-   SEED BRACKET MATH — identical logic to your PlayoffBracket.jsx
+   SEED BRACKET MATH
 ═══════════════════════════════════════════════════════════════ */
 const FIRST_ROUND_PAIRS = {
   2:  [[1,2]],
@@ -129,7 +129,7 @@ function buildBracket(playoffGames, numTeams) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   H2H LOGIC — season games only, all-time
+   H2H LOGIC
 ═══════════════════════════════════════════════════════════════ */
 function computeH2H(teamA, teamB, games) {
   let wA = 0, wB = 0, t = 0, gfA = 0, gfB = 0, soA = 0, soB = 0
@@ -152,7 +152,96 @@ function computeH2H(teamA, teamB, games) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   BnB THEME
+   GAME STATS H2H LOGIC
+   Aggregates game_stats_team rows for teamA vs teamB this season
+═══════════════════════════════════════════════════════════════ */
+function computeGameStatsH2H(teamA, teamB, gameStatRows) {
+  const aRows = [], bRows = []
+  console.log('[BnB H2H] ' + teamA + ' vs ' + teamB + ' rows:' + (gameStatRows?.length||0))
+  console.log('[BnB H2H] sample:', (gameStatRows||[]).slice(0,3).map(r => r.home+'v'+r.away+' s:'+r.season))
+  ;(gameStatRows||[]).forEach(r => {
+    const aIsHome = r.home === teamA && r.away === teamB
+    const aIsAway = r.home === teamB && r.away === teamA
+    if (!aIsHome && !aIsAway) return
+    console.log('[BnB H2H] matched:', r.home+'v'+r.away)
+    // For teamA: collect their stats whether home or away
+    if (aIsHome) {
+      aRows.push({ shots: r.home_shots, score: r.home_score, fow: r.home_fow, fo_total: r.fo_total,
+        chk: r.home_chk, pass_att: r.home_pass_attempts, pass_com: r.home_pass_complete,
+        pp_g: r.home_pp_g, pp_amt: r.home_pp_amt, shg: r.home_shg,
+        break_att: r.home_break_attempts, break_g: r.home_break_goals,
+        oxa: r.home_1xa, oxg: r.home_1xg, attack: r.home_attack, opp_shots: r.away_shots })
+      bRows.push({ shots: r.away_shots, score: r.away_score, fow: r.away_fow, fo_total: r.fo_total,
+        chk: r.away_chk, pass_att: r.away_pass_attempts, pass_com: r.away_pass_complete,
+        pp_g: r.away_pp_g, pp_amt: r.away_pp_amt, shg: r.away_shg,
+        break_att: r.away_break_attempts, break_g: r.away_break_goals,
+        oxa: r.away_1xa, oxg: r.away_1xg, attack: r.away_attack, opp_shots: r.home_shots })
+    } else {
+      aRows.push({ shots: r.away_shots, score: r.away_score, fow: r.away_fow, fo_total: r.fo_total,
+        chk: r.away_chk, pass_att: r.away_pass_attempts, pass_com: r.away_pass_complete,
+        pp_g: r.away_pp_g, pp_amt: r.away_pp_amt, shg: r.away_shg,
+        break_att: r.away_break_attempts, break_g: r.away_break_goals,
+        oxa: r.away_1xa, oxg: r.away_1xg, attack: r.away_attack, opp_shots: r.home_shots })
+      bRows.push({ shots: r.home_shots, score: r.home_score, fow: r.home_fow, fo_total: r.fo_total,
+        chk: r.home_chk, pass_att: r.home_pass_attempts, pass_com: r.home_pass_complete,
+        pp_g: r.home_pp_g, pp_amt: r.home_pp_amt, shg: r.home_shg,
+        break_att: r.home_break_attempts, break_g: r.home_break_goals,
+        oxa: r.home_1xa, oxg: r.home_1xg, attack: r.home_attack, opp_shots: r.away_shots })
+    }
+  })
+
+  function agg(rows) {
+    if (!rows.length) return null
+    const sum = (f) => rows.reduce((s, r) => s + (r[f] || 0), 0)
+    const shots      = sum('shots')
+    const score      = sum('score')
+    const opp_shots  = sum('opp_shots')
+    const fow        = sum('fow')
+    const fo_total   = sum('fo_total')
+    const chk        = sum('chk')
+    const pass_att   = sum('pass_att')
+    const pass_com   = sum('pass_com')
+    const pp_g       = sum('pp_g')
+    const pp_amt     = sum('pp_amt')
+    const shg        = sum('shg')
+    const break_att  = sum('break_att')
+    const break_g    = sum('break_g')
+    const oxa        = sum('oxa')
+    const oxg        = sum('oxg')
+
+    // Parse attack time strings "HH:MM:SS" -> total seconds
+    const attackSecs = rows.reduce((s, r) => {
+      if (!r.attack) return s
+      const parts = String(r.attack).split(':').map(Number)
+      return s + (parts[0]||0)*3600 + (parts[1]||0)*60 + (parts[2]||0)
+    }, 0)
+    const avgAttackSecs = attackSecs / rows.length
+    const atkMins = Math.floor(avgAttackSecs / 60)
+    const atkSecs = Math.round(avgAttackSecs % 60)
+    const atkStr  = `${atkMins}:${String(atkSecs).padStart(2,'0')}`
+
+    return {
+      sh:   shots,
+      shPct: shots > 0 ? Math.round((score / shots) * 100) : 0,
+      oxPct: oxa  > 0 ? Math.round((oxg  / oxa)  * 100) : 0,
+      sd:   shots - opp_shots,
+      foPct: fo_total > 0 ? Math.round((fow / fo_total) * 100) : 0,
+      baPct: break_att > 0 ? Math.round((break_g / break_att) * 100) : 0,
+      psPct: pass_att  > 0 ? Math.round((pass_com / pass_att) * 100) : 0,
+      chk,
+      ppg:  pp_g,
+      ppa:  pp_amt,
+      shg,
+      atk:  atkStr,
+      gp:   rows.length,
+    }
+  }
+
+  return { a: agg(aRows), b: agg(bRows), gp: aRows.length }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   THEME
 ═══════════════════════════════════════════════════════════════ */
 const T = {
   accent:   '#cc1a1a',
@@ -161,7 +250,7 @@ const T = {
   loss:     '#ef4444',
   text:     '#ffffff',
   textDim:  'rgba(255,255,255,0.55)',
-  textFnt:  'rgba(255,255,255,0.18)',
+  textMid:  'rgba(255,255,255,0.38)',  // minimum dim — no gray below this
   bg:       '#0a0a0a',
   bgCard:   'linear-gradient(155deg,#0a0505 0%,#110808 100%)',
   font:     "'Barlow Condensed', sans-serif",
@@ -171,29 +260,29 @@ const T = {
 /* ═══════════════════════════════════════════════════════════════
    BRACKET PRIMITIVES
 ═══════════════════════════════════════════════════════════════ */
-function Logo({ team, size=22 }) {
+function Logo({ team, size=20 }) {
   const [err, setErr] = useState(false)
   const base = { width: size, height: size, flexShrink: 0, borderRadius: 3, background: 'rgba(0,0,0,0.5)', padding: 2, objectFit: 'contain', display: 'block' }
-  if (!team) return <div style={{ ...base, border: '1px dashed rgba(204,26,26,0.25)', display:'flex', alignItems:'center', justifyContent:'center', color: T.textFnt, fontSize: 9 }}>?</div>
-  if (err)   return <div style={{ ...base, display:'flex', alignItems:'center', justifyContent:'center', color: T.accent, fontSize: 10, fontFamily: T.font, fontWeight: 900 }}>{team.slice(0,3)}</div>
+  if (!team) return <div style={{ ...base, border: '1px dashed rgba(204,26,26,0.25)', display:'flex', alignItems:'center', justifyContent:'center', color: T.textMid, fontSize: 8 }}>?</div>
+  if (err)   return <div style={{ ...base, display:'flex', alignItems:'center', justifyContent:'center', color: T.accent, fontSize: 9, fontFamily: T.font, fontWeight: 900 }}>{team.slice(0,3)}</div>
   return <img src={`/assets/teamLogos/${team}.png`} alt={team} style={base} onError={() => setErr(true)} />
 }
 
 function TeamRow({ team, seed, wins, isWinner, winsNeeded=4, flipped=false }) {
   return (
     <div style={{
-      display: 'flex', alignItems: 'center', gap: 5, padding: '4px 7px', minHeight: 26,
+      display: 'flex', alignItems: 'center', gap: 4, padding: '3px 6px', minHeight: 22,
       background: isWinner ? 'linear-gradient(90deg,rgba(34,197,94,0.1),rgba(34,197,94,0.02))' : 'transparent',
       borderLeft:  !flipped && isWinner ? '2px solid #22c55e' : !flipped ? '2px solid transparent' : 'none',
       borderRight:  flipped && isWinner ? '2px solid #22c55e' :  flipped ? '2px solid transparent' : 'none',
       flexDirection: flipped ? 'row-reverse' : 'row', boxSizing: 'border-box',
     }}>
-      {seed != null && <span style={{ color: T.accent, fontFamily: T.font, fontWeight: 900, fontSize: 11, minWidth: 16, textAlign: flipped ? 'left' : 'right' }}>{seed}</span>}
-      <Logo team={team} size={20} />
-      <span style={{ flex: 1, color: isWinner ? T.win : team ? T.text : T.textFnt, fontFamily: T.font, fontSize: 15, fontWeight: 700, letterSpacing: 1, textAlign: flipped ? 'right' : 'left' }}>{team || 'TBD'}</span>
-      <div style={{ display: 'flex', gap: 3, flexDirection: flipped ? 'row-reverse' : 'row' }}>
+      {seed != null && <span style={{ color: T.accent, fontFamily: T.font, fontWeight: 900, fontSize: 10, minWidth: 14, textAlign: flipped ? 'left' : 'right' }}>{seed}</span>}
+      <Logo team={team} size={18} />
+      <span style={{ flex: 1, color: isWinner ? T.win : team ? T.text : T.textMid, fontFamily: T.font, fontSize: 13, fontWeight: 700, letterSpacing: 1, textAlign: flipped ? 'right' : 'left' }}>{team || 'TBD'}</span>
+      <div style={{ display: 'flex', gap: 2, flexDirection: flipped ? 'row-reverse' : 'row' }}>
         {Array.from({ length: winsNeeded }).map((_,i) => (
-          <div key={i} style={{ width: 6, height: 6, borderRadius: '50%', background: i < wins ? (isWinner ? '#22c55e' : T.accent) : 'rgba(255,255,255,0.07)', boxShadow: i < wins ? `0 0 5px ${isWinner ? '#22c55e' : T.accent}` : 'none' }} />
+          <div key={i} style={{ width: 5, height: 5, borderRadius: '50%', background: i < wins ? (isWinner ? '#22c55e' : T.accent) : 'rgba(255,255,255,0.1)', boxShadow: i < wins ? `0 0 4px ${isWinner ? '#22c55e' : T.accent}` : 'none' }} />
         ))}
       </div>
     </div>
@@ -204,21 +293,21 @@ function ScoreGrid({ games, topTeam, botTeam, seriesLength=7 }) {
   if (!games?.length) return null
   const gC = games.slice(0, seriesLength)
   return (
-    <div style={{ background: 'rgba(0,0,0,0.4)', padding: '3px 7px', borderTop: '1px solid rgba(204,26,26,0.1)', borderBottom: '1px solid rgba(204,26,26,0.1)' }}>
-      <div style={{ display: 'flex', marginBottom: 2 }}>
-        <div style={{ width: 22 }} />
-        {gC.map((_,i) => <div key={i} style={{ flex: 1, textAlign: 'center', color: 'rgba(255,255,255,0.28)', fontFamily: T.font, fontSize: 10, fontWeight: 700 }}>{i+1}</div>)}
+    <div style={{ background: 'rgba(0,0,0,0.4)', padding: '2px 6px', borderTop: '1px solid rgba(204,26,26,0.1)', borderBottom: '1px solid rgba(204,26,26,0.1)' }}>
+      <div style={{ display: 'flex', marginBottom: 1 }}>
+        <div style={{ width: 20 }} />
+        {gC.map((_,i) => <div key={i} style={{ flex: 1, textAlign: 'center', color: T.textMid, fontFamily: T.font, fontSize: 9, fontWeight: 700 }}>{i+1}</div>)}
       </div>
       {[topTeam, botTeam].map((team, idx) => (
-        <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: idx===0 ? 2 : 0 }}>
-          <div style={{ width: 22, fontFamily: T.font, fontSize: 11, fontWeight: 700, color: T.textDim }}>{team?.slice(0,3)}</div>
+        <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: idx===0 ? 1 : 0 }}>
+          <div style={{ width: 20, fontFamily: T.font, fontSize: 10, fontWeight: 700, color: T.textDim }}>{team?.slice(0,3)}</div>
           {gC.map((g, i) => {
             const aT  = idx === 0
             const ts  = g.team_code_a === topTeam ? g.team_a_score : g.team_b_score
             const bs  = g.team_code_a === topTeam ? g.team_b_score : g.team_a_score
             const val = aT ? ts : bs
             const won = (aT ? ts : bs) > (aT ? bs : ts)
-            return <div key={i} style={{ flex: 1, textAlign: 'center', fontFamily: T.mono, fontSize: 16, color: won ? T.win : T.textFnt, fontWeight: won ? 'bold' : 'normal' }}>{val ?? '-'}</div>
+            return <div key={i} style={{ flex: 1, textAlign: 'center', fontFamily: T.mono, fontSize: 14, color: won ? T.win : T.textMid, fontWeight: won ? 'bold' : 'normal' }}>{val ?? '-'}</div>
           })}
         </div>
       ))}
@@ -231,12 +320,12 @@ function BottomBar({ topW, botW, winner: w, topTeam, botTeam }) {
   if (w) {
     const wW = w===topTeam ? topW : botW
     const lW = w===topTeam ? botW : topW
-    return <div style={{ textAlign:'center', padding:'4px 5px', fontFamily: T.font, fontSize: 12, fontWeight: 900, color: T.win, background:'rgba(34,197,94,0.07)', borderTop:'1px solid rgba(34,197,94,0.18)', letterSpacing: 1 }}>{w} WINS {wW}-{lW}</div>
+    return <div style={{ textAlign:'center', padding:'3px 5px', fontFamily: T.font, fontSize: 11, fontWeight: 900, color: T.win, background:'rgba(34,197,94,0.07)', borderTop:'1px solid rgba(34,197,94,0.18)', letterSpacing: 1 }}>{w} WINS {wW}-{lW}</div>
   }
   if ((topW+botW) === 0) return null
   const leading = topW > botW ? topTeam : botTeam
   const label   = topW === botW ? `TIED ${topW}-${botW}` : `${leading} LEADS ${Math.max(topW,botW)}-${Math.min(topW,botW)}`
-  return <div style={{ textAlign:'center', padding:'3px 5px', fontFamily: T.font, fontSize: 11, fontWeight: 700, color: T.accent, background:'rgba(204,26,26,0.05)', borderTop:'1px solid rgba(204,26,26,0.1)', letterSpacing: 1 }}>{label}</div>
+  return <div style={{ textAlign:'center', padding:'2px 5px', fontFamily: T.font, fontSize: 10, fontWeight: 700, color: T.accent, background:'rgba(204,26,26,0.05)', borderTop:'1px solid rgba(204,26,26,0.1)', letterSpacing: 1 }}>{label}</div>
 }
 
 function MatchupCard({ slot, cardRef, flipped=false, onSelect, isSelected }) {
@@ -248,9 +337,9 @@ function MatchupCard({ slot, cardRef, flipped=false, onSelect, isSelected }) {
 
   return (
     <div ref={cardRef} onClick={() => topTeam && botTeam && onSelect && onSelect(slot)} style={{
-      width: '100%', border: `1px solid ${bdr}`, borderRadius: 7,
+      width: '100%', border: `1px solid ${bdr}`, borderRadius: 6,
       background: T.bgCard,
-      boxShadow: `0 0 10px ${glow}, 0 3px 12px rgba(0,0,0,0.5), inset 0 0 12px rgba(0,0,0,0.4)`,
+      boxShadow: `0 0 8px ${glow}, 0 2px 8px rgba(0,0,0,0.5), inset 0 0 10px rgba(0,0,0,0.4)`,
       overflow: 'hidden', boxSizing: 'border-box',
       cursor: (topTeam && botTeam) ? 'pointer' : 'default',
       transition: 'border-color 0.15s',
@@ -259,7 +348,7 @@ function MatchupCard({ slot, cardRef, flipped=false, onSelect, isSelected }) {
       <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(204,26,26,0.18),transparent)' }} />
       {games.length > 0
         ? <ScoreGrid games={games} topTeam={topTeam} botTeam={botTeam} seriesLength={seriesLength} />
-        : <div style={{ textAlign:'center', padding:'3px 0', color: T.textFnt, fontFamily: T.font, fontSize: 11, letterSpacing: 3 }}>— VS —</div>
+        : <div style={{ textAlign:'center', padding:'2px 0', color: T.textMid, fontFamily: T.font, fontSize: 10, letterSpacing: 3 }}>— VS —</div>
       }
       <div style={{ height: 1, background: 'linear-gradient(90deg,transparent,rgba(204,26,26,0.18),transparent)' }} />
       <TeamRow team={botTeam} seed={botSeed} wins={botW} isWinner={w===botTeam} winsNeeded={winsNeeded} flipped={flipped} />
@@ -272,32 +361,32 @@ function ChampCard({ slot, cardRef }) {
   const { topTeam, botTeam, topSeed, botSeed, topW, botW, games, winner: w, winsNeeded=4, seriesLength=7 } = slot || {}
   function CRow({ team, seed, wins, isWinner }) {
     return (
-      <div style={{ display:'flex', alignItems:'center', gap:7, padding:'7px 10px', minHeight:36, background: isWinner ? 'linear-gradient(90deg,rgba(34,197,94,0.12),rgba(34,197,94,0.03))' : 'transparent', borderLeft: isWinner ? '3px solid #22c55e' : '3px solid transparent', boxSizing:'border-box' }}>
-        {seed != null && <span style={{ color: T.accent, fontFamily: T.font, fontWeight: 900, fontSize: 12, minWidth: 20, textAlign:'right' }}>{seed}</span>}
-        <Logo team={team} size={26} />
-        <span style={{ flex:1, color: isWinner ? T.win : team ? T.text : T.textFnt, fontFamily: T.font, fontSize: 17, fontWeight: 900, letterSpacing: 1 }}>{team || 'TBD'}</span>
-        <div style={{ display:'flex', gap:4 }}>
-          {Array.from({ length: winsNeeded }).map((_,i) => <div key={i} style={{ width:7, height:7, borderRadius:'50%', background: i < wins ? (isWinner ? '#22c55e' : T.accent) : 'rgba(255,255,255,0.07)', boxShadow: i < wins ? `0 0 6px ${isWinner ? '#22c55e' : T.accent}` : 'none' }} />)}
+      <div style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 8px', minHeight:30, background: isWinner ? 'linear-gradient(90deg,rgba(34,197,94,0.12),rgba(34,197,94,0.03))' : 'transparent', borderLeft: isWinner ? '3px solid #22c55e' : '3px solid transparent', boxSizing:'border-box' }}>
+        {seed != null && <span style={{ color: T.accent, fontFamily: T.font, fontWeight: 900, fontSize: 11, minWidth: 16, textAlign:'right' }}>{seed}</span>}
+        <Logo team={team} size={22} />
+        <span style={{ flex:1, color: isWinner ? T.win : team ? T.text : T.textMid, fontFamily: T.font, fontSize: 15, fontWeight: 900, letterSpacing: 1 }}>{team || 'TBD'}</span>
+        <div style={{ display:'flex', gap:3 }}>
+          {Array.from({ length: winsNeeded }).map((_,i) => <div key={i} style={{ width:6, height:6, borderRadius:'50%', background: i < wins ? (isWinner ? '#22c55e' : T.accent) : 'rgba(255,255,255,0.1)', boxShadow: i < wins ? `0 0 5px ${isWinner ? '#22c55e' : T.accent}` : 'none' }} />)}
         </div>
       </div>
     )
   }
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:6, flexShrink:0 }}>
-      <div style={{ fontSize:26, lineHeight:1 }}>🏆</div>
-      <div ref={cardRef} style={{ width:185, border:'2px solid rgba(204,26,26,0.6)', borderRadius:8, background: T.bgCard, boxShadow:'0 0 20px rgba(204,26,26,0.18),inset 0 0 20px rgba(204,26,26,0.04)', overflow:'hidden' }}>
-        <div style={{ textAlign:'center', padding:'7px 0 4px', fontFamily: T.font, fontSize:11, fontWeight:900, color: T.accent, letterSpacing:3, textShadow:`0 0 8px ${T.accent}` }}>CHAMPIONSHIP</div>
-        <div style={{ height:1, background:`linear-gradient(90deg,transparent,${T.accent},transparent)`, margin:'2px 0' }} />
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:5, flexShrink:0 }}>
+      <div style={{ fontSize:22, lineHeight:1 }}>🏆</div>
+      <div ref={cardRef} style={{ width:165, border:'2px solid rgba(204,26,26,0.6)', borderRadius:7, background: T.bgCard, boxShadow:'0 0 18px rgba(204,26,26,0.18),inset 0 0 18px rgba(204,26,26,0.04)', overflow:'hidden' }}>
+        <div style={{ textAlign:'center', padding:'5px 0 3px', fontFamily: T.font, fontSize:10, fontWeight:900, color: T.accent, letterSpacing:3, textShadow:`0 0 8px ${T.accent}` }}>CHAMPIONSHIP</div>
+        <div style={{ height:1, background:`linear-gradient(90deg,transparent,${T.accent},transparent)`, margin:'1px 0' }} />
         <CRow team={topTeam} seed={topSeed} wins={topW||0} isWinner={w===topTeam} />
         <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(204,26,26,0.2),transparent)' }} />
-        {(games||[]).length > 0 ? <ScoreGrid games={games} topTeam={topTeam} botTeam={botTeam} seriesLength={seriesLength} /> : <div style={{ textAlign:'center', padding:'4px 0', color: T.textFnt, fontFamily: T.font, fontSize:11, letterSpacing:3 }}>— VS —</div>}
+        {(games||[]).length > 0 ? <ScoreGrid games={games} topTeam={topTeam} botTeam={botTeam} seriesLength={seriesLength} /> : <div style={{ textAlign:'center', padding:'3px 0', color: T.textMid, fontFamily: T.font, fontSize:10, letterSpacing:3 }}>— VS —</div>}
         <div style={{ height:1, background:'linear-gradient(90deg,transparent,rgba(204,26,26,0.2),transparent)' }} />
         <CRow team={botTeam} seed={botSeed} wins={botW||0} isWinner={w===botTeam} />
         {!w && <BottomBar topW={topW||0} botW={botW||0} winner={w} topTeam={topTeam} botTeam={botTeam} />}
         {w && (
-          <div style={{ textAlign:'center', padding:'12px 8px 14px', borderTop:`1px solid rgba(204,26,26,0.3)`, background:'rgba(204,26,26,0.07)' }}>
-            <div style={{ display:'flex', justifyContent:'center', marginBottom:7 }}><Logo team={w} size={52} /></div>
-            <div style={{ fontFamily: T.font, fontSize:13, fontWeight:900, color: T.accent, letterSpacing:3, textShadow:`0 0 8px ${T.accent}` }}>CHAMPION</div>
+          <div style={{ textAlign:'center', padding:'10px 6px 12px', borderTop:`1px solid rgba(204,26,26,0.3)`, background:'rgba(204,26,26,0.07)' }}>
+            <div style={{ display:'flex', justifyContent:'center', marginBottom:5 }}><Logo team={w} size={44} /></div>
+            <div style={{ fontFamily: T.font, fontSize:11, fontWeight:900, color: T.accent, letterSpacing:3, textShadow:`0 0 8px ${T.accent}` }}>CHAMPION</div>
           </div>
         )}
       </div>
@@ -392,7 +481,7 @@ function BracketCanvas({ leftRounds, rightRounds, champSlot, nRounds, onSelectSl
   const champRef     = useRef(null)
   const leftRefs     = useRef([])
   const rightRefs    = useRef([])
-  const CARD_W = 178, COL_GAP = 32
+  const CARD_W = 148, COL_GAP = 26
 
   const getBox = useCallback((el) => {
     if (!el || !containerRef.current) return null
@@ -415,12 +504,12 @@ function BracketCanvas({ leftRounds, rightRounds, champSlot, nRounds, onSelectSl
   function col(rounds, refsGrid, ri, flipped) {
     const rnd = rounds[ri]
     if (!rnd) return null
-    const cardGap  = Math.pow(2, ri) * 10
+    const cardGap  = Math.pow(2, ri) * 8
     const isInner  = ri === rounds.length-1
 
     return (
       <div key={`${flipped?'R':'L'}-${ri}`} style={{ display:'flex', flexDirection:'column', gap:`${cardGap}px`, width:CARD_W, flexShrink:0, position:'relative', zIndex:1, alignSelf:'stretch', justifyContent:'space-around' }}>
-        <div style={{ position:'absolute', top:-26, left:0, right:0, textAlign:'center', fontFamily: T.font, fontSize:10, fontWeight:900, color: isInner ? T.accent : 'rgba(204,26,26,0.45)', letterSpacing:2, whiteSpace:'nowrap', textShadow: isInner ? `0 0 8px ${T.accent}` : 'none' }}>
+        <div style={{ position:'absolute', top:-24, left:0, right:0, textAlign:'center', fontFamily: T.font, fontSize:9, fontWeight:900, color: isInner ? T.accent : 'rgba(204,26,26,0.45)', letterSpacing:2, whiteSpace:'nowrap', textShadow: isInner ? `0 0 8px ${T.accent}` : 'none' }}>
           {LABELS[ri] || `ROUND ${ri+1}`}
         </div>
         {rnd.map((slot, mi) => {
@@ -440,8 +529,8 @@ function BracketCanvas({ leftRounds, rightRounds, champSlot, nRounds, onSelectSl
   const rightCols = rightRounds.map((_, ri) => col(rightRounds, rightRefs.current, ri, true)).reverse()
 
   return (
-    <div style={{ padding:'0 16px 8px', overflowX:'auto', overflowY:'hidden', width:'100%', boxSizing:'border-box', height:'100%' }}>
-      <div ref={containerRef} style={{ display:'flex', alignItems:'center', justifyContent:'flex-start', gap:`${COL_GAP}px`, paddingTop:30, position:'relative', minHeight:10, minWidth:1200 }}>
+    <div style={{ padding:'0 12px 8px', overflowX:'auto', overflowY:'hidden', width:'100%', boxSizing:'border-box', height:'100%' }}>
+      <div ref={containerRef} style={{ display:'flex', alignItems:'center', justifyContent:'flex-start', gap:`${COL_GAP}px`, paddingTop:28, position:'relative', minHeight:10, minWidth:1050 }}>
         <BracketLines getBox={getBox} leftRefs={leftRefs.current} rightRefs={rightRefs.current} champRef={champRef} leftRounds={leftRounds} rightRounds={rightRounds} />
         <div style={{ display:'flex', flexDirection:'row', gap:`${COL_GAP}px`, alignItems:'center', position:'relative', zIndex:1 }}>{leftCols}</div>
         <div style={{ flexShrink:0, zIndex:1, position:'relative', alignSelf:'center' }}><ChampCard slot={champSlot} cardRef={champRef} /></div>
@@ -452,92 +541,247 @@ function BracketCanvas({ leftRounds, rightRounds, champSlot, nRounds, onSelectSl
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   H2H PANEL
+   H2H SECTION HEADER
 ═══════════════════════════════════════════════════════════════ */
-function H2HPanel({ slot, allGames }) {
+function SectionHeader({ label, sub }) {
+  return (
+    <div style={{
+      flexShrink: 0, padding: '5px 14px',
+      background: 'rgba(204,26,26,0.06)',
+      borderBottom: '1px solid rgba(204,26,26,0.2)',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+    }}>
+      <div style={{ fontFamily: T.font, fontSize: 13, fontWeight: 900, color: T.accent, letterSpacing: '0.25em' }}>{label}</div>
+      {sub && <div style={{ fontFamily: T.font, fontSize: 12, color: T.textMid, letterSpacing: '0.15em' }}>{sub}</div>}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TEAM IDENTITY HEADER — logo + name shown above each column
+═══════════════════════════════════════════════════════════════ */
+function TeamHeader({ team, align = 'left' }) {
+  const [err, setErr] = useState(false)
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
+      padding: '4px 10px 3px',
+      borderBottom: '1px solid rgba(204,26,26,0.15)',
+      background: 'rgba(0,0,0,0.2)',
+      flexShrink: 0,
+    }}>
+      {align === 'right' && (
+        <span style={{ fontFamily: T.font, fontSize: 20, fontWeight: 900, color: T.text, letterSpacing: '0.1em' }}>{team}</span>
+      )}
+      {!err
+        ? <img src={`/assets/teamLogos/${team}.png`} alt={team}
+            style={{ width: 28, height: 28, objectFit: 'contain', filter: 'drop-shadow(0 0 4px rgba(204,26,26,0.4))' }}
+            onError={() => setErr(true)} />
+        : <div style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: T.font, fontSize: 13, fontWeight: 900, color: T.accent }}>{team?.slice(0,3)}</div>
+      }
+      {align === 'left' && (
+        <span style={{ fontFamily: T.font, fontSize: 20, fontWeight: 900, color: T.text, letterSpacing: '0.1em' }}>{team}</span>
+      )}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   H2H RECORD PANEL — This Season or All-Time
+   Layout: [Logo + TeamA name] stat | LABEL | stat [TeamB name + Logo]
+═══════════════════════════════════════════════════════════════ */
+function H2HRecordPanel({ label, h2h, teamA, teamB, gp }) {
+  const { wA, wB, t, gfA, gfB, soA, soB } = h2h
+
+  // No L5 — only 2 games per season
+  const rows = [
+    { stat: 'W',  vA: wA,   vB: wB,   lowerBetter: false },
+    { stat: 'GF', vA: gfA,  vB: gfB,  lowerBetter: false },
+    { stat: 'GA', vA: gfB,  vB: gfA,  lowerBetter: true  },
+    { stat: 'SO', vA: soA,  vB: soB,  lowerBetter: false },
+  ]
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+      <SectionHeader label={label} sub={`${gp} GP${t > 0 ? ` · ${t}T` : ''}`} />
+
+      {/* Team identity row */}
+      <div style={{ display: 'flex', flexShrink: 0 }}>
+        <div style={{ flex: 1 }}><TeamHeader team={teamA} align="left" /></div>
+        <div style={{ width: 38, flexShrink: 0, borderBottom: '1px solid rgba(204,26,26,0.15)', background: 'rgba(0,0,0,0.2)' }} />
+        <div style={{ flex: 1 }}><TeamHeader team={teamB} align="right" /></div>
+      </div>
+
+      {/* Stat rows */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', padding: '4px 10px' }}>
+        {rows.map(({ stat, vA, vB, lowerBetter }) => {
+          const aWins = lowerBetter ? vA < vB : vA > vB
+          const bWins = lowerBetter ? vB < vA : vB > vA
+          return (
+            <div key={stat} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {/* Team A value */}
+              <div style={{
+                flex: 1, textAlign: 'right',
+                fontFamily: T.font, fontSize: 36, fontWeight: 900, lineHeight: 1,
+                color: aWins ? '#fff' : T.textMid,
+                textShadow: aWins ? '0 0 12px rgba(255,255,255,0.15)' : 'none',
+              }}>{vA}</div>
+
+              {/* Stat label */}
+              <div style={{
+                flexShrink: 0, width: 38, textAlign: 'center',
+                fontFamily: T.font, fontSize: 12, fontWeight: 900,
+                color: 'rgba(204,26,26,0.7)', letterSpacing: '0.1em',
+              }}>{stat}</div>
+
+              {/* Team B value */}
+              <div style={{
+                flex: 1, textAlign: 'left',
+                fontFamily: T.font, fontSize: 36, fontWeight: 900, lineHeight: 1,
+                color: bWins ? '#fff' : T.textMid,
+                textShadow: bWins ? '0 0 12px rgba(255,255,255,0.15)' : 'none',
+              }}>{vB}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GAME STATS PANEL — aggregated season h2h game stats
+═══════════════════════════════════════════════════════════════ */
+function GameStatsPanel({ teamA, teamB, statsA, statsB, gp }) {
+  if (!statsA || !statsB) {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, borderLeft: '1px solid rgba(204,26,26,0.2)', borderRight: '1px solid rgba(204,26,26,0.2)' }}>
+        <SectionHeader label="GAME STATS" sub={`${gp} GP`} />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontFamily: T.font, fontSize: 13, color: T.textMid, letterSpacing: '0.2em' }}>NO GAME STATS</div>
+        </div>
+      </div>
+    )
+  }
+
+  const rows = [
+    { label: 'SH',   vA: statsA.sh,    vB: statsB.sh,    fmt: v => v,       lowerBetter: false },
+    { label: 'SH%',  vA: statsA.shPct, vB: statsB.shPct, fmt: v => `${v}%`, lowerBetter: false },
+    { label: '1X%',  vA: statsA.oxPct, vB: statsB.oxPct, fmt: v => `${v}%`, lowerBetter: false },
+    { label: 'SD',   vA: statsA.sd,    vB: statsB.sd,    fmt: v => (v > 0 ? `+${v}` : `${v}`), lowerBetter: false },
+    { label: 'FO%',  vA: statsA.foPct, vB: statsB.foPct, fmt: v => `${v}%`, lowerBetter: false },
+    { label: 'BA%',  vA: statsA.baPct, vB: statsB.baPct, fmt: v => `${v}%`, lowerBetter: false },
+    { label: 'PS%',  vA: statsA.psPct, vB: statsB.psPct, fmt: v => `${v}%`, lowerBetter: false },
+    { label: 'CHK',  vA: statsA.chk,   vB: statsB.chk,   fmt: v => v,       lowerBetter: false },
+    { label: 'PPG',  vA: statsA.ppg,   vB: statsB.ppg,   fmt: v => v,       lowerBetter: false },
+    { label: 'PPA',  vA: statsA.ppa,   vB: statsB.ppa,   fmt: v => v,       lowerBetter: true  },
+    { label: 'SHG',  vA: statsA.shg,   vB: statsB.shg,   fmt: v => v,       lowerBetter: false },
+    { label: 'ATK',  vA: statsA.atk,   vB: statsB.atk,   fmt: v => v,       lowerBetter: false, isStr: true },
+  ]
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, borderLeft: '1px solid rgba(204,26,26,0.2)', borderRight: '1px solid rgba(204,26,26,0.2)' }}>
+      <SectionHeader label="GAME STATS" sub={`${gp} GP`} />
+
+      {/* Team identity row */}
+      <div style={{ display: 'flex', flexShrink: 0 }}>
+        <div style={{ flex: 1 }}><TeamHeader team={teamA} align="left" /></div>
+        <div style={{ width: 38, flexShrink: 0, borderBottom: '1px solid rgba(204,26,26,0.15)', background: 'rgba(0,0,0,0.2)' }} />
+        <div style={{ flex: 1 }}><TeamHeader team={teamB} align="right" /></div>
+      </div>
+
+      {/* Stat rows — smaller font to fit 12 rows */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-evenly', padding: '2px 10px', overflow: 'hidden' }}>
+        {rows.map(({ label, vA, vB, fmt, lowerBetter, isStr }) => {
+          const aWins = isStr ? false : (lowerBetter ? vA < vB : vA > vB)
+          const bWins = isStr ? false : (lowerBetter ? vB < vA : vB > vA)
+          // For ATK compare seconds
+          const aWinsAtk = isStr && statsA && statsB ? (() => {
+            const toSec = s => { const p = String(s).split(':').map(Number); return (p[0]||0)*60+(p[1]||0) }
+            return toSec(statsA.atk) > toSec(statsB.atk)
+          })() : false
+          const bWinsAtk = isStr && statsA && statsB ? (() => {
+            const toSec = s => { const p = String(s).split(':').map(Number); return (p[0]||0)*60+(p[1]||0) }
+            return toSec(statsB.atk) > toSec(statsA.atk)
+          })() : false
+
+          const aBright = isStr ? aWinsAtk : aWins
+          const bBright = isStr ? bWinsAtk : bWins
+
+          return (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div style={{
+                flex: 1, textAlign: 'right',
+                fontFamily: T.font, fontSize: 20, fontWeight: 900, lineHeight: 1,
+                color: aBright ? '#fff' : T.textMid,
+                textShadow: aBright ? '0 0 10px rgba(255,255,255,0.12)' : 'none',
+              }}>{fmt(vA)}</div>
+
+              <div style={{
+                flexShrink: 0, width: 38, textAlign: 'center',
+                fontFamily: T.font, fontSize: 10, fontWeight: 900,
+                color: 'rgba(204,26,26,0.7)', letterSpacing: '0.08em',
+              }}>{label}</div>
+
+              <div style={{
+                flex: 1, textAlign: 'left',
+                fontFamily: T.font, fontSize: 20, fontWeight: 900, lineHeight: 1,
+                color: bBright ? '#fff' : T.textMid,
+                textShadow: bBright ? '0 0 10px rgba(255,255,255,0.12)' : 'none',
+              }}>{fmt(vB)}</div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   H2H PANEL — full bottom strip
+   LEFT = This Season  |  CENTER = Game Stats  |  RIGHT = All-Time
+═══════════════════════════════════════════════════════════════ */
+function H2HPanel({ slot, allGames, seasonGames, gameStats, onClear }) {
   const teamA = slot?.topTeam
   const teamB = slot?.botTeam
 
   if (!slot || !teamA || !teamB) {
     return (
-      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10 }}>
-        <div style={{ fontSize:30, opacity:0.05 }}>⚔</div>
-        <div style={{ fontFamily: T.font, fontSize:14, fontWeight:700, color:'#282828', letterSpacing:'0.2em' }}>CLICK A MATCHUP TO LOAD H2H</div>
+      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
+        <div style={{ fontFamily: T.font, fontSize: 16, fontWeight: 700, color: T.textMid, letterSpacing: '0.25em' }}>
+          ← CLICK ANY MATCHUP TO SEE H2H STATS
+        </div>
       </div>
     )
   }
 
-  const h2h = useMemo(() => computeH2H(teamA, teamB, allGames), [teamA, teamB, allGames])
-  const { wA, wB, t, gfA, gfB, soA, soB, gp, last10 } = h2h
-  const aLeads = wA > wB, bLeads = wB > wA
-  const aBar = gp === 0 ? 50 : Math.round((wA / Math.max(wA+wB, 1)) * 100)
+  const h2hAll    = useMemo(() => computeH2H(teamA, teamB, allGames),    [teamA, teamB, allGames])
+  const h2hSeason = useMemo(() => computeH2H(teamA, teamB, seasonGames), [teamA, teamB, seasonGames])
+  const gsH2H     = useMemo(() => computeGameStatsH2H(teamA, teamB, gameStats), [teamA, teamB, gameStats])
 
   return (
-    <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden' }}>
-      {/* VS header */}
-      <div style={{ flexShrink:0, padding:'10px 20px 8px', borderBottom:'1px solid rgba(204,26,26,0.2)', background:'linear-gradient(180deg,rgba(204,26,26,0.06) 0%,transparent 100%)' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          {/* Team A */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1 }}>
-            <img src={`/assets/teamLogos/${teamA}.png`} alt={teamA} style={{ width:38, height:38, objectFit:'contain' }} onError={e => e.target.style.display='none'} />
-            <div>
-              <div style={{ fontFamily: T.font, fontSize:24, fontWeight:900, color:'#fff', letterSpacing:'0.1em', lineHeight:1 }}>{teamA}</div>
-              <div style={{ fontFamily: T.font, fontSize:12, fontWeight:700, color: aLeads ? T.win : '#555', letterSpacing:'0.1em', marginTop:2 }}>{wA}W · {gfA}GF · {soA} SO</div>
-            </div>
-          </div>
-          {/* Center */}
-          <div style={{ flexShrink:0, padding:'0 16px', textAlign:'center' }}>
-            <div style={{ fontFamily: T.font, fontSize:10, fontWeight:900, color: T.accent, letterSpacing:'0.3em', marginBottom:2 }}>ALL-TIME H2H</div>
-            <div style={{ fontFamily: T.font, fontSize:26, fontWeight:900, color: T.accent }}>VS</div>
-            <div style={{ fontFamily: T.font, fontSize:10, color:'#444', letterSpacing:'0.15em', marginTop:2 }}>{gp} GP{t > 0 ? ` · ${t}T` : ''}</div>
-          </div>
-          {/* Team B */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, flex:1, justifyContent:'flex-end' }}>
-            <div style={{ textAlign:'right' }}>
-              <div style={{ fontFamily: T.font, fontSize:24, fontWeight:900, color:'#fff', letterSpacing:'0.1em', lineHeight:1 }}>{teamB}</div>
-              <div style={{ fontFamily: T.font, fontSize:12, fontWeight:700, color: bLeads ? T.win : '#555', letterSpacing:'0.1em', marginTop:2 }}>{wB}W · {gfB}GF · {soB} SO</div>
-            </div>
-            <img src={`/assets/teamLogos/${teamB}.png`} alt={teamB} style={{ width:38, height:38, objectFit:'contain' }} onError={e => e.target.style.display='none'} />
-          </div>
-        </div>
-        {/* Win bar */}
-        <div style={{ marginTop:8, display:'flex', height:5, borderRadius:3, overflow:'hidden' }}>
-          <div style={{ width:`${aBar}%`, background: aLeads ? `linear-gradient(90deg,${T.accent},${T.accentBr})` : '#1e1e1e', transition:'width 0.5s ease' }} />
-          <div style={{ width:`${100-aBar}%`, background: bLeads ? `linear-gradient(90deg,${T.accentBr},${T.accent})` : '#1e1e1e', transition:'width 0.5s ease' }} />
-        </div>
-        <div style={{ display:'flex', justifyContent:'space-between', marginTop:3 }}>
-          <span style={{ fontFamily: T.font, fontSize:10, color:'#444' }}>{aBar}%</span>
-          <span style={{ fontFamily: T.font, fontSize:10, color:'#444' }}>{100-aBar}%</span>
-        </div>
-      </div>
+    <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'row', overflow:'hidden', position:'relative' }}>
 
-      {/* Last 10 */}
-      <div style={{ flex:1, padding:'8px 20px', overflow:'hidden' }}>
-        <div style={{ fontFamily: T.font, fontSize:10, fontWeight:900, color: T.accent, letterSpacing:'0.2em', marginBottom:6 }}>
-          LAST {Math.min(10, last10.length)} MEETINGS (SEASON GAMES)
-        </div>
-        <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-          {last10.length === 0 && <div style={{ fontFamily: T.font, fontSize:13, color:'#333', letterSpacing:'0.15em' }}>NO GAMES PLAYED</div>}
-          {last10.map((g, i) => {
-            const aWon = g.winner === teamA, bWon = g.winner === teamB
-            return (
-              <div key={i} style={{ display:'flex', alignItems:'center', gap:6, padding:'4px 10px', background: i%2===0 ? 'rgba(255,255,255,0.02)' : 'transparent', borderRadius:3 }}>
-                <div style={{ fontFamily: T.font, fontSize:10, color:'#333', width:22, flexShrink:0 }}>G{last10.length-i}</div>
-                <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'flex-end', gap:6 }}>
-                  <span style={{ fontFamily: T.font, fontSize:14, fontWeight: aWon?900:600, color: aWon?'#fff':'#3a3a3a' }}>{teamA}</span>
-                  <span style={{ fontFamily: T.mono, fontSize:22, fontWeight:900, color: aWon ? T.win : g.winner===null ? '#555' : T.loss, minWidth:22, textAlign:'right' }}>{g.sA}</span>
-                </div>
-                <div style={{ fontFamily: T.font, fontSize:13, color:'#2a2a2a', flexShrink:0 }}>—</div>
-                <div style={{ flex:1, display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontFamily: T.mono, fontSize:22, fontWeight:900, color: bWon ? T.win : g.winner===null ? '#555' : T.loss, minWidth:22 }}>{g.sB}</span>
-                  <span style={{ fontFamily: T.font, fontSize:14, fontWeight: bWon?900:600, color: bWon?'#fff':'#3a3a3a' }}>{teamB}</span>
-                </div>
-                {g.ot ? <div style={{ fontFamily: T.font, fontSize:9, fontWeight:900, color: T.accent, width:20, textAlign:'right', flexShrink:0 }}>OT</div> : <div style={{ width:20 }} />}
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      {/* Clear button — top right corner */}
+      {onClear && (
+        <button onClick={onClear} style={{
+          position: 'absolute', top: 6, right: 10, zIndex: 10,
+          background: 'transparent', border: '1px solid rgba(204,26,26,0.3)',
+          borderRadius: 3, padding: '3px 10px', cursor: 'pointer',
+          fontFamily: T.font, fontSize: 11, color: T.textMid, letterSpacing: '0.15em',
+        }}>✕ CLEAR</button>
+      )}
+
+      {/* ── LEFT: THIS SEASON ── */}
+      <H2HRecordPanel label="THIS SEASON" h2h={h2hSeason} teamA={teamA} teamB={teamB} gp={h2hSeason.gp} />
+
+      {/* ── CENTER: GAME STATS ── */}
+      <GameStatsPanel teamA={teamA} teamB={teamB} statsA={gsH2H.a} statsB={gsH2H.b} gp={gsH2H.gp} />
+
+      {/* ── RIGHT: ALL-TIME ── */}
+      <H2HRecordPanel label="ALL-TIME" h2h={h2hAll} teamA={teamA} teamB={teamB} gp={h2hAll.gp} />
+
     </div>
   )
 }
@@ -546,42 +790,102 @@ function H2HPanel({ slot, allGames }) {
    MAIN EXPORT
 ═══════════════════════════════════════════════════════════════ */
 export default function PodcastBracket() {
+  const [availableLgs, setAvailableLgs] = useState([])
   const [playoffGames, setPlayoffGames] = useState([])
   const [allGames,     setAllGames]     = useState([])
+  const [seasonGames,  setSeasonGames]  = useState([])
+  const [gameStats,    setGameStats]    = useState([])
   const [bracketLg,    setBracketLg]    = useState('')
   const [loading,      setLoading]      = useState(true)
   const [selectedSlot, setSelectedSlot] = useState(null)
 
+  // Step 1: on mount, fetch all lgs that have playoff data and default to latest
   useEffect(() => {
+    const init = async () => {
+      const { data } = await supabase
+        .from('playoff_games')
+        .select('lg')
+        .ilike('lg', 'W%')
+        .order('lg', { ascending: false })
+      if (!data?.length) { setLoading(false); return }
+      // dedupe
+      const lgs = [...new Set(data.map(r => r.lg))]
+      setAvailableLgs(lgs)
+      setBracketLg(lgs[0]) // default to latest
+    }
+    init()
+  }, [])
+
+  // Step 2: whenever bracketLg changes, reload all data for that season
+  useEffect(() => {
+    if (!bracketLg) return
     const load = async () => {
       setLoading(true)
-      const { data: seasons } = await supabase
-        .from('seasons').select('*').ilike('lg','W%')
-        .order('lg', { ascending: false }).limit(10)
+      setSelectedSlot(null)
 
-      // Use most recent completed season for bracket, or current if in playoffs
-      const current   = seasons?.find(s => s.status === 'season')
-      const completed = seasons?.find(s => s.status === 'complete')
-      // If current season is in playoffs mode, use it; otherwise use last complete
-      const target = completed || current || seasons?.[0]
-      if (!target) { setLoading(false); return }
-      setBracketLg(target.lg)
-
-      const [{ data: pgames }, { data: hist }] = await Promise.all([
-        supabase.from('playoff_games').select('*').eq('lg', target.lg)
+      const [
+        { data: pgames },
+        { data: regSeasonAll },
+        { data: regSeasonCurrent },
+        { data: gStats },
+        { data: playoffStatsAll },
+      ] = await Promise.all([
+        // Bracket data — full playoff_games row for this lg
+        supabase.from('playoff_games').select('*').eq('lg', bracketLg)
           .order('round').order('series_number').order('game_number'),
+        // All-time reg season games (all lgs)
         supabase.from('games')
-          .select('id,home,away,score_home,score_away,ot')
-          .not('score_home','is',null)
-          .or('mode.eq.Season,mode.eq.season,mode.ilike.season%,mode.ilike.regular%'),
+          .select('id,home,away,score_home,score_away,ot,lg')
+          .not('score_home', 'is', null),
+        // This season reg season games
+        supabase.from('games')
+          .select('id,home,away,score_home,score_away,ot,lg')
+          .eq('lg', bracketLg)
+          .not('score_home', 'is', null),
+        // Game stats for this lg — reg season + playoffs (no type filter)
+        supabase.from('game_stats_team')
+          .select('*')
+          .eq('season', bracketLg),
+        // All-time playoff scores via game_stats_team — has correct home/away + scores for all lgs
+        supabase.from('game_stats_team')
+          .select('id,season,home,away,home_score,away_score,ot_flag,playoff_game_id')
+          .not('playoff_game_id', 'is', null),
       ])
 
+      // Normalize game_stats_team playoff rows to the same shape as games rows for computeH2H
+      // game_stats_team already has correct home/away designation + scores
+      const normalizePOStats = (rows) => (rows||[]).map(g => ({
+        id:         g.playoff_game_id,  // use playoff_game_id as the unique id
+        home:       g.home,
+        away:       g.away,
+        score_home: g.home_score,
+        score_away: g.away_score,
+        ot:         g.ot_flag,
+        lg:         g.season,           // season col = lg
+      }))
+
+      const allPlayoffNorm    = normalizePOStats(playoffStatsAll)
+      const seasonPlayoffNorm = allPlayoffNorm.filter(g => g.lg === bracketLg)
+
+      // Merge reg season + playoff rows for H2H consumption
+      const allGamesMerged    = [...(regSeasonAll||[]),     ...allPlayoffNorm]
+      const seasonGamesMerged = [...(regSeasonCurrent||[]), ...seasonPlayoffNorm]
+
+      console.log('[BnB] lg:', bracketLg,
+        '| pgames:', pgames?.length,
+        '| seasonGames (reg+po):', seasonGamesMerged.length,
+        '| allGames (reg+po):', allGamesMerged.length,
+        '| gameStats:', gStats?.length,
+        '| playoffStats all-time:', allPlayoffNorm.length)
+
       setPlayoffGames(pgames || [])
-      setAllGames(hist || [])
+      setAllGames(allGamesMerged)
+      setSeasonGames(seasonGamesMerged)
+      setGameStats(gStats || [])
       setLoading(false)
     }
     load()
-  }, [])
+  }, [bracketLg])
 
   const { leftRounds, rightRounds, champSlot, nRounds } = useMemo(() => {
     if (!playoffGames.length) return { leftRounds:[], rightRounds:[], champSlot:null, nRounds:0 }
@@ -596,54 +900,69 @@ export default function PodcastBracket() {
 
   if (loading) return (
     <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center' }}>
-      <div style={{ fontFamily: T.font, fontSize:18, color: T.accent, letterSpacing:'0.2em' }}>LOADING BRACKET...</div>
+      <div style={{ fontFamily: T.font, fontSize:16, color: T.accent, letterSpacing:'0.2em' }}>LOADING BRACKET...</div>
     </div>
   )
 
   if (!playoffGames.length) return (
     <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:12 }}>
-      <div style={{ fontSize:30, opacity:0.06 }}>🏒</div>
-      <div style={{ fontFamily: T.font, fontSize:14, color:'#282828', letterSpacing:'0.2em' }}>NO PLAYOFF DATA IN playoff_games TABLE</div>
+      <div style={{ fontSize:26, opacity:0.06 }}>🏒</div>
+      <div style={{ fontFamily: T.font, fontSize:12, color: T.textMid, letterSpacing:'0.2em' }}>NO PLAYOFF DATA IN playoff_games TABLE</div>
     </div>
   )
 
   return (
     <>
       <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=VT323&display=swap" rel="stylesheet" />
-      <style>{`@keyframes bnbChampShimmer { 0%{transform:translateX(-100%) translateY(-100%) rotate(45deg)} 100%{transform:translateX(100%) translateY(100%) rotate(45deg)} }`}</style>
 
       <div style={{ width:'100%', height:'100%', display:'flex', flexDirection:'column', overflow:'hidden', background: T.bg, fontFamily: T.font }}>
 
-        {/* ══ TOP 52%: BRACKET ══ */}
-        <div style={{ flex:'0 0 52%', borderBottom:'1px solid rgba(204,26,26,0.3)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
-          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'8px 16px 5px', borderBottom:'1px solid rgba(204,26,26,0.12)' }}>
+        {/* ══ TOP 65%: BRACKET ══ */}
+        <div style={{ flex:'0 0 65%', borderBottom:'2px solid rgba(204,26,26,0.4)', overflow:'hidden', display:'flex', flexDirection:'column' }}>
+          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'5px 14px 3px', borderBottom:'1px solid rgba(204,26,26,0.15)' }}>
             <div style={{ width:3, height:20, background: T.accent, borderRadius:2 }} />
             <div style={{ fontSize:18, fontWeight:900, color:'#fff', letterSpacing:'0.18em' }}>PLAYOFF BRACKET</div>
-            {bracketLg && <div style={{ fontSize:11, color: T.accent, letterSpacing:'0.2em', fontWeight:700 }}>{bracketLg}</div>}
+            {/* Season selector */}
+            {availableLgs.length > 0 && (
+              <select
+                value={bracketLg}
+                onChange={e => setBracketLg(e.target.value)}
+                style={{
+                  background: '#0f0f0f',
+                  border: '1px solid rgba(204,26,26,0.4)',
+                  borderRadius: 3,
+                  color: T.accent,
+                  fontFamily: T.font,
+                  fontSize: 13,
+                  fontWeight: 700,
+                  letterSpacing: '0.15em',
+                  padding: '3px 8px',
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                {availableLgs.map(lg => (
+                  <option key={lg} value={lg} style={{ background: '#0f0f0f', color: T.accent }}>{lg}</option>
+                ))}
+              </select>
+            )}
             <div style={{ flex:1, height:1, background:'linear-gradient(90deg,rgba(204,26,26,0.3),transparent)' }} />
-            <div style={{ fontSize:10, color:'#333', letterSpacing:'0.15em' }}>CLICK MATCHUP FOR H2H ↓</div>
+            <div style={{ fontSize:11, color: T.textMid, letterSpacing:'0.15em', fontWeight:700 }}>CLICK MATCHUP → H2H BELOW</div>
           </div>
           <div style={{ flex:1, overflow:'auto' }}>
             <BracketCanvas leftRounds={leftRounds} rightRounds={rightRounds} champSlot={champSlot} nRounds={nRounds} onSelectSlot={setSelectedSlot} selectedSlot={selectedSlot} />
           </div>
         </div>
 
-        {/* ══ BOTTOM 48%: H2H ══ */}
-        <div style={{ flex:'0 0 48%', overflow:'hidden', display:'flex', flexDirection:'column', background:'rgba(0,0,0,0.25)' }}>
-          <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:12, padding:'7px 16px 5px', borderBottom:'1px solid rgba(204,26,26,0.12)' }}>
-            <div style={{ width:3, height:20, background: selectedSlot?.topTeam ? T.accent : '#1e1e1e', borderRadius:2, transition:'background 0.2s' }} />
-            <div style={{ fontSize:16, fontWeight:900, color: selectedSlot?.topTeam ? '#fff' : '#282828', letterSpacing:'0.18em', transition:'color 0.2s' }}>
-              {selectedSlot?.topTeam && selectedSlot?.botTeam
-                ? `${selectedSlot.topTeam} vs ${selectedSlot.botTeam} — ALL-TIME H2H`
-                : 'H2H MATCHUP DETAIL'}
-            </div>
-            {selectedSlot?.topTeam && (
-              <button onClick={() => setSelectedSlot(null)} style={{ marginLeft:'auto', background:'transparent', border:'1px solid #1e1e1e', borderRadius:4, padding:'3px 10px', cursor:'pointer', fontFamily: T.font, fontSize:10, color:'#444', letterSpacing:'0.15em' }}>✕ CLEAR</button>
-            )}
-          </div>
-          <div style={{ flex:1, overflow:'hidden' }}>
-            <H2HPanel slot={selectedSlot} allGames={allGames} />
-          </div>
+        {/* ══ BOTTOM 35%: H2H STATS ══ */}
+        <div style={{ flex:'0 0 35%', overflow:'hidden', display:'flex', flexDirection:'column', background:'rgba(0,0,0,0.3)' }}>
+          <H2HPanel
+            slot={selectedSlot}
+            allGames={allGames}
+            seasonGames={seasonGames}
+            gameStats={gameStats}
+            onClear={() => setSelectedSlot(null)}
+          />
         </div>
       </div>
     </>

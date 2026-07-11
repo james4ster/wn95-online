@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node src/scripts/generate-random-art.js && vite",
-    "build": "node src/scripts/generate-random-art.js && vite build",
+    "dev": "node scripts/generate-random-art.js && vite",
+    "build": "node scripts/generate-random-art.js && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "start": "node server.js"

@@ -743,7 +743,7 @@ function LeagueGazette({
           // pick the same image for the full calendar day
 
           // ── Change this string any time you want to force a new daily pick for everyone
-          const ART_CACHE_BUST = 'v4';
+          const ART_CACHE_BUST = 'v5';
 
           const today = new Date().toISOString().slice(0, 10); // "2026-07-10"
           const seed = `${today}-${leagueLabel}-${ART_CACHE_BUST}`;

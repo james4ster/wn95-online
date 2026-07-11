@@ -743,9 +743,9 @@ function LeagueGazette({
           // pick the same image for the full calendar day
 
           // ── Change this string any time you want to force a new daily pick for everyone
-          const ART_CACHE_BUST = 'v5';
+          const ART_CACHE_BUST = 'v1';
 
-          const today = new Date().toISOString().slice(0, 10); // "2026-07-10"
+          const today = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString().slice(0, 10);
           const seed = `${today}-${leagueLabel}-${ART_CACHE_BUST}`;
           // Simple deterministic hash → index
           const hash = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 0);
@@ -1504,7 +1504,7 @@ function LeagueGazette({
 
  // Used to control versions of the exploding logos in visitors local storage
  // Increment the version if I want to have new changes reanimate
-const ELIM_ANIM_VERSION = 'v2';
+const ELIM_ANIM_VERSION = 'v5';
 
 function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamNameMap, currentSeason }) {
   // Build eliminated set and seed map from series data

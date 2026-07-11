@@ -8,6 +8,10 @@ import { createPortal } from 'react-dom';
 import { ChampionsHomePanel } from '../pages/Champions'
 import { useNavigate } from 'react-router-dom'
 
+
+// ── Offseason art pool — auto-discovered from the random/ folder at build time ──
+import OFFSEASON_ART_FILES from '../offseasonArtManifest.json';
+
 /*
 =====================
 Homepage Flair Options
@@ -73,9 +77,9 @@ function useLeagueCountdown(season, nextSeason) {
     }
 
     const targetDate =
-      season.status === 'offseason'
-        ? season.start_date // ← this would be on the NEXT season row
-        : season.end_date;
+  season.status === 'offseason'
+    ? (nextSeason?.start_date ?? season.start_date)
+    : season.end_date;
 
     if (!targetDate) {
       setTick({ mode: season.status || 'done', seasonLabel: season.lg });
@@ -622,8 +626,8 @@ async function fetchGazetteEdition({
       ')'
     );
     return typeof cached.data === 'string'
-      ? JSON.parse(cached.data)
-      : cached.data;
+  ? { ...JSON.parse(cached.data), date: cached.date }
+  : { ...cached.data, date: cached.date };
   } catch (e) {
     console.log('[Gazette] Cache lookup failed:', e.message);
     return null;
@@ -717,49 +721,62 @@ function LeagueGazette({
       ([code, info]) => info.full === team || code === team
     )?.[0] || team;
 
-  useEffect(() => {
-    if (!teamCode) return;
-    setFeaturedSrc(null);
-    setUseBanner(false);
-
-    const isOffseason = currentSeason?.status === 'offseason';
-
-    if (edition?.champion_team && currentSeason?.status === 'playoffs') {
-      setFeaturedSrc(`/assets/team-art/champ/${teamCode}.png`);
-      return;
-    }
-
-    const found = [];
-    let cancelled = false;
-
-    const check = (n) => {
-      if (cancelled) return;
-      if (n > 10) {
-        found.length > 0
-          ? setFeaturedSrc(found[Math.floor(Math.random() * found.length)])
-          : setUseBanner(true);
+    useEffect(() => {
+      if (!teamCode) return;
+      setFeaturedSrc(null);
+      setUseBanner(false);
+    
+      const isOffseason = currentSeason?.status === 'offseason';
+      const daysSinceEnd = currentSeason?.end_date
+        ? (Date.now() - new Date(currentSeason.end_date).getTime()) / 86400000
+        : null;
+      const inDiscordWindow = isOffseason && daysSinceEnd != null && daysSinceEnd >= 3;
+    
+      if (edition?.champion_team && currentSeason?.status === 'playoffs') {
+        setFeaturedSrc(`/assets/team-art/champ/${teamCode}.png`);
         return;
       }
-      const url = `/assets/team-art/random/${teamCode}${n}.png`;
-      const img = new Image();
-      img.onload = () => {
-        if (!cancelled) {
-          found.push(url);
-          check(n + 1);
+    
+      if (inDiscordWindow) {
+        if (OFFSEASON_ART_FILES.length > 0) {
+          // Seed with today's date string + league label so all clients
+          // pick the same image for the full calendar day
+
+          // ── Change this string any time you want to force a new daily pick for everyone
+          const ART_CACHE_BUST = 'v6';
+
+          const editionDate = edition?.date || new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const seed = `${editionDate}-${leagueLabel}-${ART_CACHE_BUST}`;
+          // Simple deterministic hash → index
+          const hash = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 0);
+          const pick = OFFSEASON_ART_FILES[hash % OFFSEASON_ART_FILES.length];
+          setFeaturedSrc(pick);
+        } else {
+          setUseBanner(true);
         }
+        return;
+      }
+    
+      // In-season / early-offseason: team-keyed random art probe
+      let cancelled = false;
+      const found = [];
+      const check = (n) => {
+        if (cancelled) return;
+        if (n > 10) {
+          found.length > 0
+            ? setFeaturedSrc(found[Math.floor(Math.random() * found.length)])
+            : setUseBanner(true);
+          return;
+        }
+        const url = `/assets/team-art/random/${teamCode}${n}.png`;
+        const img = new Image();
+        img.onload = () => { if (!cancelled) { found.push(url); check(n + 1); } };
+        img.onerror = () => { if (!cancelled) check(n + 1); };
+        img.src = url;
       };
-      img.onerror = () => {
-        if (!cancelled) check(n + 1);
-      };
-      img.src = url;
-    };
-
-    check(1);
-
-    return () => {
-      cancelled = true;
-    };
-  }, [teamCode, edition?.champion_team, currentSeason?.status]);
+      check(1);
+      return () => { cancelled = true; };
+    }, [teamCode, edition?.champion_team, currentSeason?.status, currentSeason?.end_date, leagueLabel, edition?.date]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -817,6 +834,12 @@ function LeagueGazette({
 
   // Full name for the hero footer — key into map by teamCode, not team
   const featFullName = teamNameMap[teamCode]?.full || teamCode;
+
+  const isOffseason = currentSeason?.status === 'offseason';
+  const daysSinceEnd = currentSeason?.end_date
+  ? (Date.now() - new Date(currentSeason.end_date).getTime()) / 86400000
+  : null;
+  const inDiscordWindow = isOffseason && daysSinceEnd != null && daysSinceEnd >= 3;
 
   return (
     <div
@@ -925,40 +948,38 @@ function LeagueGazette({
                   <div className="si-hero-vignette" />
                 </div>
                 <div className="si-hero-body">
-                  <img
-                    src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
-                    alt={teamCode}
-                    className="si-hero-logo"
-                    onError={(e) => {
-                      e.currentTarget.style.opacity = '0';
-                    }}
-                  />
+                  {!inDiscordWindow && (
+                    <img
+                      src={`/assets/teamLogos/${teamCode || 'placeholder'}.png`}
+                      alt={teamCode}
+                      className="si-hero-logo"
+                      onError={(e) => {
+                        e.currentTarget.style.opacity = '0';
+                      }}
+                    />
+                  )}
                 </div>
+                {!inDiscordWindow && (
                 <div className="si-hero-foot">
-                  {/* Show full team name in hero footer */}
                   <div className="si-hero-name-wrap">
                     <span className="si-hero-team">{featFullName}</span>
                     <span className="si-hero-code">{teamCode}</span>
                   </div>
                   <div className="si-hero-badges">
                     {featWin && (
-                      <span className="si-badge si-badge-w">
-                        W{featWin.count}
-                      </span>
+                      <span className="si-badge si-badge-w">W{featWin.count}</span>
                     )}
                     {featLoss && (
-                      <span className="si-badge si-badge-l">
-                        L{featLoss.count}
-                      </span>
+                      <span className="si-badge si-badge-l">L{featLoss.count}</span>
                     )}
                     {featForm && (
                       <span className="si-badge si-badge-form">
-                        {featForm.w}–{featForm.l}{' '}
-                        <span className="si-badge-l10">L10</span>
+                        {featForm.w}–{featForm.l} <span className="si-badge-l10">L10</span>
                       </span>
                     )}
                   </div>
                 </div>
+              )}
               </div>
             </div>
 
@@ -1475,6 +1496,8 @@ function LeagueGazette({
           .si-cover-line { font-size:11px; }
           .si-skel-grid { grid-template-columns:1fr; }
           .si-skel-hero { min-height:130px; }
+          .si-hero-featured {
+            object-position: center 25%;
         }
       `}</style>
     </div>
@@ -1483,7 +1506,7 @@ function LeagueGazette({
 
  // Used to control versions of the exploding logos in visitors local storage
  // Increment the version if I want to have new changes reanimate
-const ELIM_ANIM_VERSION = 'v2';
+const ELIM_ANIM_VERSION = 'v5';
 
 function PlayoffEliminationBoard({ playoffSeriesData, playoffTeamCodes, teamNameMap, currentSeason }) {
   // Build eliminated set and seed map from series data
@@ -1873,13 +1896,20 @@ useEffect(() => {
       return;
     }
     const STATUS_PRIORITY = { playoffs: 0, season: 1, offseason: 2, complete: 3 };
-
+    const now = Date.now();
     const latest = ps.reduce((b, s) => {
       const sPri = STATUS_PRIORITY[s.status] ?? 1;
       const bPri = STATUS_PRIORITY[b.status] ?? 1;
       if (sPri !== bPri) return sPri < bPri ? s : b;
-      // Same priority — fall back to most recent end_date
-      return new Date(s.end_date) > new Date(b.end_date) ? s : b;
+
+      // Tiebreak: prefer a season that has actually started over a future
+      // placeholder row (e.g. next season's row, created early for the countdown).
+      const sStarted = s.start_date ? new Date(s.start_date).getTime() <= now : false;
+      const bStarted = b.start_date ? new Date(b.start_date).getTime() <= now : false;
+      if (sStarted !== bStarted) return sStarted ? s : b;
+
+      // If both/neither started, prefer the more recently started one.
+      return new Date(s.start_date ?? 0) > new Date(b.start_date ?? 0) ? s : b;
     });
     setCurrentSeason(latest);
 
@@ -1910,10 +1940,10 @@ useEffect(() => {
     setChampionTeam(resolvedChampion);
 
     /* Capture Season for Countdown */
-    const nextSeason =
-      (seasons || []).find((s) => s.idx === latest.idx + 1) || null;
-
-    setNextSeason(nextSeason);
+    const nextSeason = ps
+    .filter((s) => s.start_date && new Date(s.start_date).getTime() > Date.now())
+    .sort((a, b) => new Date(a.start_date) - new Date(b.start_date))[0] || null;
+setNextSeason(nextSeason);
 
     // ── Teams for this season → build name map (includes coach) ──────────
     // teams table uses `abr` as the team code that matches games.home/away

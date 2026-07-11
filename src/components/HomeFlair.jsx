@@ -1,26 +1,179 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+
+
+// ─── Date helpers ────────────────────────────────────────────────────────────
+// nth weekday of a month, e.g. 4th Thursday of November = Thanksgiving
+function nthWeekdayOfMonth(year, month, weekday, n) {
+  const first = new Date(year, month, 1);
+  const offset = (weekday - first.getDay() + 7) % 7;
+  return new Date(year, month, 1 + offset + (n - 1) * 7);
+}
 
 // ─── Holiday definitions ─────────────────────────────────────────────────────
-// Add more here as needed. `window` = days before+after the date that also show flair.
+// `window` = days before+after the date that also show flair.
+// `getDate(year)` lets us support floating dates (Thanksgiving, equinox/solstice).
 const HOLIDAYS = [
-  { month: 7,  day: 4,  window: 2, effect: 'fireworks' },
-  { month: 10, day: 31, window: 2, effect: 'snow'      }, // placeholder — swap for spooky later
-  { month: 12, day: 25, window: 2, effect: 'snow'      },
-  { month: 1,  day: 1,  window: 2, effect: 'fireworks' },
+  {
+    id: 'newyear',
+    getDate: (y) => new Date(y, 0, 1),
+    window: 1,
+    effect: 'fireworks',
+    banner: {
+      emoji1: '🎉', emoji2: '🎊',
+      lines: ['HAPPY NEW YEAR'],
+      accent: '#FFD700',
+      footer: 'FROM THE TICKLE CORP.',
+    },
+  },
+  {
+    id: 'spring',
+    getDate: (y) => new Date(y, 2, 20), // approx. spring equinox
+    window: 1,
+    effect: 'petals',
+    banner: {
+      emoji1: '🌸', emoji2: '🌷',
+      lines: ['HAPPY FIRST DAY OF SPRING'],
+      accent: '#FF8FB3',
+      footer: 'FROM THE BOARD OF GOVERNORS',
+    },
+  },
+  {
+    id: 'july4',
+    getDate: (y) => new Date(y, 6, 4),
+    window: 1,
+    effect: 'fireworks',
+    banner: {
+      emoji1: '🎆', emoji2: '🎇',
+      lines: ['HAPPY BIRTHDAY', 'AMERICA'],
+      accent: '#B22234',
+      accent2: '#3C3B6E',
+      footer: 'FROM THE WORLD NATIONAL',
+      patriotic: true,
+    },
+  },
+  {
+    id: 'autumn',
+    getDate: (y) => new Date(y, 8, 22), // approx. autumn equinox
+    window: 1,
+    effect: 'leaves',
+    banner: {
+      emoji1: '🍁', emoji2: '🍂',
+      lines: ['HAPPY FIRST DAY OF FALL'],
+      accent: '#D2691E',
+      footer: 'SPONSORED BY PNPL MANAGEMENT',
+    },
+  },
+  {
+    id: 'halloween',
+    getDate: (y) => new Date(y, 9, 31),
+    window: 1,
+    effect: 'spooky',
+    banner: {
+      emoji1: '🎃', emoji2: '👻',
+      lines: ['HAPPY HALLOWEEN'],
+      accent: '#FF7518',
+      accent2: '#6B2FA0',
+      footer: 'FROM THE TICKLEWEB STAFF',
+    },
+  },
+  {
+    id: 'thanksgiving',
+    getDate: (y) => nthWeekdayOfMonth(y, 10, 4, 4), // 4th Thursday of November
+    window: 1,
+    effect: 'harvest',
+    banner: {
+      emoji1: '🦃', emoji2: '🍂',
+      lines: ['HAPPY THANKSGIVING'],
+      accent: '#B5651D',
+      footer: 'FROM THE FACE OF THE LEAGUE',
+    },
+  },
+  {
+    id: 'winter',
+    getDate: (y) => new Date(y, 11, 21), // approx. winter solstice
+    window: 1,
+    effect: 'snow',
+    banner: {
+      emoji1: '❄️', emoji2: '☃️',
+      lines: ['HAPPY FIRST DAY OF WINTER'],
+      accent: '#87CEEB',
+      footer: 'FROM THE WORLD NATIONAL',
+    },
+  },
+  {
+    id: 'christmas',
+    getDate: (y) => new Date(y, 11, 25),
+    window: 1,
+    effect: 'christmasMix', 
+    banner: {
+      emoji1: '🎄', emoji2: '🎁',
+      lines: ['MERRY CHRISTMAS'],
+      accent: '#C8102E',
+      accent2: '#00693E',
+      footer: 'SPONSORED BY BELL N BELL',
+    },
+  },
 ];
 
-function getActiveEffect() {
-  const now = new Date();
-  const m = now.getMonth() + 1;
-  const d = now.getDate();
+// ===== Emoji List ======
+const LEAF_EMOJIS = ['🍁', '🍂', '🍃'];
+const PETAL_EMOJIS = ['🌸', '🌷', '🌺'];
+const SPOOKY_EMOJIS = ['🎃', '🦇', '👻'];
+const HARVEST_EMOJIS = ['🍂', '🎃', '🍁'];
+const CHRISTMAS_EMOJIS = ['🎄', '🎁', '⭐', '🔔'];
 
-  for (const h of HOLIDAYS) {
-    const hDate = new Date(now.getFullYear(), h.month - 1, h.day);
-    const diff = Math.abs((now - hDate) / 86400000);
-    if (diff <= h.window) return h.effect;
+// ── TEMP TEST TOGGLE — force a specific holiday to preview, delete when done ──
+const FORCE_HOLIDAY_TEST = null //'spring'; // set to a holiday id below to preview, e.g. 'halloween'
+
+function getActiveHoliday() {
+
+  if (FORCE_HOLIDAY_TEST) {
+    return HOLIDAYS.find((h) => h.id === FORCE_HOLIDAY_TEST) || null;
   }
-  return null;
+
+  const now = new Date();
+  const year = now.getFullYear();
+
+  let best = null;
+  let bestDiff = Infinity;
+
+  // Check this year and neighboring years' instances (handles Dec 31 → Jan 1 wraparound)
+  for (const h of HOLIDAYS) {
+    for (const y of [year - 1, year, year + 1]) {
+      const hDate = h.getDate(y);
+      const diffDays = Math.abs((now - hDate) / 86400000);
+      if (diffDays <= h.window && diffDays < bestDiff) {
+        best = h;
+        bestDiff = diffDays;
+      }
+    }
+  }
+  return best;
 }
+
+// ─── "Seen today" gating for fullscreen takeover ────────────────────────────
+function seenTodayKey(holidayId) {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}`;
+  return `wn95_flair_seen_${holidayId}_${dateStr}`;
+}
+
+function hasSeenToday(holidayId) {
+  try {
+    return localStorage.getItem(seenTodayKey(holidayId)) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markSeenToday(holidayId) {
+  try {
+    localStorage.setItem(seenTodayKey(holidayId), '1');
+  } catch {
+    // ignore — worst case it shows again
+  }
+}
+
 
 // ─── Fireworks canvas ────────────────────────────────────────────────────────
 function FireworksCanvas() {
@@ -28,12 +181,13 @@ function FireworksCanvas() {
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    console.log('[fw] canvas ref:', canvas);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    console.log('[fw] ctx:', ctx);
     if (!ctx) return;
-  
+
+    let logicalW = window.innerWidth;
+    let logicalH = window.innerHeight;
+
     const resize = () => {
       const dpr = window.devicePixelRatio || 1;
       logicalW = window.innerWidth;
@@ -109,6 +263,8 @@ function FireworksCanvas() {
         this.vx = (dx / dist) * speed;
         this.vy = (dy / dist) * speed;
         this.color = COLORS[Math.floor(Math.random() * COLORS.length)];
+        this.radius = 2.5;
+        this.alpha = 1;
         this.trail = [];
         this.alive = true;
       }
@@ -121,10 +277,9 @@ function FireworksCanvas() {
         if (this.vy >= 0) this.alive = false;
       }
       draw(ctx) {
-        this.trail.forEach((t, i) => {
-          const a = (i / this.trail.length) * 0.55;
+        this.trail.forEach((t) => {
           ctx.beginPath();
-          ctx.arc(this.x, this.y, this.radius * 1.7, 0, Math.PI * 2);
+          ctx.arc(t.x, t.y, this.radius * 1.7, 0, Math.PI * 2);
           ctx.fillStyle = this.color + Math.round(this.alpha * 0.12 * 255).toString(16).padStart(2, '0');
           ctx.fill();
         });
@@ -149,8 +304,6 @@ function FireworksCanvas() {
       }
     }
 
-    let logicalW = window.innerWidth;
-    let logicalH = window.innerHeight;
     const shells = [];
     const particles = [];
     let nextShell = 0;
@@ -192,10 +345,7 @@ function FireworksCanvas() {
       }
     };
 
-    // ← KEY CHANGE: delay init so fixed/fullscreen parent has laid out on mobile
     const initTimer = setTimeout(() => {
-      console.log('[fw] init firing, window:', window.innerWidth, window.innerHeight);
-    
       resize();
       launchShell();
       loop();
@@ -224,7 +374,7 @@ function FireworksCanvas() {
   );
 }
 
-// ─── Snow canvas (placeholder for winter holidays) ───────────────────────────
+// ─── Snow canvas ─────────────────────────────────────────────────────────────
 function SnowCanvas() {
   const canvasRef = useRef(null);
 
@@ -270,90 +420,297 @@ function SnowCanvas() {
   );
 }
 
-// ─── Banner label ────────────────────────────────────────────────────────────
-const LABELS = {
-  fireworks: { text: '🎆 HAPPY BIRTHDAY AMERICA', color: '#FF4500' },
-  snow:      { text: '❄️ HAPPY HOLIDAYS', color: '#87CEEB' },
-};
+// ─── Falling emoji canvas — powers leaves, petals, pumpkins/bats, harvest ────
+function FallingEmojiCanvas({ emojis, count = 34, minSize = 16, maxSize = 30, spin = true, speedMult = 1 }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    const items = Array.from({ length: count }, () => ({
+      x: Math.random() * (canvas.width || window.innerWidth),
+      y: Math.random() * (canvas.height || window.innerHeight),
+      size: Math.random() * (maxSize - minSize) + minSize,
+      vy: (Math.random() * 0.6 + 0.4) * speedMult,
+      vx: (Math.random() - 0.5) * 0.6,
+      rot: Math.random() * 360,
+      vr: (Math.random() - 0.5) * 2,
+      sway: Math.random() * Math.PI * 2,
+      emoji: emojis[Math.floor(Math.random() * emojis.length)],
+      alpha: Math.random() * 0.35 + 0.65,
+    }));
+
+    let raf;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      items.forEach((it) => {
+        ctx.save();
+        ctx.globalAlpha = it.alpha;
+        ctx.translate(it.x, it.y);
+        if (spin) ctx.rotate((it.rot * Math.PI) / 180);
+        ctx.font = `${it.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(it.emoji, 0, 0);
+        ctx.restore();
+
+        it.sway += 0.02;
+        it.x += it.vx + Math.sin(it.sway) * 0.5;
+        it.y += it.vy;
+        it.rot += it.vr;
+
+        if (it.y > canvas.height + 20) {
+          it.y = -20;
+          it.x = Math.random() * canvas.width;
+        }
+        if (it.x > canvas.width + 20) it.x = -20;
+        if (it.x < -20) it.x = canvas.width + 20;
+      });
+    };
+    loop();
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [emojis, count, minSize, maxSize, spin, speedMult]);
+
+  return (
+    <canvas ref={canvasRef} style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', zIndex:0, borderRadius:'10px' }} />
+  );
+}
+
+
+// ─── Flash canvas — emojis pop in/out at random screen positions ────────────
+// ─── Flash canvas — emojis pop in/out at random screen positions ────────────
+function FlashEmojiCanvas({ emojis, count = 10, minSize = 26, maxSize = 46, frantic = false }) {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const resize = () => { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight; };
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    const respawn = (f) => {
+      f.x = Math.random() * canvas.width;
+      f.y = Math.random() * canvas.height;
+      f.size = Math.random() * (maxSize - minSize) + minSize;
+      f.emoji = emojis[Math.floor(Math.random() * emojis.length)];
+      if (frantic) {
+        f.delay = Math.random() * 400;         // almost no wait
+        f.fadeIn = 50 + Math.random() * 60;     // snappy fade in
+        f.hold = 90 + Math.random() * 180;      // brief hold
+        f.fadeOut = 70 + Math.random() * 90;    // quick fade out
+      } else {
+        f.delay = Math.random() * 1800;
+        f.fadeIn = 120 + Math.random() * 150;
+        f.hold = 250 + Math.random() * 500;
+        f.fadeOut = 200 + Math.random() * 250;
+      }
+      f.t = 0;
+      f.phase = 'delay';
+    };
+
+    const flashers = Array.from({ length: count }, () => {
+      const f = {};
+      respawn(f);
+      f.t = Math.random() * (frantic ? 600 : 2000);
+      return f;
+    });
+
+    let last = performance.now();
+    let raf;
+    const loop = (now) => {
+      raf = requestAnimationFrame(loop);
+      const dt = now - last;
+      last = now;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      flashers.forEach((f) => {
+        f.t += dt;
+        let alpha = 0;
+
+        if (f.phase === 'delay') {
+          if (f.t >= f.delay) { f.t = 0; f.phase = 'in'; }
+        } else if (f.phase === 'in') {
+          alpha = Math.min(1, f.t / f.fadeIn);
+          if (f.t >= f.fadeIn) { f.t = 0; f.phase = 'hold'; }
+        } else if (f.phase === 'hold') {
+          alpha = 1;
+          if (f.t >= f.hold) { f.t = 0; f.phase = 'out'; }
+        } else if (f.phase === 'out') {
+          alpha = Math.max(0, 1 - f.t / f.fadeOut);
+          if (f.t >= f.fadeOut) { respawn(f); }
+        }
+
+        if (alpha > 0) {
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          ctx.font = `${f.size}px serif`;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.shadowColor = 'rgba(255,120,0,0.6)';
+          ctx.shadowBlur = 14 * alpha;
+          ctx.fillText(f.emoji, f.x, f.y);
+          ctx.restore();
+        }
+      });
+    };
+    raf = requestAnimationFrame(loop);
+    return () => { cancelAnimationFrame(raf); ro.disconnect(); };
+  }, [emojis, count, minSize, maxSize, frantic]);
+
+  return (
+    <canvas ref={canvasRef} style={{ position:'absolute', inset:0, width:'100%', height:'100%', pointerEvents:'none', zIndex:0, borderRadius:'10px' }} />
+  );
+}
+
+// ─── Effect → canvas mapping ─────────────────────────────────────────────────
+function EffectCanvas({ effect }) {
+  switch (effect) {
+    case 'fireworks':
+      return <FireworksCanvas />;
+    case 'snow':
+      return <SnowCanvas />;
+    case 'christmasMix':
+      return (
+        <>
+          <SnowCanvas />
+          <FallingEmojiCanvas emojis={CHRISTMAS_EMOJIS} count={18} minSize={18} maxSize={28} speedMult={0.6} />
+        </>
+      );
+    case 'leaves':
+      return <FallingEmojiCanvas emojis={LEAF_EMOJIS} />;
+    case 'petals':
+      return <FallingEmojiCanvas emojis={PETAL_EMOJIS} minSize={14} maxSize={22} speedMult={0.7} />;
+    case 'spooky':
+        return <FlashEmojiCanvas emojis={SPOOKY_EMOJIS} count={22} minSize={22} maxSize={48} frantic />;
+    case 'harvest':
+      return <FallingEmojiCanvas emojis={HARVEST_EMOJIS} count={28} spin={false} />;
+    default:
+      return null;
+  }
+}
+
+// ─── Banner ──────────────────────────────────────────────────────────────────
+function HolidayBanner({ banner }) {
+  const { emoji1, emoji2, lines, accent, accent2, footer, patriotic } = banner;
+  const acc2 = accent2 || accent;
+
+  return (
+    <div style={{
+      position: 'absolute',
+      top: '25px',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      zIndex: 100000,
+      pointerEvents: 'none',
+    }}>
+      <span style={{
+        display: 'inline-flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '8px',
+        fontFamily: "'Press Start 2P', monospace",
+        fontSize: 'clamp(9px, 1.5vw, 13px)',
+        letterSpacing: '3px',
+        textAlign: 'center',
+        lineHeight: 1.6,
+        padding: '18px 28px',
+        borderRadius: '10px',
+        background: 'rgba(0,0,0,0.18)',
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+        border: `2px solid ${accent}99`,
+        position: 'relative',
+        overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, height: 4,
+          background: patriotic
+            ? `linear-gradient(90deg,${accent} 0%,${accent} 33%,#FFFFFF 33%,#FFFFFF 66%,${acc2} 66%,${acc2} 100%)`
+            : `linear-gradient(90deg,${accent},${acc2})`,
+        }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+          <span style={{ fontSize: 20 }}>{emoji1}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+            {lines.map((line, i) => (
+              <span
+                key={i}
+                style={{
+                  color: '#FFFFFF',
+                  textShadow: `0 0 12px ${i % 2 === 0 ? accent : acc2}, 0 0 24px ${i % 2 === 0 ? accent : acc2}`,
+                }}
+              >
+                {line}
+              </span>
+            ))}
+          </div>
+          <span style={{ fontSize: 20 }}>{emoji2}</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', justifyContent: 'center' }}>
+          <div style={{ height: 1, flex: 1, background: `linear-gradient(90deg,transparent,${accent})` }} />
+          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', letterSpacing: 2 }}>★ ★ ★</span>
+          <div style={{ height: 1, flex: 1, background: `linear-gradient(90deg,${acc2},transparent)` }} />
+        </div>
+
+        <span style={{ fontSize: '0.65em', color: 'rgba(255,255,255,.35)', letterSpacing: '2px' }}>{footer}</span>
+
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0, height: 4,
+          background: patriotic
+            ? `linear-gradient(90deg,${acc2} 0%,${acc2} 33%,#FFFFFF 33%,#FFFFFF 66%,${accent} 66%,${accent} 100%)`
+            : `linear-gradient(90deg,${acc2},${accent})`,
+        }} />
+      </span>
+    </div>
+  );
+}
 
 // ─── Main export ─────────────────────────────────────────────────────────────
 export default function SeasonalFlair({ fullscreen = false }) {
-  const effect = getActiveEffect();
-  if (!effect) return null;
+  const holiday = getActiveHoliday();
 
-  const label = LABELS[effect];
+  const [seen, setSeen] = useState(
+    fullscreen && holiday ? hasSeenToday(holiday.id) : false
+  );
+
+  useEffect(() => {
+    if (fullscreen && holiday && !hasSeenToday(holiday.id)) {
+      markSeenToday(holiday.id);
+    }
+  }, [fullscreen, holiday?.id]);
+
+  if (!holiday) return null;
+  if (fullscreen && seen) return null;
 
   return (
-        <div
-          style={{
-            position: fullscreen ? 'fixed' : 'relative',
-            inset: fullscreen ? 0 : undefined,
-            width: fullscreen ? '100vw' : '100%',
-            height: fullscreen ? '100vh' : '160px',
-            marginBottom: fullscreen ? 0 : '.6rem',
-            borderRadius: fullscreen ? 0 : '10px',
-            overflow: 'hidden',
-            background: 'transparent',
-            border: 'none',
-            zIndex: 99999,
-            pointerEvents: 'none',
-          }}
-        >
-      {effect === 'fireworks' && <FireworksCanvas />}
-      {effect === 'snow'      && <SnowCanvas />}
-
-      {/* Overlay label — sits above canvas */}
-      <div style={{
-            position: 'absolute',
-            top: '25px',
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 100000,
-            pointerEvents: 'none',
-            }}>
-        <span style={{
-  display: 'inline-flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: '8px',
-  fontFamily: "'Press Start 2P', monospace",
-  fontSize: 'clamp(9px, 1.5vw, 13px)',
-  letterSpacing: '3px',
-  textAlign: 'center',
-  lineHeight: 1.6,
-  padding: '18px 28px',
-  borderRadius: '10px',
-  background: 'rgba(0,0,0,0.18)',
-  backdropFilter: 'blur(6px)',
-  WebkitBackdropFilter: 'blur(6px)',
-  border: '2px solid rgba(178,34,52,0.6)',
-  position: 'relative',
-  overflow: 'hidden',
-}}>
-  {/* Top stripe */}
-  <div style={{ position:'absolute', top:0, left:0, right:0, height:4, background:'linear-gradient(90deg,#B22234 0%,#B22234 33%,#FFFFFF 33%,#FFFFFF 66%,#3C3B6E 66%,#3C3B6E 100%)' }} />
-  
-  <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:6 }}>
-    <span style={{ fontSize:20 }}>🎆</span>
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-      <span style={{ color:'#FFFFFF', textShadow:'0 0 12px #B22234, 0 0 24px #B22234' }}>HAPPY BIRTHDAY</span>
-      <span style={{ color:'#FFFFFF', textShadow:'0 0 12px #3C3B6E, 0 0 24px #3C3B6E' }}>AMERICA</span>
-    </div>
-    <span style={{ fontSize:20 }}>🎇</span>
-  </div>
-
-  <div style={{ display:'flex', alignItems:'center', gap:6, width:'100%', justifyContent:'center' }}>
-    <div style={{ height:1, flex:1, background:'linear-gradient(90deg,transparent,#B22234)' }} />
-    <span style={{ fontSize:12, color:'rgba(255,255,255,0.6)', letterSpacing:2 }}>★ ★ ★</span>
-    <div style={{ height:1, flex:1, background:'linear-gradient(90deg,#3C3B6E,transparent)' }} />
-  </div>
-
-  <span style={{ fontSize:'0.65em', color:'rgba(255,255,255,.35)', letterSpacing:'2px' }}>FROM THE WN95HL</span>
-
-  {/* Bottom stripe */}
-  <div style={{ position:'absolute', bottom:0, left:0, right:0, height:4, background:'linear-gradient(90deg,#3C3B6E 0%,#3C3B6E 33%,#FFFFFF 33%,#FFFFFF 66%,#B22234 66%,#B22234 100%)' }} />
-</span>
-      </div>
+    <div
+      style={{
+        position: fullscreen ? 'fixed' : 'relative',
+        inset: fullscreen ? 0 : undefined,
+        width: fullscreen ? '100vw' : '100%',
+        height: fullscreen ? '100vh' : '160px',
+        marginBottom: fullscreen ? 0 : '.6rem',
+        borderRadius: fullscreen ? 0 : '10px',
+        overflow: 'hidden',
+        background: 'transparent',
+        border: 'none',
+        zIndex: 99999,
+        pointerEvents: 'none',
+      }}
+    >
+      <EffectCanvas effect={holiday.effect} />
+      <HolidayBanner banner={holiday.banner} />
     </div>
   );
 }

@@ -1,10 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 
+function computeH2H(teamA, teamB, games) {
+  let ptsA = 0,
+    ptsB = 0;
+  (games || []).forEach((g) => {
+    const aIsHome = g.home === teamA && g.away === teamB;
+    const aIsAway = g.home === teamB && g.away === teamA;
+    if (!aIsHome && !aIsAway) return;
+    const sA = aIsHome ? g.score_home : g.score_away;
+    const sB = aIsHome ? g.score_away : g.score_home;
+    if (sA > sB) ptsA += 2;
+    else if (sB > sA) ptsB += 2;
+    else {
+      ptsA += 1;
+      ptsB += 1;
+    }
+  });
+  return { ptsA, ptsB };
+}
+
 function sortWithTiebreakers(teams, games) {
-  const computeH2H = (teamA, teamB) => {
-    let ptsA = 0, ptsB = 0;
-    (games || []).forEach(g => {
+  const computeH2HLocal = (teamA, teamB) => {
+    let ptsA = 0,
+      ptsB = 0;
+    (games || []).forEach((g) => {
       const aIsHome = g.home === teamA && g.away === teamB;
       const aIsAway = g.home === teamB && g.away === teamA;
       if (!aIsHome && !aIsAway) return;
@@ -12,45 +32,479 @@ function sortWithTiebreakers(teams, games) {
       const sB = aIsHome ? g.score_away : g.score_home;
       if (sA > sB) ptsA += 2;
       else if (sB > sA) ptsB += 2;
-      else { ptsA += 1; ptsB += 1; }
+      else {
+        ptsA += 1;
+        ptsB += 1;
+      }
     });
     return { ptsA, ptsB };
   };
   const h2hCache = {};
   const getH2H = (a, b) => {
     const key = [a, b].sort().join('::');
-    if (!h2hCache[key]) h2hCache[key] = computeH2H(a, b);
+    if (!h2hCache[key]) h2hCache[key] = computeH2HLocal(a, b);
     return h2hCache[key];
   };
   const byPts = {};
-  teams.forEach(t => {
+  teams.forEach((t) => {
     if (!byPts[t.pts]) byPts[t.pts] = [];
     byPts[t.pts].push(t);
   });
   const result = [];
-  Object.keys(byPts).map(Number).sort((a, b) => b - a).forEach(pts => {
-    const tier = byPts[pts];
-    if (tier.length === 1) {
-      result.push({ ...tier[0], _h2hPts: 0 });
-    } else {
-      const enriched = tier.map(t => {
-        let h2hPts = 0;
-        tier.forEach(other => {
-          if (other.team === t.team) return;
-          const { ptsA } = getH2H(t.team, other.team);
-          h2hPts += ptsA;
+  Object.keys(byPts)
+    .map(Number)
+    .sort((a, b) => b - a)
+    .forEach((pts) => {
+      const tier = byPts[pts];
+      if (tier.length === 1) {
+        result.push({ ...tier[0], _h2hPts: 0 });
+      } else {
+        const enriched = tier.map((t) => {
+          let h2hPts = 0;
+          tier.forEach((other) => {
+            if (other.team === t.team) return;
+            const { ptsA } = getH2H(t.team, other.team);
+            h2hPts += ptsA;
+          });
+          return { ...t, _h2hPts: h2hPts };
         });
-        return { ...t, _h2hPts: h2hPts };
-      });
-      enriched.sort((a, b) => {
-        if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
-        if (b.w !== a.w) return b.w - a.w;
-        return b.gd - a.gd;
-      });
-      result.push(...enriched);
-    }
-  });
+        enriched.sort((a, b) => {
+          if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
+          if (b.w !== a.w) return b.w - a.w;
+          return b.gd - a.gd;
+        });
+        result.push(...enriched);
+      }
+    });
   return result;
+}
+
+// ── Tooltip: SOS ──────────────────────────────────────────────────────────────
+function SOSTooltip({ sosInfo }) {
+  if (!sosInfo || !sosInfo.anchorRect) return null;
+  const { data, anchorRect } = sosInfo;
+  const { opponents, sos } = data;
+  const tooltipW = 300;
+  const fixedLeft = Math.min(
+    anchorRect.left - tooltipW - 8,
+    window.innerWidth - tooltipW - 16
+  );
+  const tooltipHeight = 80 + opponents.length * 44;
+  const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+  const fixedTop = Math.max(
+    16,
+    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
+  );
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: fixedTop,
+        left: Math.max(8, fixedLeft),
+        zIndex: 9999,
+        width: tooltipW,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -8,
+          background:
+            'radial-gradient(ellipse at center, rgba(135,206,235,.1) 0%, transparent 70%)',
+          borderRadius: 16,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          background:
+            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
+          border: '1px solid rgba(135,206,235,.5)',
+          borderRadius: 12,
+          boxShadow:
+            '0 0 0 1px rgba(135,206,235,.15), 0 8px 32px rgba(0,0,0,.8)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px 8px',
+            borderBottom: '1px solid rgba(135,206,235,.15)',
+            background:
+              'linear-gradient(90deg, rgba(135,206,235,.08) 0%, rgba(135,206,235,.04) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.6rem',
+              color: '#87CEEB',
+              letterSpacing: 2,
+              textShadow: '0 0 8px rgba(135,206,235,.7)',
+            }}
+          >
+            REMAINING SOS
+          </div>
+          <div
+            style={{
+              fontFamily: "'VT323', monospace",
+              fontSize: '1.3rem',
+              color: '#E0E0E0',
+            }}
+          >
+            {sos.toFixed(3)}
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '32px 1fr 56px',
+            gap: '0 8px',
+            padding: '6px 16px 4px',
+            borderBottom: '1px solid rgba(255,255,255,.05)',
+          }}
+        >
+          <div />
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(255,255,255,.3)',
+            }}
+          >
+            OPPONENT
+          </div>
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(135,206,235,.5)',
+              textAlign: 'center',
+            }}
+          >
+            PTS%
+          </div>
+        </div>
+        {opponents.map((opp, idx) => (
+          <div
+            key={opp.team}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '32px 1fr 56px',
+              gap: '0 8px',
+              padding: '8px 16px',
+              background:
+                idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
+              borderBottom:
+                idx < opponents.length - 1
+                  ? '1px solid rgba(255,255,255,.04)'
+                  : 'none',
+              alignItems: 'center',
+            }}
+          >
+            <img
+              src={`/assets/teamLogos/${opp.team}.png`}
+              alt={opp.team}
+              style={{
+                width: 28,
+                height: 28,
+                objectFit: 'contain',
+                filter: 'drop-shadow(0 0 4px rgba(135,206,235,.4))',
+              }}
+              onError={(e) => {
+                e.target.style.display = 'none';
+              }}
+            />
+            <span
+              style={{
+                fontFamily: "'VT323', monospace",
+                fontSize: '1.4rem',
+                color: '#E0E0E0',
+                letterSpacing: 1,
+                lineHeight: 1,
+              }}
+            >
+              {opp.team}
+            </span>
+            <span
+              style={{
+                fontFamily: "'VT323', monospace",
+                fontSize: '1.4rem',
+                color: '#E0E0E0',
+                textAlign: 'center',
+              }}
+            >
+              {opp.pts_pct.toFixed(3)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Tooltip: Tiebreaker ───────────────────────────────────────────────────────
+function TiebreakerTooltip({
+  hoveredTeam,
+  tiedStandings,
+  seasonGames,
+  anchorRect,
+}) {
+  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect)
+    return null;
+  const tooltipW = 360;
+  const fixedLeft = window.innerWidth - tooltipW - 16;
+  const tooltipHeight = 200;
+  const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+  const fixedTop = Math.max(
+    16,
+    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
+  );
+  const enriched = tiedStandings.map((s) => {
+    let h2hPts = 0;
+    tiedStandings.forEach((other) => {
+      if (other.team === s.team) return;
+      const { ptsA } = computeH2H(s.team, other.team, seasonGames);
+      h2hPts += ptsA;
+    });
+    return { ...s, h2hPts };
+  });
+  const ranked = [...enriched].sort((a, b) => {
+    if (b.h2hPts !== a.h2hPts) return b.h2hPts - a.h2hPts;
+    if (b.w !== a.w) return b.w - a.w;
+    return b.gd - a.gd;
+  });
+  const baseSeed = Math.min(...tiedStandings.map((s) => s._sortRank ?? 1));
+  const maxH2H = Math.max(...ranked.map((r) => r.h2hPts), 1);
+  const StatBar = ({ value, max, color }) => (
+    <div
+      style={{
+        flex: 1,
+        height: 5,
+        background: 'rgba(255,255,255,.08)',
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          height: '100%',
+          width: `${Math.max(0, (value / (max || 1)) * 100)}%`,
+          background: color,
+          borderRadius: 2,
+          boxShadow: `0 0 6px ${color}`,
+          transition: 'width .4s cubic-bezier(.4,0,.2,1)',
+        }}
+      />
+    </div>
+  );
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: fixedTop,
+        left: fixedLeft,
+        zIndex: 9999,
+        width: tooltipW,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -8,
+          background:
+            'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)',
+          borderRadius: 16,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          background:
+            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
+          border: '1px solid rgba(255,215,0,.5)',
+          borderRadius: 12,
+          boxShadow:
+            '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px 8px',
+            borderBottom: '1px solid rgba(255,215,0,.15)',
+            background:
+              'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.6rem',
+              color: '#FF8C00',
+              letterSpacing: 2,
+              textShadow: '0 0 8px rgba(255,140,0,.7)',
+            }}
+          >
+            TIEBREAKER
+          </div>
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.5rem',
+              color: 'rgba(255,255,255,.4)',
+              letterSpacing: 1,
+            }}
+          >
+            {ranked.length} TEAMS · {ranked[0].pts} PTS
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '44px 1fr 56px 56px 56px',
+            gap: '0 6px',
+            padding: '6px 16px 4px',
+            borderBottom: '1px solid rgba(255,255,255,.05)',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(255,255,255,.3)',
+              textAlign: 'center',
+            }}
+          >
+            SEED
+          </div>
+          <div />
+          {['H2H', 'W', 'GD'].map((lbl) => (
+            <div
+              key={lbl}
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.65rem',
+                color: 'rgba(135,206,235,.5)',
+                textAlign: 'center',
+                letterSpacing: 1,
+              }}
+            >
+              {lbl}
+            </div>
+          ))}
+        </div>
+        {ranked.map((row, idx) => {
+          const seedNum = baseSeed + idx;
+          const gdSign = row.gd > 0 ? '+' : '';
+          return (
+            <div
+              key={row.team}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '44px 1fr 56px 56px 56px',
+                gap: '0 6px',
+                padding: '9px 16px',
+                background:
+                  idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
+                borderBottom:
+                  idx < ranked.length - 1
+                    ? '1px solid rgba(255,255,255,.04)'
+                    : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.6rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 8px rgba(255,140,0,.6)',
+                  lineHeight: 1,
+                }}
+              >
+                {seedNum}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 5,
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'VT323', monospace",
+                    fontSize: '1.5rem',
+                    color: '#E0E0E0',
+                    letterSpacing: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1,
+                  }}
+                >
+                  {row.team}
+                </span>
+                <StatBar value={row.h2hPts} max={maxH2H} color="#FF8C00" />
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(255,140,0,.5)',
+                }}
+              >
+                {row.h2hPts}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#87CEEB',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(135,206,235,.4)',
+                }}
+              >
+                {row.w}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color:
+                    row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888',
+                  textAlign: 'center',
+                  textShadow:
+                    row.gd > 0
+                      ? '0 0 6px rgba(0,255,136,.5)'
+                      : row.gd < 0
+                      ? '0 0 6px rgba(255,68,68,.5)'
+                      : 'none',
+                }}
+              >
+                {gdSign}
+                {row.gd}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export default function FullScreenStandingsModal({
@@ -67,12 +521,33 @@ export default function FullScreenStandingsModal({
   gfPerG,        
   gaPerG,
 }) {
-  const [sortConfig, setSortConfig] = useState({ key: 'default', direction: 'descending' });
+  const [sortConfig, setSortConfig] = useState({
+    key: 'default',
+    direction: 'descending',
+  });
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const activeSortKey = sortConfig.key === 'default' ? 'pts' : sortConfig.key;
 
+  // ── Tooltip state (desktop hover only) ──
+  const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
+  const [sosInfo, setSosInfo] = useState(null);
+
+  // Detect mobile so we skip tooltips
+  const isMobile =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(max-width: 932px)').matches;
+  const isLandscape =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(max-width: 932px) and (orientation: landscape)')
+      .matches;
+  const isPortrait =
+    typeof window !== 'undefined' &&
+    window.matchMedia('(max-width: 932px) and (orientation: portrait)').matches;
+
   useEffect(() => {
-    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    const handler = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
     window.addEventListener('keydown', handler);
     document.body.style.overflow = 'hidden';
     return () => {
@@ -86,25 +561,84 @@ export default function FullScreenStandingsModal({
       setSortConfig({ key: 'default', direction: 'descending' });
       return;
     }
-    setSortConfig(prev => {
+    setSortConfig((prev) => {
       let direction = 'ascending';
       if (prev.key === key) {
         direction = prev.direction === 'ascending' ? 'descending' : 'ascending';
       } else {
-        direction = reverseSortColumns.includes(key) ? 'ascending' : 'descending';
+        direction = reverseSortColumns.includes(key)
+          ? 'ascending'
+          : 'descending';
       }
       return { key, direction };
     });
   }, []);
 
-  const sortedGroups = groupedStandings.map(group => {
+  const handlePtsCellMouseEnter = useCallback(
+    (e, team, pts, allTeams) => {
+      if (window.matchMedia('(hover: none)').matches) return;
+      if (isMobile) return;
+      const tiedTeams = allTeams.filter((s) => Number(s.pts) === Number(pts));
+      if (tiedTeams.length < 2) {
+        setTiebreakerInfo(null);
+        return;
+      }
+      const anyNearEnd = tiedTeams.some((t) => (t.gr ?? 0) <= 10);
+      if (!anyNearEnd) {
+        setTiebreakerInfo(null);
+        return;
+      }
+      const r = e.currentTarget.getBoundingClientRect();
+      setTiebreakerInfo({
+        hoveredTeam: team,
+        tiedStandings: tiedTeams,
+        anchorRect: {
+          top: r.top,
+          right: r.right,
+          left: r.left,
+          height: r.height,
+        },
+      });
+    },
+    [isMobile]
+  );
+
+  const handleSosCellMouseEnter = useCallback(
+    (e, team) => {
+      if (window.matchMedia('(hover: none)').matches) return;
+      if (isMobile) return;
+      const sd = sosData[team];
+      if (!sd || sd.sos == null) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      setSosInfo({
+        team,
+        data: sd,
+        anchorRect: {
+          top: r.top,
+          right: r.right,
+          left: r.left,
+          height: r.height,
+        },
+      });
+    },
+    [isMobile, sosData]
+  );
+
+  const sortedGroups = groupedStandings.map((group) => {
     let teams;
-    if (sortConfig.key === 'default' || sortConfig.key === 'pts' || sortConfig.key === 'season_rank') {
+    if (
+      sortConfig.key === 'default' ||
+      sortConfig.key === 'pts' ||
+      sortConfig.key === 'season_rank'
+    ) {
       teams = sortWithTiebreakers(group.teams, rawGames).map((s, i) => ({
         ...s,
         _sortRank: s._sortRank ?? i + 1,
       }));
-      if (sortConfig.direction === 'ascending' && sortConfig.key !== 'default') {
+      if (
+        sortConfig.direction === 'ascending' &&
+        sortConfig.key !== 'default'
+      ) {
         teams = [...teams].reverse();
       }
     } else {
@@ -113,7 +647,9 @@ export default function FullScreenStandingsModal({
         if (a[key] == null) return 1;
         if (b[key] == null) return -1;
         if (typeof a[key] === 'string') {
-          return direction === 'ascending' ? a[key].localeCompare(b[key]) : b[key].localeCompare(a[key]);
+          return direction === 'ascending'
+            ? a[key].localeCompare(b[key])
+            : b[key].localeCompare(a[key]);
         }
         return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
       });
@@ -123,27 +659,45 @@ export default function FullScreenStandingsModal({
 
   return createPortal(
     <div className="fsm-overlay" onClick={onClose}>
-      <div className="fsm-panel" onClick={e => e.stopPropagation()}>
+      {/* Tooltips rendered into the portal via nested portals */}
+      {tiebreakerInfo &&
+        tiebreakerInfo.anchorRect &&
+        createPortal(
+          <TiebreakerTooltip
+            hoveredTeam={tiebreakerInfo.hoveredTeam}
+            tiedStandings={tiebreakerInfo.tiedStandings}
+            seasonGames={rawGames}
+            anchorRect={tiebreakerInfo.anchorRect}
+          />,
+          document.body
+        )}
+      {sosInfo &&
+        sosInfo.anchorRect &&
+        createPortal(<SOSTooltip sosInfo={sosInfo} />, document.body)}
 
-        {/* ── Close bar — minimal ── */}
+      <div className="fsm-panel" onClick={(e) => e.stopPropagation()}>
+        {/* ── Close bar ── */}
         <div className="fsm-topbar">
           <span className="fsm-title">⚡ STANDINGS</span>
-          <button className="fsm-close-btn" onClick={onClose}>✕ ESC</button>
+          <button className="fsm-close-btn" onClick={onClose}>
+            ✕ ESC
+          </button>
         </div>
 
-        {/* ── Scrollable body — this is the scroll container so sticky thead works ── */}
+        {/* ── Scrollable body ── */}
         <div className="fsm-body">
           {sortedGroups.map((group, groupIdx) => (
             <div key={groupIdx} className="fsm-group">
               {(group.title || group.subtitle) && (
                 <div className="fsm-group-header">
-                  {group.title}{group.subtitle ? ` — ${group.subtitle}` : ''}
+                  {group.title}
+                  {group.subtitle ? ` — ${group.subtitle}` : ''}
                 </div>
               )}
               <table className="fsm-table">
                 <thead>
                   <tr>
-                    {columns.map(col => (
+                    {columns.map((col) => (
                       <th
                         key={col.key}
                         onClick={() => handleSort(col.key)}
@@ -151,7 +705,9 @@ export default function FullScreenStandingsModal({
                           'fsm-th',
                           activeSortKey === col.key ? 'fsm-th-sorted' : '',
                           col.key === 'season_rank' ? 'fsm-th-rank' : '',
-                        ].filter(Boolean).join(' ')}
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
                       >
                         {col.label}
                         {activeSortKey === col.key && (
@@ -168,38 +724,64 @@ export default function FullScreenStandingsModal({
                     const isClinched = clinched.has(s.team);
                     const isElim = eliminated.has(s.team);
                     const isTied = tiedPtsSet.has(Number(s.pts));
-                    const isPlayoff = playoffTeams && s._sortRank <= playoffTeams;
+                    const isPlayoff =
+                      playoffTeams && s._sortRank <= playoffTeams;
 
                     return (
                       <React.Fragment key={`${s.team}-${idx}`}>
-                        <tr className={[
-                          idx % 2 === 0 ? 'fsm-even' : 'fsm-odd',
-                          isPlayoff ? 'fsm-playoff' : '',
-                          isClinched ? 'fsm-clinched' : '',
-                          isElim ? 'fsm-elim' : '',
-                        ].filter(Boolean).join(' ')}>
-
+                        <tr
+                          className={[
+                            idx % 2 === 0 ? 'fsm-even' : 'fsm-odd',
+                            isPlayoff ? 'fsm-playoff' : '',
+                            isClinched ? 'fsm-clinched' : '',
+                            isElim ? 'fsm-elim' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
                           {/* Rank */}
                           <td className="fsm-td fsm-td-rank">
                             <span className="fsm-rank-badge">{idx + 1}</span>
                           </td>
 
-                          {/* Team — logo + code */}
+                          {/* Team */}
                           <td className="fsm-td fsm-td-team">
                             <div className="fsm-team-inner">
-                              <div className={`fsm-logo-wrap ${isClinched ? 'fsm-logo-clinched' : isElim ? 'fsm-logo-elim' : ''}`}>
+                              <div
+                                className={`fsm-logo-wrap ${
+                                  isClinched
+                                    ? 'fsm-logo-clinched'
+                                    : isElim
+                                    ? 'fsm-logo-elim'
+                                    : ''
+                                }`}
+                              >
                                 <img
                                   src={`/assets/teamLogos/${s.team}.png`}
                                   alt={s.team}
                                   className="fsm-logo"
-                                  onError={e => {
+                                  onError={(e) => {
                                     e.target.style.display = 'none';
-                                    e.target.nextElementSibling.style.display = 'flex';
+                                    e.target.nextElementSibling.style.display =
+                                      'flex';
                                   }}
                                 />
-                                <div className="fsm-logo-fallback" style={{ display: 'none' }}>{s.team}</div>
+                                <div
+                                  className="fsm-logo-fallback"
+                                  style={{ display: 'none' }}
+                                >
+                                  {s.team}
+                                </div>
                               </div>
-                              <span className={`fsm-team-code ${isClinched ? 'fsm-code-clinched' : isElim ? 'fsm-code-elim' : ''}`}>
+                              <span
+                                className={`fsm-team-code ${
+                                  isClinched
+                                    ? 'fsm-code-clinched'
+                                    : isElim
+                                    ? 'fsm-code-elim'
+                                    : ''
+                                }`}
+                              >
                                 {s.team}
                               </span>
                             </div>
@@ -209,17 +791,67 @@ export default function FullScreenStandingsModal({
                           {showCoach && <td className="fsm-td fsm-td-coach">{s.coach}</td>}
 
                           {/* GP */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'gp' ? 'fsm-sorted-cell' : ''}`}>{s.gp}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'gp' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.gp}
+                          </td>
                           {/* W */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'w' ? 'fsm-sorted-cell' : ''}`}>{s.w}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'w' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.w}
+                          </td>
                           {/* L */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'l' ? 'fsm-sorted-cell' : ''}`}>{s.l}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'l' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.l}
+                          </td>
                           {/* T */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 't' ? 'fsm-sorted-cell' : ''}`}>{s.t}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 't' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.t}
+                          </td>
                           {/* OTL */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'otl' ? 'fsm-sorted-cell' : ''}`}>{s.otl}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'otl' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.otl}
+                          </td>
                           {/* Pts */}
-                          <td className={`fsm-td fsm-stat fsm-pts ${activeSortKey === 'pts' ? 'fsm-sorted-cell' : ''} ${isTied ? 'fsm-tied-pts' : ''}`}>{s.pts}</td>
+                          <td
+                            className={`fsm-td fsm-stat fsm-pts ${
+                              activeSortKey === 'pts' ? 'fsm-sorted-cell' : ''
+                            } ${isTied ? 'fsm-tied-pts' : ''}`}
+                            onMouseEnter={
+                              isTied
+                                ? (e) =>
+                                    handlePtsCellMouseEnter(
+                                      e,
+                                      s.team,
+                                      Number(s.pts),
+                                      group.teams
+                                    )
+                                : undefined
+                            }
+                            onMouseLeave={
+                              isTied ? () => setTiebreakerInfo(null) : undefined
+                            }
+                          >
+                            {s.pts}
+                          </td>
                           {/* Pts% */}
                           <td className={`fsm-td fsm-stat ${activeSortKey === 'pts_pct' ? 'fsm-sorted-cell' : ''}`}>
                             {s.gp > 0 ? (s.pts / (s.gp * 2)).toFixed(3) : '.000'}
@@ -241,34 +873,101 @@ export default function FullScreenStandingsModal({
                                 </td>
                               )}
                           {/* GD */}
-                          <td className={`fsm-td fsm-stat ${s.gd > 0 ? 'fsm-pos' : s.gd < 0 ? 'fsm-neg' : ''} ${activeSortKey === 'gd' ? 'fsm-sorted-cell' : ''}`}>
-                            {s.gd > 0 ? '+' : ''}{s.gd}
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              s.gd > 0 ? 'fsm-pos' : s.gd < 0 ? 'fsm-neg' : ''
+                            } ${
+                              activeSortKey === 'gd' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.gd > 0 ? '+' : ''}
+                            {s.gd}
                           </td>
                           {/* OTW */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'otw' ? 'fsm-sorted-cell' : ''}`}>{s.otw}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'otw' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.otw}
+                          </td>
                           {/* SO */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'shutouts' ? 'fsm-sorted-cell' : ''}`}>{s.shutouts}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'shutouts'
+                                ? 'fsm-sorted-cell'
+                                : ''
+                            }`}
+                          >
+                            {s.shutouts}
+                          </td>
                           {/* STRK */}
-                          <td className={`fsm-td fsm-stat fsm-streak ${
-                            s.streakType === 'W' || s.streakType === 'OTW' ? 'fsm-streak-w' :
-                            s.streakType === 'L' || s.streakType === 'OTL' ? 'fsm-streak-l' : 'fsm-streak-t'
-                          } ${activeSortKey === 'streakVal' ? 'fsm-sorted-cell' : ''}`}>
+                          <td
+                            className={`fsm-td fsm-stat fsm-streak ${
+                              s.streakType === 'W' || s.streakType === 'OTW'
+                                ? 'fsm-streak-w'
+                                : s.streakType === 'L' || s.streakType === 'OTL'
+                                ? 'fsm-streak-l'
+                                : 'fsm-streak-t'
+                            } ${
+                              activeSortKey === 'streakVal'
+                                ? 'fsm-sorted-cell'
+                                : ''
+                            }`}
+                          >
                             {s.streak}
                           </td>
                           {/* GR */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'gr' ? 'fsm-sorted-cell' : ''}`}>{s.gr ?? '—'}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'gr' ? 'fsm-sorted-cell' : ''
+                            }`}
+                          >
+                            {s.gr ?? '—'}
+                          </td>
                           {/* MAX PTS */}
-                          <td className={`fsm-td fsm-stat ${activeSortKey === 'maxPts' ? 'fsm-sorted-cell' : ''}`}>{s.maxPts ?? '—'}</td>
+                          <td
+                            className={`fsm-td fsm-stat ${
+                              activeSortKey === 'maxPts'
+                                ? 'fsm-sorted-cell'
+                                : ''
+                            }`}
+                          >
+                            {s.maxPts ?? '—'}
+                          </td>
+                          {/* SOS */}
+                          <td
+                            className={`fsm-td fsm-stat fsm-sos-cell ${
+                              activeSortKey === 'sos' ? 'fsm-sorted-cell' : ''
+                            } ${
+                              sosData[s.team]?.sos != null
+                                ? 'fsm-sos-hoverable'
+                                : ''
+                            }`}
+                            onMouseEnter={(e) =>
+                              handleSosCellMouseEnter(e, s.team)
+                            }
+                            onMouseLeave={() => setSosInfo(null)}
+                          >
+                            {sosData[s.team]?.sos != null
+                              ? sosData[s.team].sos.toFixed(3)
+                              : '—'}
+                          </td>
                         </tr>
 
                         {playoffTeams && idx === playoffTeams - 1 && (
                           <tr className="fsm-cutoff-row">
-                            <td colSpan={columns.length} className="fsm-cutoff-cell">
+                            <td
+                              colSpan={columns.length}
+                              className="fsm-cutoff-cell"
+                            >
                               <div className="fsm-cutoff-line">
                                 <div className="fsm-cutoff-glow" />
                                 <div className="fsm-cutoff-content">
                                   <div className="fsm-cutoff-diamond" />
-                                  <span className="fsm-cutoff-text">PLAYOFF LINE</span>
+                                  <span className="fsm-cutoff-text">
+                                    PLAYOFF LINE
+                                  </span>
                                   <div className="fsm-cutoff-diamond" />
                                 </div>
                               </div>
@@ -591,6 +1290,7 @@ export default function FullScreenStandingsModal({
             .fsm-th:nth-child(16), /* STRK */
             .fsm-th:nth-child(17), /* GR */
             .fsm-th:nth-child(18), /* MAX PTS */
+            .fsm-th:nth-child(19), /* SOS */
             .fsm-td:nth-child(3),
            /* .fsm-td:nth-child(4), */
             .fsm-td:nth-child(10),
@@ -600,7 +1300,8 @@ export default function FullScreenStandingsModal({
             .fsm-td:nth-child(15),
             .fsm-td:nth-child(16),
             .fsm-td:nth-child(17),
-            .fsm-td:nth-child(18) {
+            .fsm-td:nth-child(18),
+            .fsm-td:nth-child(19) {
               display: none;
             }
           

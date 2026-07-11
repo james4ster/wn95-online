@@ -626,8 +626,8 @@ async function fetchGazetteEdition({
       ')'
     );
     return typeof cached.data === 'string'
-      ? JSON.parse(cached.data)
-      : cached.data;
+  ? { ...JSON.parse(cached.data), date: cached.date }
+  : { ...cached.data, date: cached.date };
   } catch (e) {
     console.log('[Gazette] Cache lookup failed:', e.message);
     return null;
@@ -745,8 +745,8 @@ function LeagueGazette({
           // ── Change this string any time you want to force a new daily pick for everyone
           const ART_CACHE_BUST = 'v6';
 
-          const today = new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString().slice(0, 10);
-          const seed = `${today}-${leagueLabel}-${ART_CACHE_BUST}`;
+          const editionDate = edition?.date || new Date(Date.now() - 11 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          const seed = `${editionDate}-${leagueLabel}-${ART_CACHE_BUST}`;
           // Simple deterministic hash → index
           const hash = [...seed].reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) >>> 0, 0);
           const pick = OFFSEASON_ART_FILES[hash % OFFSEASON_ART_FILES.length];
@@ -776,7 +776,7 @@ function LeagueGazette({
       };
       check(1);
       return () => { cancelled = true; };
-    }, [teamCode, edition?.champion_team, currentSeason?.status, currentSeason?.end_date, leagueLabel]);
+    }, [teamCode, edition?.champion_team, currentSeason?.status, currentSeason?.end_date, leagueLabel, edition?.date]);
 
   const load = useCallback(async () => {
     setLoading(true);

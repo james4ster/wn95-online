@@ -227,7 +227,7 @@ export default function MainNavigation() {
           background: transparent;
           border: 2px solid transparent;
           border-radius: 8px;
-          color: #87CEEB;
+          color: var(--holiday-accent, #87CEEB);
           font-family: 'Press Start 2P', monospace;
           font-size: 0.65rem;
           text-decoration: none;
@@ -250,9 +250,9 @@ export default function MainNavigation() {
         .nav-link:hover::before { left: 100%; }
 
         .nav-link:hover {
-          border-color: #87CEEB;
+          border-color: var(--holiday-accent, #87CEEB);
           color: #FFF;
-          box-shadow: 0 0 15px rgba(135,206,235,0.4), inset 0 0 8px rgba(135,206,235,0.1);
+          box-shadow: 0 0 15px var(--holiday-accent, rgba(135,206,235,0.4)), inset 0 0 8px rgba(135,206,235,0.1);
           transform: translateY(-2px);
         }
 

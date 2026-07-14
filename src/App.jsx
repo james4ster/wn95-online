@@ -26,6 +26,7 @@ import PowerRankings from './pages/PowerRankings';
 import GettingStarted from './pages/GettingStarted';
 import Champions from './pages/Champions'
 import ZamboniOffseasonBar from './components/ZamboniSeasonBar'
+import { HolidayAccent } from './components/HomeFlair';
 
 //import TickleBot from "./components/TickleBot";
 
@@ -98,11 +99,14 @@ function App() {
   }, []);
 
   return (
-    <LeagueProvider>
-      <Router>
-        <AppShell />
-      </Router>
-    </LeagueProvider>
+    <>
+      <HolidayAccent />
+      <LeagueProvider>
+        <Router>
+          <AppShell />
+        </Router>
+      </LeagueProvider>
+    </>
   );
 }
 

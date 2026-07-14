@@ -14,7 +14,7 @@ function nthWeekdayOfMonth(year, month, weekday, n) {
 // `getDate(year)` lets us support floating dates (Thanksgiving, equinox/solstice).
 const HOLIDAYS = [
   {
-    id: 'newyear',
+    id: 'newyear', tier: 'major',
     getDate: (y) => new Date(y, 0, 1),
     window: 1,
     effect: 'fireworks',
@@ -26,19 +26,14 @@ const HOLIDAYS = [
     },
   },
   {
-    id: 'spring',
+    id: 'spring', tier: 'minor',
     getDate: (y) => new Date(y, 2, 20), // approx. spring equinox
     window: 1,
     effect: 'petals',
-    banner: {
-      emoji1: '🌸', emoji2: '🌷',
-      lines: ['HAPPY FIRST DAY OF SPRING'],
-      accent: '#FF8FB3',
-      footer: 'FROM THE BOARD OF GOVERNORS',
-    },
+    accent: '#FF8FB3',
   },
   {
-    id: 'july4',
+    id: 'july4', tier: 'major',
     getDate: (y) => new Date(y, 6, 4),
     window: 1,
     effect: 'fireworks',
@@ -52,19 +47,14 @@ const HOLIDAYS = [
     },
   },
   {
-    id: 'autumn',
+    id: 'autumn', tier: 'minor',
     getDate: (y) => new Date(y, 8, 22), // approx. autumn equinox
     window: 1,
     effect: 'leaves',
-    banner: {
-      emoji1: '🍁', emoji2: '🍂',
-      lines: ['HAPPY FIRST DAY OF FALL'],
-      accent: '#D2691E',
-      footer: 'SPONSORED BY PNPL MANAGEMENT',
-    },
+    accent: '#D2691E',
   },
   {
-    id: 'halloween',
+    id: 'halloween', tier: 'major',
     getDate: (y) => new Date(y, 9, 31),
     window: 1,
     effect: 'spooky',
@@ -77,7 +67,7 @@ const HOLIDAYS = [
     },
   },
   {
-    id: 'thanksgiving',
+    id: 'thanksgiving', tier: 'major',
     getDate: (y) => nthWeekdayOfMonth(y, 10, 4, 4), // 4th Thursday of November
     window: 1,
     effect: 'harvest',
@@ -88,8 +78,8 @@ const HOLIDAYS = [
       footer: 'FROM THE FACE OF THE LEAGUE',
     },
   },
-  {
-    id: 'winter',
+  { 
+    id: 'winter', tier: 'major',
     getDate: (y) => new Date(y, 11, 21), // approx. winter solstice
     window: 1,
     effect: 'snow',
@@ -101,7 +91,7 @@ const HOLIDAYS = [
     },
   },
   {
-    id: 'christmas',
+    id: 'christmas', tier: 'major',
     getDate: (y) => new Date(y, 11, 25),
     window: 1,
     effect: 'christmasMix', 
@@ -113,6 +103,18 @@ const HOLIDAYS = [
       footer: 'SPONSORED BY BELL N BELL',
     },
   },
+  {
+    id: 'stpatricks', tier: 'minor',
+    getDate: (y) => new Date(y, 2, 17),
+    window: 1,
+    accent: '#00A651',
+  },
+  {
+    id: 'boxingday', tier: 'minor',
+    getDate: (y) => new Date(y, 11, 26),
+    window: 1,
+    accent: ' #C0C0C0',
+  },
 ];
 
 // ===== Emoji List ======
@@ -123,7 +125,7 @@ const HARVEST_EMOJIS = ['🍂', '🎃', '🍁'];
 const CHRISTMAS_EMOJIS = ['🎄', '🎁', '⭐', '🔔'];
 
 // ── TEMP TEST TOGGLE — force a specific holiday to preview, delete when done ──
-const FORCE_HOLIDAY_TEST = null //'spring'; // set to a holiday id below to preview, e.g. 'halloween'
+const FORCE_HOLIDAY_TEST = 'boxingday'; // set to a holiday id below to preview, e.g. 'halloween'
 
 function getActiveHoliday() {
 
@@ -676,9 +678,31 @@ function HolidayBanner({ banner }) {
   );
 }
 
+// ─── Minor-tier holidays: site-wide accent color swap, no canvas/banner ─────
+export function HolidayAccent() {
+  const holiday = FORCE_HOLIDAY_TEST
+    ? HOLIDAYS.find((h) => h.id === FORCE_HOLIDAY_TEST)
+    : getActiveHoliday();
+
+    useEffect(() => {
+      if (holiday?.tier === 'minor' && holiday.accent) {
+        document.documentElement.style.setProperty('--holiday-accent', holiday.accent);
+      } else {
+        document.documentElement.style.removeProperty('--holiday-accent');
+      }
+    return () => {
+      document.documentElement.style.removeProperty('--holiday-accent');
+    };
+  }, [holiday?.id]);
+
+  return null;
+}
+
+
 // ─── Main export ─────────────────────────────────────────────────────────────
 export default function SeasonalFlair({ fullscreen = false }) {
   const holiday = getActiveHoliday();
+  if (!holiday || holiday.tier !== 'major') return null; // ← only majors get the takeover
 
   const [seen, setSeen] = useState(
     fullscreen && holiday ? hasSeenToday(holiday.id) : false

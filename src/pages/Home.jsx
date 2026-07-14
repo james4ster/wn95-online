@@ -1015,7 +1015,7 @@ function LeagueGazette({
               </div>
 
               {/* Recent scorers callout — if we have any */}
-              {topScorers.length > 0 && (
+              {!isOffseason && topScorers.length > 0 && (
                 <div className="si-table">
                   <div className="si-table-hd">
                     <span
@@ -1072,7 +1072,7 @@ function LeagueGazette({
               )}
 
               {/* On fire */}
-              {winStreaks.length > 0 && (
+              {!isOffseason && winStreaks.length > 0 && (
                 <div className="si-table">
                   <div className="si-table-hd">
                     <span
@@ -1101,7 +1101,7 @@ function LeagueGazette({
               )}
 
               {/* Ice cold */}
-              {lossStreaks.length > 0 && (
+              {!isOffseason && lossStreaks.length > 0 && (
                 <div className="si-table">
                   <div className="si-table-hd">
                     <span

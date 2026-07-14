@@ -114,7 +114,7 @@ export default function LeagueSubNav() {
           gap: 0.5rem;
           padding: 0 1.6rem;
           height: 48px;
-          color: rgba(135, 206, 235, 0.65);
+          color: var(--holiday-accent, rgba(135, 206, 235, 0.65));
           font-family: 'VT323', monospace;
           font-size: 1.15rem;
           letter-spacing: 1.5px;
@@ -133,7 +133,7 @@ export default function LeagueSubNav() {
           bottom: -3px;
           left: 18%; right: 18%;
           height: 3px;
-          background: linear-gradient(90deg, transparent, #87CEEB, transparent);
+          background: linear-gradient(90deg, transparent, var(--holiday-accent, #87CEEB), transparent);
           opacity: 0;
           transition: opacity 0.15s;
         }

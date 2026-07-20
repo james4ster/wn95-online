@@ -34,6 +34,95 @@ function computeH2H(teamA, teamB, games) {
   return { ptsA, ptsB };
 }
 
+// Shared core for the W18+ tiebreaker rule: wins -> h2h pts (within win-tier)
+// -> h2h GD (within h2h-tier) -> season GD.
+// Takes a group of teams already tied on points, returns them in final seed order.
+// Every team is annotated with h2hPts/h2hGD computed against the FULL points-tied
+// group (for tooltip display), plus internal _tier* fields used only for sorting.
+function orderTiedGroupV2(tierTeams, games) {
+  // Display stats: always vs. the whole points-tied group, whatever actually decided the seed
+  const withDisplayStats = tierTeams.map((t) => {
+    let h2hPts = 0;
+    let h2hGD = 0;
+    tierTeams.forEach((o) => {
+      if (o.team === t.team) return;
+      h2hPts += computeH2H(t.team, o.team, games).ptsA;
+      games.forEach((g) => {
+        const isHome = g.home === t.team && g.away === o.team;
+        const isAway = g.home === o.team && g.away === t.team;
+        if (!isHome && !isAway) return;
+        const sT = isHome ? g.score_home : g.score_away;
+        const sO = isHome ? g.score_away : g.score_home;
+        h2hGD += sT - sO;
+      });
+    });
+    return { ...t, h2hPts, h2hGD };
+  });
+
+  // Sort stats: scoped narrower at each step, per the actual rule
+  const byWins = groupBy(withDisplayStats, 'w');
+  const winTiers = Object.keys(byWins).map(Number).sort((a, b) => b - a);
+  const result = [];
+
+  winTiers.forEach((w) => {
+    const winGroup = byWins[w];
+    if (winGroup.length === 1) {
+      result.push(winGroup[0]);
+      return;
+    }
+    const withTierH2HPts = winGroup.map((t) => ({
+      ...t,
+      _tierH2hPts: winGroup
+        .filter((o) => o.team !== t.team)
+        .reduce((sum, o) => sum + computeH2H(t.team, o.team, games).ptsA, 0),
+    }));
+
+    const byH2HPts = groupBy(withTierH2HPts, '_tierH2hPts');
+    Object.keys(byH2HPts)
+      .map(Number)
+      .sort((a, b) => b - a)
+      .forEach((hp) => {
+        const h2hGroup = byH2HPts[hp];
+        if (h2hGroup.length === 1) {
+          result.push(h2hGroup[0]);
+          return;
+        }
+        const withTierGD = h2hGroup.map((t) => {
+          const tierGD = h2hGroup
+            .filter((o) => o.team !== t.team)
+            .reduce((acc, o) => {
+              games.forEach((g) => {
+                const isHome = g.home === t.team && g.away === o.team;
+                const isAway = g.home === o.team && g.away === t.team;
+                if (!isHome && !isAway) return;
+                const sT = isHome ? g.score_home : g.score_away;
+                const sO = isHome ? g.score_away : g.score_home;
+                acc += sT - sO;
+              });
+              return acc;
+            }, 0);
+          return { ...t, _tierH2hGD: tierGD };
+        });
+        withTierGD.sort((a, b) => b._tierH2hGD - a._tierH2hGD || b.gd - a.gd);
+        result.push(...withTierGD);
+      });
+  });
+
+  return result;
+}
+
+// v2 Tiebreakers — W18+
+// Points -> wins -> h2h pts (within win-tier) -> h2h GD (within h2h-tier) -> season GD
+function sortWithTiebreakersV2(teams, games) {
+  const byPts = groupBy(teams, 'pts');
+  return Object.entries(byPts)
+    .sort(([a], [b]) => b - a)
+    .flatMap(([, tier]) =>
+      tier.length === 1 ? tier : orderTiedGroupV2(tier, games)
+    );
+}
+
+
 function computeStandings(games) {
   const teamMap = {};
   const ensureTeam = (code) => {
@@ -156,6 +245,7 @@ function computeStandings(games) {
   });
 }
 
+// Original tiebreakers - W1 - W17
 function sortWithTiebreakers(teams, games) {
   const h2hCache = {};
   const getH2H = (a, b) => {
@@ -199,6 +289,23 @@ function sortWithTiebreakers(teams, games) {
       }
     });
   return result;
+}
+
+
+
+
+function groupBy(items, key) {
+  return items.reduce((acc, item) => {
+    const k = item[key];
+    (acc[k] ||= []).push(item);
+    return acc;
+  }, {});
+}
+
+function sortStandings(teams, games, ruleset) {
+  return ruleset === 'v2_wins_h2h_gd'
+    ? sortWithTiebreakersV2(teams, games)
+    : sortWithTiebreakers(teams, games); // v1, untouched
 }
 
 function SOSTooltip({ sosInfo }) {
@@ -627,6 +734,283 @@ function TiebreakerTooltip({
   );
 }
 
+// Hover function to show the v2 tiebreakers in the correct order on the screen
+// v2 went into effect for season w18
+function TiebreakerTooltipV2({
+  hoveredTeam,
+  tiedStandings,
+  seasonGames,
+  anchorRect,
+}) {
+  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect)
+    return null;
+
+  const ranked = orderTiedGroupV2(tiedStandings, seasonGames);
+  const baseSeed = Math.min(...tiedStandings.map((s) => s._sortRank ?? 1));
+  const maxH2H = Math.max(...ranked.map((r) => r.h2hPts ?? 0), 1);
+
+  const tooltipW = 380;
+  const fixedLeft = window.innerWidth - tooltipW - 16;
+  const tooltipHeight = 200;
+  const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+  const fixedTop = Math.max(
+    16,
+    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
+  );
+
+  const StatBar = ({ value, max, color }) => (
+    <div
+      style={{
+        flex: 1,
+        height: 5,
+        background: 'rgba(255,255,255,.08)',
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          height: '100%',
+          width: `${Math.max(0, ((value ?? 0) / (max || 1)) * 100)}%`,
+          background: color,
+          borderRadius: 2,
+          boxShadow: `0 0 6px ${color}`,
+          transition: 'width .4s cubic-bezier(.4,0,.2,1)',
+        }}
+      />
+    </div>
+  );
+
+  const gridCols = '40px 1fr 42px 42px 48px 48px';
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: fixedTop,
+        left: fixedLeft,
+        zIndex: 9999,
+        width: tooltipW,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -8,
+          background:
+            'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)',
+          borderRadius: 16,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          background:
+            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
+          border: '1px solid rgba(255,215,0,.5)',
+          borderRadius: 12,
+          boxShadow:
+            '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px 8px',
+            borderBottom: '1px solid rgba(255,215,0,.15)',
+            background:
+              'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.6rem',
+              color: '#FF8C00',
+              letterSpacing: 2,
+              textShadow: '0 0 8px rgba(255,140,0,.7)',
+            }}
+          >
+            TIEBREAKER
+          </div>
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.5rem',
+              color: 'rgba(255,255,255,.4)',
+              letterSpacing: 1,
+            }}
+          >
+            {ranked.length} TEAMS · {ranked[0].pts} PTS
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: gridCols,
+            gap: '0 6px',
+            padding: '6px 16px 4px',
+            borderBottom: '1px solid rgba(255,255,255,.05)',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(255,255,255,.3)',
+              textAlign: 'center',
+            }}
+          >
+            SEED
+          </div>
+          <div />
+          {['W', 'H2H', 'H2HGD', 'GD'].map((lbl) => (
+            <div
+              key={lbl}
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.55rem',
+                color: 'rgba(135,206,235,.5)',
+                textAlign: 'center',
+                letterSpacing: 1,
+              }}
+            >
+              {lbl}
+            </div>
+          ))}
+        </div>
+        {ranked.map((row, idx) => {
+          const seedNum = baseSeed + idx;
+          const gdSign = row.gd > 0 ? '+' : '';
+          const h2hGDSign = row.h2hGD != null && row.h2hGD > 0 ? '+' : '';
+          return (
+            <div
+              key={row.team}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: gridCols,
+                gap: '0 6px',
+                padding: '9px 16px',
+                background:
+                  idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
+                borderBottom:
+                  idx < ranked.length - 1
+                    ? '1px solid rgba(255,255,255,.04)'
+                    : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.6rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 8px rgba(255,140,0,.6)',
+                  lineHeight: 1,
+                }}
+              >
+                {seedNum}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 5,
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'VT323', monospace",
+                    fontSize: '1.5rem',
+                    color: '#E0E0E0',
+                    letterSpacing: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1,
+                  }}
+                >
+                  {row.team}
+                </span>
+                <StatBar value={row.h2hPts} max={maxH2H} color="#FF8C00" />
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#87CEEB',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(135,206,235,.4)',
+                }}
+              >
+                {row.w}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(255,140,0,.5)',
+                }}
+              >
+                {row.h2hPts ?? '—'}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.3rem',
+                  color:
+                    row.h2hGD == null
+                      ? '#888'
+                      : row.h2hGD > 0
+                      ? '#00FF88'
+                      : row.h2hGD < 0
+                      ? '#FF4444'
+                      : '#888',
+                  textAlign: 'center',
+                  textShadow:
+                    row.h2hGD != null && row.h2hGD > 0
+                      ? '0 0 6px rgba(0,255,136,.5)'
+                      : row.h2hGD != null && row.h2hGD < 0
+                      ? '0 0 6px rgba(255,68,68,.5)'
+                      : 'none',
+                }}
+              >
+                {row.h2hGD != null ? `${h2hGDSign}${row.h2hGD}` : '—'}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.3rem',
+                  color:
+                    row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888',
+                  textAlign: 'center',
+                  textShadow:
+                    row.gd > 0
+                      ? '0 0 6px rgba(0,255,136,.5)'
+                      : row.gd < 0
+                      ? '0 0 6px rgba(255,68,68,.5)'
+                      : 'none',
+                }}
+              >
+                {gdSign}
+                {row.gd}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 //Cutline banner
 function ClinchBanner({ clinchNumber, playoffTeams }) {
   if (clinchNumber == null || !playoffTeams) return null;
@@ -795,6 +1179,8 @@ export default function Standings() {
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
   const [sosInfo, setSosInfo] = useState(null);
 
+  // Tiebreaker state
+
   // TeamDrawer state
   const [drawerPrimary, setDrawerPrimary] = useState(null);
   const [drawerCompare, setDrawerCompare] = useState(null);
@@ -852,6 +1238,7 @@ export default function Standings() {
   const [seasonTeams, setSeasonTeams] = useState([]);
   const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(null);
   const [rsGamesVs, setRsGamesVs] = useState(null);
+  const [tiebreakerRuleset, setTiebreakerRuleset] = useState('v1_h2h_w_gd');
   const [compactView, setCompactView] = useState(false);
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
 
@@ -864,7 +1251,7 @@ export default function Standings() {
     (async () => {
       const { data, error } = await supabase
         .from('seasons')
-        .select('lg, year, end_date, playoff_teams, rs_games_vs')
+        .select('lg, year, end_date, playoff_teams, rs_games_vs, tiebreaker_ruleset')
         .order('year', { ascending: false });
       if (error) {
         console.error('Error fetching seasons:', error);
@@ -890,6 +1277,7 @@ export default function Standings() {
     const season = seasons.find((s) => s.lg === selectedSeason);
     setPlayoffTeams(season?.playoff_teams ?? null);
     setRsGamesVs(season?.rs_games_vs ?? null);
+    setTiebreakerRuleset(season?.tiebreaker_ruleset ?? 'v1_h2h_w_gd');
   }, [selectedSeason, seasons]);
 
   useEffect(() => {
@@ -1042,11 +1430,11 @@ export default function Standings() {
 
   const defaultSorted = useMemo(
     () =>
-      sortWithTiebreakers(computedStandingsWithSOS, rawGames).map((s, idx) => ({
+      sortStandings(computedStandingsWithSOS, rawGames, tiebreakerRuleset).map((s, idx) => ({
         ...s,
         _sortRank: idx + 1,
       })),
-    [computedStandingsWithSOS, rawGames]
+    [computedStandingsWithSOS, rawGames, tiebreakerRuleset] // add tiebreakerRuleset to deps
   );
 
   const sortedStandings = useMemo(() => {
@@ -1247,7 +1635,7 @@ export default function Standings() {
           return direction === 'ascending' ? a[key] - b[key] : b[key] - a[key];
         });
       }
-      return sortWithTiebreakers(teams, rawGames).map((s, idx) => ({
+      return sortStandings(teams, rawGames, tiebreakerRuleset).map((s, idx) => ({
         ...s,
         _sortRank: idx + 1,
       }));
@@ -1495,16 +1883,25 @@ export default function Standings() {
       ) : (
         <>
           {tiebreakerInfo &&
-            tiebreakerInfo.anchorRect &&
-            createPortal(
-              <TiebreakerTooltip
-                hoveredTeam={tiebreakerInfo.hoveredTeam}
-                tiedStandings={tiebreakerInfo.tiedStandings}
-                seasonGames={rawGames}
-                anchorRect={tiebreakerInfo.anchorRect}
-              />,
-              document.body
-            )}
+  tiebreakerInfo.anchorRect &&
+  createPortal(
+    tiebreakerRuleset === 'v2_wins_h2h_gd' ? (
+      <TiebreakerTooltipV2
+        hoveredTeam={tiebreakerInfo.hoveredTeam}
+        tiedStandings={tiebreakerInfo.tiedStandings}
+        seasonGames={rawGames}
+        anchorRect={tiebreakerInfo.anchorRect}
+      />
+    ) : (
+      <TiebreakerTooltip
+        hoveredTeam={tiebreakerInfo.hoveredTeam}
+        tiedStandings={tiebreakerInfo.tiedStandings}
+        seasonGames={rawGames}
+        anchorRect={tiebreakerInfo.anchorRect}
+      />
+    ),
+    document.body
+  )}
 
           {sosInfo &&
             sosInfo.anchorRect &&

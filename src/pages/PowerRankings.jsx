@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
-/* UPDATE PRIOR TO SEASON START */
 const CURRENT_LG = 'W18';
 
 const RankArrow = ({ change }) => {
@@ -26,32 +25,33 @@ export default function PowerRankings() {
       const { data: rankData, error } = await supabase
         .from('power_rankings')
         .select('*')
-        .eq('lg', CURRENT_LG)
         .order('week_of', { ascending: false })
         .order('rank',    { ascending: true });
-
+  
       if (error) { console.error(error); setLoading(false); return; }
       if (!rankData?.length) { setLoading(false); return; }
-
-      const uniqueWeeks = [...new Set(rankData.map(r => r.week_of))];
+  
+      // Derive the current league from the most recent data
+      const latestLg = rankData[0].lg;
+  
+      // Filter to that league only
+      const lgData = rankData.filter(r => r.lg === latestLg);
+  
+      const uniqueWeeks = [...new Set(lgData.map(r => r.week_of))];
       setWeeks(uniqueWeeks);
-      setAllRankings(rankData);
-
+      setAllRankings(lgData);
+  
       const latestWeek = uniqueWeeks[0];
       setSelectedWeek(latestWeek);
-      setRankings(rankData.filter(r => r.week_of === latestWeek));
-
-      const { data: teamsData, error: teamsError } = await supabase
+      setRankings(lgData.filter(r => r.week_of === latestWeek));
+  
+      const { data: teamsData } = await supabase
         .from('teams')
         .select('abr, team')
-        .eq('lg', CURRENT_LG);
-
-      if (teamsError) console.error('Teams error:', teamsError);
-
+        .eq('lg', latestLg);
+  
       const logoMap = {};
-      for (const t of teamsData || []) {
-        logoMap[t.abr] = t;
-      }
+      for (const t of teamsData || []) logoMap[t.abr] = t;
       setTeamLogos(logoMap);
       setLoading(false);
     }

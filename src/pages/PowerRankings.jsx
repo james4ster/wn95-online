@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
-const CURRENT_LG = 'W17';
+const CURRENT_LG = 'W18';
 
 const RankArrow = ({ change }) => {
   if (change === null || change === undefined) return (

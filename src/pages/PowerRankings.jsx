@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../utils/supabaseClient';
 
+/* UPDATE PRIOR TO SEASON START */
 const CURRENT_LG = 'W18';
 
 const RankArrow = ({ change }) => {

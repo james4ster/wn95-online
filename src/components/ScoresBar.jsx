@@ -20,13 +20,42 @@ const LEAGUE_CFG = {
 };
 
 // ─── H2H data fetch ───────────────────────────────────────────────────────────
-async function fetchH2H(teamA, teamB, isPlayoff = false) {
+async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
+  // Get all seasons belonging to the same league family.
+  // Example: W18 -> W18, W17, W16, W15...
+  const prefix = lgPrefix(lg);
+
+  const { data: seasons, error: seasonError } = await supabase
+    .from('seasons')
+    .select('lg, year')
+    .order('year', { ascending: false });
+
+  if (seasonError) {
+    console.error('[ScoresBar] Season lookup error:', seasonError);
+    return null;
+  }
+
+  const validLgs = (seasons || [])
+    .filter((s) => lgPrefix(s.lg) === prefix)
+    .map((s) => s.lg);
+
+  if (!validLgs.length) {
+    console.warn('[ScoresBar] No matching league seasons found for:', lg);
+    return null;
+  }
+
+  console.log('[ScoresBar] H2H league history:', lg, '->', validLgs);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PLAYOFF H2H — playoff history only, across all seasons in this league
+  // ─────────────────────────────────────────────────────────────────────────
   if (isPlayoff) {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('playoff_games')
       .select(
         'id, team_code_a, team_code_b, team_a_score, team_b_score, lg, round, game_number'
       )
+      .in('lg', validLgs)
       .or(
         `and(team_code_a.eq.${teamA},team_code_b.eq.${teamB}),and(team_code_a.eq.${teamB},team_code_b.eq.${teamA})`
       )
@@ -34,67 +63,111 @@ async function fetchH2H(teamA, teamB, isPlayoff = false) {
       .order('id', { ascending: false })
       .limit(10);
 
+    if (error) {
+      console.error('[ScoresBar] H2H playoff error:', error);
+      return null;
+    }
+
     const games = (data || []).map((g) => ({
       home: g.team_code_a,
       away: g.team_code_b,
-      result_home: g.team_a_score > g.team_b_score ? 'W' : 'L',
-      result_away: g.team_b_score > g.team_a_score ? 'W' : 'L',
+      score_home: g.team_a_score,
+      score_away: g.team_b_score,
+      result_home: Number(g.team_a_score) > Number(g.team_b_score) ? 'W' : 'L',
+      result_away: Number(g.team_b_score) > Number(g.team_a_score) ? 'W' : 'L',
       ot: 0,
       lg: g.lg,
       _isPlayoff: true,
     }));
 
     if (!games.length) return null;
-    return buildH2HResult(games, teamA, teamB);
-  } else {
-    const { data } = await supabase
-      .from('games')
-      .select('legacy_game_id, home, away, result_home, result_away, ot, lg')
-      .or(
-        `and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`
-      )
-      .not('score_home', 'is', null)
-      .order('legacy_game_id', { ascending: false })
-      .limit(10);
 
-    const games = data || [];
-    if (!games.length) return null;
     return buildH2HResult(games, teamA, teamB);
   }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // REGULAR-SEASON H2H — regular-season history only, across all seasons
+  // ─────────────────────────────────────────────────────────────────────────
+  const { data, error } = await supabase
+    .from('games')
+    .select(
+      'legacy_game_id, home, away, score_home, score_away, result_home, result_away, ot, lg'
+    )
+    .in('lg', validLgs)
+    .or(
+      `and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`
+    )
+    .not('score_home', 'is', null)
+    .order('legacy_game_id', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('[ScoresBar] H2H error:', error);
+    return null;
+  }
+
+  const games = data || [];
+
+  if (!games.length) return null;
+
+  return buildH2HResult(games, teamA, teamB);
 }
 
 function buildH2HResult(games, teamA, teamB) {
   const getResult = (g, team) => {
     const isHome = g.home === team;
-    const r = ((isHome ? g.result_home : g.result_away) || '').toUpperCase();
-    return r === 'W' || r === 'OTW' ? 'W' : 'L';
+
+    const result = (isHome ? g.result_home : g.result_away || '').toUpperCase();
+
+    if (result === 'W' || result === 'OTW') return 'W';
+    if (result === 'L' || result === 'OTL') return 'L';
+
+    // Fallback to score
+    const teamScore = Number(isHome ? g.score_home : g.score_away);
+    const opponentScore = Number(isHome ? g.score_away : g.score_home);
+
+    if (teamScore > opponentScore) return 'W';
+    if (teamScore < opponentScore) return 'L';
+
+    return null;
   };
 
-  let winsA = 0,
-    winsB = 0;
-  games.forEach((g) => {
-    if (getResult(g, teamA) === 'W') winsA++;
-    else winsB++;
+  const validGames = games.filter(
+    (g) => getResult(g, teamA) !== null && getResult(g, teamB) !== null
+  );
+
+  let winsA = 0;
+  let winsB = 0;
+
+  validGames.forEach((g) => {
+    if (getResult(g, teamA) === 'W') {
+      winsA++;
+    } else {
+      winsB++;
+    }
   });
 
   const calcStreak = (team) => {
-    if (!games.length) return 0;
-    const first = getResult(games[0], team);
-    let n = 0;
-    for (const g of games) {
-      if (getResult(g, team) === first) n++;
-      else break;
+    if (!validGames.length) return 0;
+
+    const first = getResult(validGames[0], team);
+    let count = 0;
+
+    for (const g of validGames) {
+      if (getResult(g, team) !== first) break;
+      count++;
     }
-    return first === 'W' ? n : -n;
+
+    return first === 'W' ? count : -count;
   };
 
   return {
-    games,
+    games: validGames,
     winsA,
     winsB,
     streakA: calcStreak(teamA),
     streakB: calcStreak(teamB),
-    total: games.length,
+    total: validGames.length,
   };
 }
 
@@ -127,7 +200,12 @@ function ScoreCard({ game, index }) {
       if (!fetchedRef.current) {
         fetchedRef.current = true;
         setH2hLoad(true);
-        const result = await fetchH2H(game.away, game.home, !!game._isPlayoff);
+        const result = await fetchH2H(
+          game.away,
+          game.home,
+          game.lg,
+          !!game._isPlayoff
+        );
         setH2h(result);
         setH2hLoad(false);
       }
@@ -288,7 +366,7 @@ function ScoreCard({ game, index }) {
 
             {/* Mini dot history — away team perspective */}
             <div className="sc-dots-row">
-              {h2h.games.slice(0, 8).map((g, i) => {
+              {h2h.games.slice(0, 10).map((g, i) => {
                 const aIsHome = g.home === game.away;
                 const r = (
                   (aIsHome ? g.result_home : g.result_away) || ''

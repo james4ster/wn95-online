@@ -48,7 +48,7 @@ const HOLIDAYS = [
   },
   {
     id: 'autumn', tier: 'minor',
-    getDate: (y) => new Date(y, 8, 22), // approx. autumn equinox
+    getDate: (y) => new Date(y, 9, 22), // approx. autumn equinox
     window: 1,
     effect: 'leaves',
     accent: '#D2691E',

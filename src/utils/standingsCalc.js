@@ -275,7 +275,7 @@ export function computeH2H(teamA, teamB, games) {
         }
       }); 
     return result;
-  }
+  } 
   
   export function groupBy(items, key) {
     return items.reduce((acc, item) => {

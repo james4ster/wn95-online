@@ -1580,7 +1580,7 @@ export default function TeamDrawer({
                       transition: 'all .2s',
                     }}
                   > 
-                    {tabKey === 'stats' ? 'TEAM STATS' : 'PLAYOFF SCENARIO'}
+                    {tabKey === 'stats' ? 'TEAM STATS' : 'PLAYOFF SCENARIO'} 
                   </button>
                 ))}
               </div>

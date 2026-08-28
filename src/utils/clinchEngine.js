@@ -69,7 +69,7 @@ export const CLINCH_CONFIG = {
           seed: sortedStandings.indexOf(t) + 1,
         })); 
         return { status: 'clinched', ...base, nearbySeeds };
-      }
+      } 
 
     if (eliminated.has(team)) return { status: 'eliminated', ...base };
   

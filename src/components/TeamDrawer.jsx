@@ -8,6 +8,9 @@
 import React, { useEffect, useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '../utils/supabaseClient';
+import { computeClinchScenario, computeRemainingOpponents } from '../utils/clinchEngine';
+import { computeStandings, sortStandings } from '../utils/standingsCalc';
+
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
@@ -688,16 +691,617 @@ function TeamIdentity({ team, standing, accentColor }) {
   );
 }
 
+function ImpactRow({ rival, accentColor }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 4,
+      padding: '8px 10px', marginBottom: 6, borderRadius: 6,
+      background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.07)',
+      borderLeft: `3px solid ${rival.relation === 'ahead' ? '#87CEEB' : '#FF8C00'}`,
+    }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <img src={`/assets/teamLogos/${rival.team}.png`} alt={rival.team}
+            style={{ width: 22, height: 22, objectFit: 'contain' }}
+            onError={(e) => { e.target.style.display = 'none'; }} />
+          <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: '.95rem', color: '#E0E0E0', letterSpacing: .5 }}>
+            {rival.team}
+          </span>
+          <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.32rem', color: rival.relation === 'ahead' ? '#87CEEB' : '#FF8C00', letterSpacing: 1 }}>
+            {rival.relation === 'ahead' ? 'AHEAD' : 'BEHIND'}
+          </span>
+        </div>
+        <span style={{ fontFamily: "'VT323', monospace", fontSize: '1.05rem', color: 'rgba(255,255,255,.6)' }}>
+          {rival.pts} PTS · {rival.gr} GR · MAX {rival.maxPts}
+        </span>
+      </div>
+
+      <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.05rem', color: '#FFD700', marginTop: 2 }}>
+        {rival.needText}
+      </div>
+
+      {rival.remainingOpponents?.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+          {rival.remainingOpponents.map((o) => (
+            <span key={o.team} style={{
+              fontFamily: "'VT323', monospace", fontSize: '.85rem',
+              color: o.team === rival.h2hOpponent ? '#FFD700' : 'rgba(255,255,255,.45)',
+              background: 'rgba(0,0,0,.3)', border: '1px solid rgba(255,255,255,.08)',
+              borderRadius: 4, padding: '2px 6px',
+            }}>
+              vs {o.team} ({o.gamesLeft})
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function computeBestWorstSeed(team, sortedStandings) {
+  if (!sortedStandings?.length) return null;
+  const me = sortedStandings.find(s => s.team === team);
+  if (!me || me.maxPts == null) return null;
+
+  const others = sortedStandings.filter(s => s.team !== team);
+
+  // Best possible: this team wins out (maxPts), every rival held to their
+  // floor (current pts). Worst possible: this team's current pts stand,
+  // every rival wins out (their maxPts). Same independent per-team
+  // ceiling/floor convention already used for clinch/elimination.
+  const bestSeed  = others.filter(o => (o.pts ?? 0) > me.maxPts).length + 1;
+  const worstSeed = others.filter(o => (o.maxPts ?? o.pts ?? 0) > me.pts).length + 1;
+
+  return { bestSeed, worstSeed };
+}
+
+
+function ClinchPanel({ data, accentColor, playoffTeams, seasonTeams, rawGames, rsGamesVs, tiebreakerRuleset, sortedStandings }) {
+  if (!data) {
+    return (
+      <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.42rem', color: 'rgba(255,255,255,.25)', textAlign: 'center', padding: '30px 0' }}>
+        NO DATA
+      </div>
+    );
+  }
+
+  if (data.status === 'no-data') {
+    return (
+      <div style={{ padding: '24px 14px', textAlign: 'center' }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.48rem', color: 'rgba(255,255,255,.4)', letterSpacing: 1, lineHeight: 2 }}>
+          SCHEDULE DATA UNAVAILABLE
+        </div>
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.2rem', color: 'rgba(255,255,255,.45)', marginTop: 8 }}>
+          This season is missing games-per-team info, so clinch scenarios can't be projected.
+        </div>
+      </div>
+    );
+  }
+
+  if (data.status === 'too-early') {
+    return (
+      <div style={{ padding: '24px 14px', textAlign: 'center' }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.48rem', color: 'rgba(255,255,255,.4)', letterSpacing: 1, lineHeight: 2 }}>
+          TOO EARLY TO PROJECT
+        </div>
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.2rem', color: 'rgba(255,255,255,.45)', marginTop: 8 }}>
+          {data.team} has {data.gr} games remaining.<br />
+          Check back in about {data.gamesUntilProjection} more games.
+        </div>
+      </div>
+    );
+  }
+
+  if (data.status === 'clinched') {
+    const bw = computeBestWorstSeed(data.team, sortedStandings);
+    return (
+      <div style={{ padding: '18px 14px', textAlign: 'center', background: 'rgba(0,221,96,.08)', border: '1px solid rgba(0,221,96,.4)', borderRadius: 10, boxShadow: '0 0 20px rgba(0,221,96,.15)' }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.6rem', color: '#00DD60', letterSpacing: 1, marginBottom: 6 }}>✅ CLINCHED</div>
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.3rem', color: 'rgba(255,255,255,.7)' }}>Seed #{data.seed} · {data.pts} PTS</div>
+        {bw && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,221,96,.2)' }}>
+            <div>
+              <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.32rem', color: 'rgba(0,221,96,.65)', letterSpacing: 1, marginBottom: 4 }}>BEST POSSIBLE</div>
+              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.6rem', color: '#00DD60' }}>Seed #{bw.bestSeed}</div>
+            </div>
+            <div style={{ width: 1, background: 'rgba(255,255,255,.1)' }} />
+            <div>
+              <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.32rem', color: 'rgba(255,176,0,.65)', letterSpacing: 1, marginBottom: 4 }}>WORST POSSIBLE</div>
+              <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.6rem', color: '#FFB000' }}>Seed #{bw.worstSeed}</div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (data.status === 'eliminated') {
+    return (
+      <div style={{ padding: '18px 14px', textAlign: 'center', background: 'rgba(255,0,0,.08)', border: '1px solid rgba(255,0,0,.4)', borderRadius: 10 }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.6rem', color: '#FF4444', letterSpacing: 1, marginBottom: 6 }}>❌ ELIMINATED</div>
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.3rem', color: 'rgba(255,255,255,.6)' }}>Max {data.maxPts} PTS — can't reach the cutoff</div>
+      </div>
+    );
+  }
+
+  const ptsBehindCutoff = data.cutoffTeam ? data.cutoffTeam.pts - data.pts : null;
+  const ptsAheadOfBubble = data.bubbleTeam ? data.pts - data.bubbleTeam.pts : null;
+  const inPlayoffs = ptsBehindCutoff != null && ptsBehindCutoff <= 0;
+
+  return (
+    <div>
+      <div style={{ padding: '12px 14px', marginBottom: 14, background: `linear-gradient(135deg, ${accentColor}18, rgba(0,0,0,.3))`, border: `1px solid ${accentColor}44`, borderRadius: 10 }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem', color: accentColor, letterSpacing: 1, marginBottom: 6 }}>
+          SEED #{data.seed} · {data.pts} PTS · {data.gr ?? '—'} GAMES LEFT
+        </div>
+        <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.15rem', color: 'rgba(255,255,255,.75)', lineHeight: 1.5 }}>
+          {inPlayoffs ? (
+            <>Currently in the playoff picture.{data.bubbleTeam && <> Leads #{playoffTeams + 1} ({data.bubbleTeam.team}) by {ptsAheadOfBubble} pts.</>}</>
+          ) : (
+            data.cutoffTeam && <>{ptsBehindCutoff} pts back of #{playoffTeams} ({data.cutoffTeam.team}).</>
+          )}
+        </div>
+      </div>
+
+      <WhatIfStandings
+        simTeams={[data.team, ...(data.allCandidates || []).map(c => c.team)]}
+        targetTeam={data.team}
+        sortedStandings={sortedStandings}  // ← add this prop
+        seasonTeams={seasonTeams}
+        rawGames={rawGames}
+        rsGamesVs={rsGamesVs}
+        tiebreakerRuleset={tiebreakerRuleset}
+        accentColor={accentColor}
+        playoffTeams={playoffTeams}
+      />  
+    </div>
+  );
+}
+
+function canonicalPair(a, b) {
+  return a < b ? [a, b] : [b, a];
+}
+
+
+// Given a "mover" team's own result (WIN/OTW/TIE/OTL/LOSS) against an opponent, resolve it
+// to the A/B-relative code buildSyntheticGame expects, where x/y is the alphabetical pair.
+function codeForOutcome(mover, x, y, outcome) {
+  const moverIsX = mover === x;
+  const map = {
+    WIN:  moverIsX ? 'A_W'   : 'B_W',
+    OTW:  moverIsX ? 'A_OTW' : 'B_OTW',
+    TIE:  'TIE',
+    OTL:  moverIsX ? 'B_OTW' : 'A_OTW',
+    LOSS: moverIsX ? 'B_W'   : 'A_W',
+  };
+  return map[outcome];
+}
+
+function buildSyntheticGame(x, y, resultCode, key) {
+  let score_home = 0, score_away = 0, ot = false;
+  switch (resultCode) {
+    case 'A_W':   score_home = 1; score_away = 0; break;
+    case 'A_OTW': score_home = 1; score_away = 0; ot = true; break;
+    case 'TIE':   score_home = 0; score_away = 0; break;
+    case 'B_OTW': score_home = 0; score_away = 1; ot = true; break;
+    case 'B_W':   score_home = 0; score_away = 1; break;
+    default: return null;
+  }
+  return { id: `hyp-${key}`, home: x, away: y, score_home, score_away, ot, coach_home: '', coach_away: '' };
+}
+
+const RESULT_OPTIONS = [
+  { outcome: 'WIN',  label: 'W',   color: '#00DD60' },
+  { outcome: 'OTW',  label: 'OTW', color: '#4DE0A0' },
+  { outcome: 'TIE',  label: 'T',   color: '#87CEEB' },
+  { outcome: 'OTL',  label: 'OTL', color: '#FFA500' },
+  { outcome: 'LOSS', label: 'L',   color: '#FF4444' },
+];
+
+// Matchups between pairs of displayed teams (for the manual toggle grid)
+function buildSimMatchups(simTeams, seasonTeams, rawGames, rsGamesVs) {
+  const sorted = [...simTeams].sort();
+  const pairs = [];
+  for (let i = 0; i < sorted.length; i++) {
+    for (let j = i + 1; j < sorted.length; j++) {
+      const [x, y] = [sorted[i], sorted[j]];
+      const oppList = computeRemainingOpponents(x, seasonTeams, rawGames, rsGamesVs ?? 2);
+      const match = oppList.find((o) => o.team === y);
+      if (match && match.gamesLeft > 0) pairs.push({ x, y, count: match.gamesLeft });
+    }
+  }
+  return pairs;
+}
+
+
+// Only the target's own remaining games — the primary editable set. Independent of
+// which teams happen to be in the bubble-range candidate pool.
+function buildTargetMatchups(target, seasonTeams, rawGames, rsGamesVs) {
+  const opponents = computeRemainingOpponents(target, seasonTeams, rawGames, rsGamesVs ?? 2);
+  return opponents
+    .map(({ team: opp, gamesLeft }) => {
+      const [x, y] = canonicalPair(target, opp);
+      return { x, y, count: gamesLeft };
+    })
+    .sort((a, b) => (a.x === target ? a.y : a.x).localeCompare(b.x === target ? b.y : b.x));
+}
+
+// MatchupRow — single-row segmented slider between two team logos.
+// Segment position/color communicates the outcome, not just the label:
+// far-left/orange = leftTeam big win, far-right/blue = rightTeam big win,
+// middle-gray = tie, with narrower OT segments flanking it.
+function MatchupRow({ x, y, idx, count, current, onSet, focusTeam }) {
+  const focusIsX = focusTeam === x;
+  const leftTeam  = focusIsX ? x : y;
+  const rightTeam = focusIsX ? y : x;
+
+  // seg.outcome is defined relative to leftTeam; setResult always expects
+  // the outcome relative to x, so flip it when leftTeam is actually y.
+  const toXRelative = (outcome) => {
+    if (focusIsX) return outcome;
+    const flip = { WIN: 'LOSS', OTW: 'OTL', TIE: 'TIE', OTL: 'OTW', LOSS: 'WIN' };
+    return flip[outcome];
+  };
+
+  // Outcomes are always defined relative to leftTeam's perspective here;
+  // codeForOutcome below resolves them back to the actual mover (x or y).
+  const SEGMENTS = [
+    { outcome: 'WIN',  flex: 1.3, label: 'W',   title: `${leftTeam} regulation win` },
+    { outcome: 'OTW',  flex: 1.1, label: 'OTW', title: `${leftTeam} OT win` },
+    { outcome: 'TIE',  flex: 0.8, label: 'T',   title: 'Tie' },
+    { outcome: 'OTL',  flex: 1.1, label: 'OTL', title: `${rightTeam} OT win` },
+    { outcome: 'LOSS', flex: 1.3, label: 'W',   title: `${rightTeam} regulation win` },
+  ];
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      padding: '8px 10px', marginBottom: 6, borderRadius: 10,
+      background: 'rgba(255,255,255,.03)', border: '1px solid rgba(255,255,255,.08)',
+    }}>
+      {/* Left team */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 60, flexShrink: 0 }}>
+        <img src={`/assets/teamLogos/${leftTeam}.png`} alt={leftTeam}
+          style={{ width: 26, height: 26, objectFit: 'contain', flexShrink: 0 }}
+          onError={e => { e.target.style.display = 'none'; }} />
+      </div>
+
+      {/* Segmented slider */}
+      <div style={{
+        flex: 1, display: 'flex', height: 36, borderRadius: 8, overflow: 'hidden',
+        border: '1px solid rgba(255,255,255,.14)', background: 'rgba(0,0,0,.35)',
+      }}>
+        {SEGMENTS.map((seg, i) => {
+          const code = codeForOutcome(focusIsX ? x : y, x, y, seg.outcome);
+          const active = current === code;
+          const color = i < 2 ? '#FF8C00' : i > 2 ? '#87CEEB' : '#9AA5B1';
+          return (
+            <button
+              key={seg.outcome}
+              title={seg.title}
+              onClick={() => onSet(toXRelative(seg.outcome))}
+              style={{
+                flex: seg.flex,
+                border: 'none',
+                borderRight: i < 4 ? '1px solid rgba(255,255,255,.08)' : 'none',
+                background: active ? `linear-gradient(180deg, ${color}45, ${color}20)` : 'transparent',
+                color: active ? color : 'rgba(255,255,255,.32)',
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: seg.label.length > 2 ? '.32rem' : '.42rem',
+                letterSpacing: 1,
+                cursor: 'pointer',
+                boxShadow: active ? `inset 0 0 14px ${color}55` : 'none',
+                transition: 'all .15s',
+              }}
+            >
+              {seg.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Right team */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: 60, flexShrink: 0, justifyContent: 'flex-end' }}>
+        <img src={`/assets/teamLogos/${rightTeam}.png`} alt={rightTeam}
+          style={{ width: 26, height: 26, objectFit: 'contain', flexShrink: 0 }}
+          onError={e => { e.target.style.display = 'none'; }} />
+      </div>
+
+      {count > 1 && (
+        <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.28rem',
+          color: 'rgba(255,255,255,.25)', flexShrink: 0, marginLeft: 4 }}>
+          {idx + 1}/{count}
+        </span>
+      )}
+    </div>
+  );
+}
+
+
+// ALL of a team's remaining games league-wide, regardless of who else is displayed —
+// this is what powers Win All / Lose All so the target's true ceiling/floor shows up
+// even against opponents not currently listed in the table.
+function buildFullScheduleKeys(team, seasonTeams, rawGames, rsGamesVs) {
+  const opponents = computeRemainingOpponents(team, seasonTeams, rawGames, rsGamesVs ?? 2);
+  const entries = [];
+  opponents.forEach(({ team: opp, gamesLeft }) => {
+    const [x, y] = canonicalPair(team, opp);
+    for (let idx = 0; idx < gamesLeft; idx++) {
+      entries.push({ key: `${x}::${y}::${idx}`, x, y });
+    }
+  });
+  return entries;
+}
+
+function WhatIfStandings({ simTeams, targetTeam, seasonTeams, rawGames,
+  tiebreakerRuleset, rsGamesVs, accentColor, playoffTeams, sortedStandings }) {
+
+  const [hypResults, setHypResults] = useState({});
+
+  // Build target's own matchups
+  const targetMatchups = useMemo(
+    () => buildTargetMatchups(targetTeam, seasonTeams, rawGames, rsGamesVs),
+    [targetTeam, seasonTeams, rawGames, rsGamesVs]
+  );
+
+  // Rival matchups — games between OTHER bubble teams (not involving the target)
+  const rivalMatchups = useMemo(() => {
+    const bubbleTeams = simTeams.filter(t => t !== targetTeam);
+    return buildSimMatchups(bubbleTeams, seasonTeams, rawGames, rsGamesVs);
+  }, [simTeams, targetTeam, seasonTeams, rawGames, rsGamesVs]);
+
+  // Recompute standings with hypothetical results injected
+  const whatIfRows = useMemo(() => {
+    const syntheticGames = Object.values(hypResults)
+      .map(({ x, y, code }, i) => buildSyntheticGame(x, y, code, i))
+      .filter(Boolean);
+    const merged = [...rawGames, ...syntheticGames];
+    const standings = computeStandings(merged);
+    const fullSorted = sortStandings(standings, merged, tiebreakerRuleset)
+      .map((s, idx) => ({ ...s, rank: idx + 1 }));
+
+    // Show: 6 above playoff line + all below who are still alive (up to 8 below)
+    const bubbleStart = 0;
+    const bubbleEnd   = Math.min(fullSorted.length, playoffTeams + 8);
+    return fullSorted.slice(bubbleStart, bubbleEnd);
+  }, [hypResults, rawGames, tiebreakerRuleset, playoffTeams]);
+
+  const setResult = (x, y, idx, outcome) => {
+    const key = `${x}::${y}::${idx}`;
+    const newCode = codeForOutcome(x, x, y, outcome);
+    setHypResults(prev => {
+      const next = { ...prev };
+      if (prev[key]?.code === newCode) delete next[key];
+      else next[key] = { x, y, code: newCode };
+      return next;
+    });
+  };
+
+  const applyToAll = (outcome) => {
+    const entries = buildFullScheduleKeys(targetTeam, seasonTeams, rawGames, rsGamesVs);
+    setHypResults(prev => {
+      const next = { ...prev };
+      entries.forEach(({ key, x, y }) => {
+        next[key] = { x, y, code: codeForOutcome(targetTeam, x, y, outcome) };
+      });
+      return next;
+    });
+  };
+
+  const clearAll = () => setHypResults({});
+  const hasHyp = Object.keys(hypResults).length > 0;
+
+  // Find where playoff line falls within the displayed slice
+  const cutIdx = whatIfRows.findIndex(r => r.rank === playoffTeams + 1);
+
+  const renderMatchupGroup = (matchups, isFocusGroup) =>
+    matchups.map(({ x, y, count }) =>
+      Array.from({ length: count }).map((_, idx) => {
+        const key = `${x}::${y}::${idx}`;
+        // For rival matchups, show from the perspective of whichever is closer to bubble
+        const focusForRow = isFocusGroup ? targetTeam : (simTeams.includes(x) ? x : y);
+        return (
+          <MatchupRow key={key} x={x} y={y} idx={idx} count={count}
+            focusTeam={focusForRow}
+            current={hypResults[key]?.code}
+            onSet={(outcome) => setResult(x, y, idx, outcome)} />
+        );
+      })
+    );
+
+  return (
+    <div style={{ display: 'flex', gap: 18, alignItems: 'flex-start' }}>
+
+      {/* LEFT: matchup controls */}
+      <div style={{ width: 380, flexShrink: 0 }}>
+
+        {/* Quick-fill buttons */}
+                <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+          <button onClick={() => applyToAll('WIN')}
+            style={quickBtnStyle('#00DD60')}>🔥 {targetTeam} WINS OUT</button>
+          <button onClick={() => applyToAll('LOSS')}
+            style={quickBtnStyle('#FF4444')}>💀 {targetTeam} LOSES OUT</button>
+          <button onClick={clearAll}
+            style={{ ...quickBtnStyle('#87CEEB'), visibility: hasHyp ? 'visible' : 'hidden' }}>
+            ↺ RESET
+          </button>
+        </div>
+
+        {/* Target's own games */}
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.38rem',
+          color: accentColor, letterSpacing: 2, marginBottom: 8 }}>
+          {targetTeam}'S REMAINING GAMES
+        </div>
+        {targetMatchups.length === 0
+          ? <div style={{ fontFamily: "'VT323', monospace", fontSize: '1rem',
+              color: 'rgba(255,255,255,.3)', marginBottom: 14 }}>No games remaining</div>
+          : <div style={{ marginBottom: 16 }}>{renderMatchupGroup(targetMatchups, true)}</div>
+        }
+
+        {/* Other bubble matchups */}
+        {rivalMatchups.length > 0 && (
+          <>
+            <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.38rem',
+              color: 'rgba(135,206,235,.6)', letterSpacing: 2, marginBottom: 8 }}>
+              OTHER BUBBLE MATCHUPS
+            </div>
+            {renderMatchupGroup(rivalMatchups, false)}
+          </>
+        )}
+      </div>
+
+      {/* RIGHT: what-if standings */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.38rem',
+          color: 'rgba(255,255,255,.35)', letterSpacing: 2, marginBottom: 8 }}>
+          PROJECTED STANDINGS
+        </div>
+        <div style={{ borderRadius: 10, overflow: 'hidden',
+          border: '1px solid rgba(255,255,255,.08)', background: 'rgba(0,0,0,.25)' }}>
+
+          {/* Header */}
+          <div style={{ display: 'grid',
+            gridTemplateColumns: '36px 1fr 36px 32px 32px 32px 32px 44px',
+            gap: 4, padding: '7px 10px',
+            background: 'rgba(255,255,255,.04)',
+            borderBottom: '1px solid rgba(255,255,255,.08)' }}>
+            {['#', 'TEAM', 'GP', 'W', 'L', 'T', 'OTL', 'PTS'].map((h, i) => (
+              <div key={i} style={{ fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.32rem', color: 'rgba(255,255,255,.3)',
+                textAlign: i <= 1 ? 'left' : 'center' }}>{h}</div>
+            ))}
+          </div>
+
+          {whatIfRows.map((s, idx) => {
+            const inPlayoffs  = s.rank <= playoffTeams;
+            const isTarget    = s.team === targetTeam;
+            const showCutline = cutIdx > 0 && idx === cutIdx - 1;
+
+            return (
+              <React.Fragment key={s.team}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '36px 1fr 36px 32px 32px 32px 32px 44px',
+                  gap: 4, padding: '8px 10px', alignItems: 'center',
+                  background: isTarget
+                    ? `${accentColor}1a`
+                    : idx % 2 === 0 ? 'rgba(255,255,255,.02)' : 'transparent',
+                  borderLeft: isTarget
+                    ? `3px solid ${accentColor}`
+                    : inPlayoffs ? '3px solid rgba(0,255,100,.3)' : '3px solid transparent',
+                  transition: 'background .2s',
+                }}>
+                  {/* Rank badge */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <span style={{
+                      fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem',
+                      color: inPlayoffs ? '#FFD700' : 'rgba(255,255,255,.3)',
+                      background: 'rgba(0,0,0,.4)',
+                      border: `1px solid ${inPlayoffs ? 'rgba(255,215,0,.4)' : 'rgba(255,255,255,.1)'}`,
+                      borderRadius: 5, padding: '3px 5px',
+                      minWidth: 24, textAlign: 'center',
+                    }}>{s.rank}</span>
+                  </div>
+
+                  {/* Logo + name */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                    <img src={`/assets/teamLogos/${s.team}.png`} alt={s.team}
+                      style={{ width: 22, height: 22, objectFit: 'contain', flexShrink: 0 }}
+                      onError={e => { e.target.style.display = 'none'; }} />
+                    <span style={{
+                      fontFamily: "'Barlow Condensed', sans-serif",
+                      fontWeight: isTarget ? 800 : 600,
+                      fontSize: isTarget ? '1.05rem' : '1rem',
+                      color: isTarget ? accentColor : inPlayoffs ? '#E0E0E0' : 'rgba(255,255,255,.5)',
+                      letterSpacing: .5,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>{s.team}</span>
+                  </div>
+
+                  {/* Stats */}
+                  {['gp', 'w', 'l', 't', 'otl'].map(k => (
+                    <div key={k} style={{ textAlign: 'center',
+                      fontFamily: "'VT323', monospace", fontSize: '1.1rem',
+                      color: inPlayoffs ? 'rgba(255,255,255,.7)' : 'rgba(255,255,255,.35)' }}>
+                      {s[k]}
+                    </div>
+                  ))}
+
+                  {/* PTS — bold, gold */}
+                  <div style={{ textAlign: 'center',
+                    fontFamily: "'VT323', monospace", fontSize: '1.25rem',
+                    color: isTarget ? accentColor : inPlayoffs ? '#FFD700' : 'rgba(255,255,255,.35)',
+                    fontWeight: 700 }}>
+                    {s.pts}
+                  </div>
+                </div>
+
+                {/* Playoff cutline */}
+                {showCutline && (
+                  <div style={{
+                    height: 2,
+                    background: 'linear-gradient(90deg, transparent, #FFD700 15%, #FFD700 85%, transparent)',
+                    boxShadow: '0 0 10px rgba(255,215,0,.5)',
+                    margin: '1px 0', position: 'relative',
+                  }}>
+                    <span style={{
+                      position: 'absolute', left: '50%', top: -7,
+                      transform: 'translateX(-50%)',
+                      background: '#0a0a15', padding: '0 8px',
+                      fontFamily: "'Press Start 2P', monospace",
+                      fontSize: '.28rem', color: '#FFD700', letterSpacing: 1,
+                      whiteSpace: 'nowrap',
+                    }}>◆ PLAYOFF LINE ◆</span>
+                  </div>
+                )}
+              </React.Fragment>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+          {[
+            { color: accentColor,          label: 'Selected team' },
+            { color: 'rgba(0,255,100,.5)', label: 'In playoffs' },
+            { color: 'rgba(255,255,255,.3)',label: 'Outside playoffs' },
+          ].map(({ color, label }) => (
+            <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{ width: 3, height: 14, background: color, borderRadius: 2 }} />
+              <span style={{ fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.28rem', color: 'rgba(255,255,255,.3)' }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function quickBtnStyle(color) {
+  return {
+    fontFamily: "'Press Start 2P', monospace", fontSize: '.42rem', letterSpacing: 1,
+    padding: '11px 16px', borderRadius: 8, cursor: 'pointer',
+    border: `1px solid ${color}66`, background: `${color}18`, color,
+    boxShadow: `0 0 12px ${color}22`, transition: 'all .15s',
+  };
+}
+
 // ─── main component ──────────────────────────────────────────────────────────
 
-export default function TeamDrawer({ selectedSeason, computedStandings, primaryTeam, compareTeam, onClose }) {
+export default function TeamDrawer({
+  selectedSeason, computedStandings, primaryTeam, compareTeam, onClose,
+  sortedStandings, playoffTeams, clinched, eliminated, rawGames, seasonTeams, rsGamesVs, tiebreakerRuleset,
+}) {
   const [dataMode, setDataMode]                 = useState('season');
+  const [activeTab, setActiveTab]               = useState('stats'); // 'stats' | 'clinch'
   const [loading, setLoading]                   = useState(false);
   const [allSkaters, setAllSkaters]             = useState([]);
   const [allGoalies, setAllGoalies]             = useState([]);
   const [allTeamGameStats, setAllTeamGameStats] = useState([]);
   const [h2hGames, setH2hGames]                 = useState([]);
   const [hasPlayoffData, setHasPlayoffData]     = useState(false);
+  const [clinchFocusTeam, setClinchFocusTeam]   = useState(null);
 
   const drawerRef  = useRef(null);
   const isCompare  = !!primaryTeam && !!compareTeam;
@@ -819,6 +1423,35 @@ export default function TeamDrawer({ selectedSeason, computedStandings, primaryT
 
   const aggregatedGoalies = useMemo(() => aggregateAndEnrichGoalies(allGoalies), [allGoalies]);
 
+  // ── Clinch scenario data ──────────────────────────────────────────────────
+  const clinchDataA = useMemo(() => {
+    if (!sortedStandings || !playoffTeams || !primaryTeam) return null;
+    return computeClinchScenario({
+      team: primaryTeam,
+      sortedStandings,
+      playoffTeams,
+      clinched: clinched || new Set(),
+      eliminated: eliminated || new Set(),
+      rawGames: rawGames || [],
+      seasonTeams: seasonTeams || [],
+      rsGamesVs,
+    });
+  }, [primaryTeam, sortedStandings, playoffTeams, clinched, eliminated, rawGames, seasonTeams, rsGamesVs]);
+
+  const clinchDataB = useMemo(() => {
+    if (!sortedStandings || !playoffTeams || !compareTeam) return null;
+    return computeClinchScenario({
+      team: compareTeam,
+      sortedStandings,
+      playoffTeams,
+      clinched: clinched || new Set(),
+      eliminated: eliminated || new Set(),
+      rawGames: rawGames || [],
+      seasonTeams: seasonTeams || [],
+      rsGamesVs,
+    });
+  }, [compareTeam, sortedStandings, playoffTeams, clinched, eliminated, rawGames, seasonTeams, rsGamesVs]);
+
   // Goalie ranks — TRUE competition ranking
   const goalieRanks = useMemo(() => {
     const active = aggregatedGoalies.filter(p => p._gp > 0 && p.shots_against > 0);
@@ -883,12 +1516,20 @@ export default function TeamDrawer({ selectedSeason, computedStandings, primaryT
 
   if (!primaryTeam) return null;
 
+  const clinchTeam   = isCompare ? (clinchFocusTeam || primaryTeam) : primaryTeam;
+  const clinchAccent = clinchTeam === primaryTeam ? '#FF8C00' : '#87CEEB';
+  const clinchData   = clinchTeam === primaryTeam ? clinchDataA : clinchDataB;
+
   const goalieStatKeys  = ['saves', 'shots_against', 'goals_against', 'shutouts', '_gaa', '_svpct'];
   const goalieColLabels = ['SV', 'SA', 'GA', 'SO', 'GAA', 'SV%'];
 
+  const drawerWidth = activeTab === 'clinch'
+  ? 'clamp(680px, 68vw, 1040px)'
+  : 'clamp(500px, 52vw, 820px)';
+
   return createPortal(
     <>
-      <div ref={drawerRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 'clamp(500px, 52vw, 820px)', zIndex: 1001, background: 'linear-gradient(170deg, #0c0b1a 0%, #0f0e22 40%, #0a0a14 100%)', borderLeft: '1px solid rgba(255,140,0,.25)', boxShadow: '-8px 0 40px rgba(0,0,0,.7), -2px 0 0 rgba(255,140,0,.1)', display: 'flex', flexDirection: 'column', animation: 'tdSlideIn .28s cubic-bezier(.4,0,.2,1)', overflowY: 'hidden' }}>
+        <div ref={drawerRef} style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: drawerWidth, transition: 'width .25s cubic-bezier(.4,0,.2,1)', zIndex: 1001, background: 'linear-gradient(170deg, #0c0b1a 0%, #0f0e22 40%, #0a0a14 100%)', borderLeft: '1px solid rgba(255,140,0,.25)', boxShadow: '-8px 0 40px rgba(0,0,0,.7), -2px 0 0 rgba(255,140,0,.1)', display: 'flex', flexDirection: 'column', animation: 'tdSlideIn .28s cubic-bezier(.4,0,.2,1)', overflowY: 'hidden' }}>
 
         {/* ── HEADER ── */}
         <div style={{ padding: '14px 18px 12px', borderBottom: '1px solid rgba(255,140,0,.15)', background: 'linear-gradient(90deg, rgba(255,140,0,.07) 0%, transparent 100%)', flexShrink: 0, position: 'sticky', top: 0, zIndex: 10, backdropFilter: 'blur(12px)' }}>
@@ -917,8 +1558,34 @@ export default function TeamDrawer({ selectedSeason, computedStandings, primaryT
                 onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,.06)'; e.currentTarget.style.color='rgba(255,255,255,.5)'; }}>✕</button>
             </div>
           </div>
+          
           {!isCompare && <div style={{ marginTop: 8, fontFamily: "'Press Start 2P', monospace", fontSize: '.3rem', color: 'rgba(255,255,255,.2)', letterSpacing: 1 }}>CLICK ANY OTHER TEAM ROW TO COMPARE</div>}
-        </div>
+
+            {playoffTeams > 0 && (
+              <div style={{ display: 'flex', gap: 6, marginTop: 10 }}>
+                {['stats', 'clinch'].map((tabKey) => (
+                  <button
+                    key={tabKey}
+                    onClick={() => setActiveTab(tabKey)}
+                    style={{
+                      fontFamily: "'Press Start 2P', monospace",
+                      fontSize: '.42rem',
+                      letterSpacing: 1,
+                      padding: '7px 12px',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      border: activeTab === tabKey ? '1px solid #FFD700' : '1px solid rgba(255,255,255,.12)',
+                      background: activeTab === tabKey ? 'linear-gradient(180deg, rgba(255,140,0,.25), rgba(255,140,0,.08))' : 'rgba(255,255,255,.04)',
+                      color: activeTab === tabKey ? '#FFD700' : 'rgba(255,255,255,.4)',
+                      transition: 'all .2s',
+                    }}
+                  >
+                    {tabKey === 'stats' ? 'TEAM STATS' : 'PLAYOFF SCENARIO'}
+                  </button>
+                ))}
+              </div>
+            )}
+            </div>
 
         {/* ── BODY ── */}
         <div style={{ padding: '14px 18px', flex: 1, overflowY: 'auto' }}>
@@ -927,10 +1594,46 @@ export default function TeamDrawer({ selectedSeason, computedStandings, primaryT
               <div style={{ width: 36, height: 36, border: '3px solid rgba(255,140,0,.2)', borderTop: '3px solid #FFD700', borderRadius: '50%', animation: 'tdSpin 1s linear infinite' }} />
               <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.5rem', color: '#87CEEB', letterSpacing: 2 }}>LOADING...</div>
             </div>
-          ) : isCompare ? (
-            <>
+                                        ) : activeTab === 'clinch' ? (
+                                          <>
+                                            {isCompare && (
+                                              <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+                                                {[
+                                                  { team: primaryTeam, color: '#FF8C00' },
+                                                  { team: compareTeam, color: '#87CEEB' },
+                                                ].map(({ team, color }) => {
+                                                  const active = clinchTeam === team;
+                                                  return (
+                                                    <button
+                                                      key={team}
+                                                      onClick={() => setClinchFocusTeam(team)}
+                                                      style={{
+                                                        display: 'flex', alignItems: 'center', gap: 6,
+                                                        padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+                                                        border: active ? `1px solid ${color}` : '1px solid rgba(255,255,255,.12)',
+                                                        background: active ? `${color}20` : 'rgba(255,255,255,.04)',
+                                                        fontFamily: "'Press Start 2P', monospace", fontSize: '.42rem', letterSpacing: 1,
+                                                        color: active ? color : 'rgba(255,255,255,.4)',
+                                                        transition: 'all .15s',
+                                                      }}
+                                                    >
+                                                      <img src={`/assets/teamLogos/${team}.png`} alt={team}
+                                                        style={{ width: 18, height: 18, objectFit: 'contain' }}
+                                                        onError={e => { e.target.style.display = 'none'; }} />
+                                                      {team}
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                            <TeamSectionDivider team={clinchTeam} accentColor={clinchAccent} label="PLAYOFF PATH" />
+                                            <ClinchPanel data={clinchData} accentColor={clinchAccent} playoffTeams={playoffTeams}
+                                              seasonTeams={seasonTeams} rawGames={rawGames} rsGamesVs={rsGamesVs}
+                                              tiebreakerRuleset={tiebreakerRuleset} sortedStandings={sortedStandings} />
+                                          </>
+                                        ) : isCompare ? (
+                      <>
               <TeamSectionDivider team={primaryTeam} accentColor="#FF8C00" label="SKATERS" />
-              <PlayerTable players={skatersA} statKeys={['goals','assists','points','shots','chk','pim']} colLabels={['G','A','PTS','S','HIT','PIM']} ranks={skaterRanks} title="" leagueTotal={leagueSkaterCount} accentColor="#FF8C00" />
               <LabelDivider label="GOALIES" accentColor="#FF8C00" />
               <PlayerTable players={goaliesA} statKeys={goalieStatKeys} colLabels={goalieColLabels} ranks={goalieRanks} title="" leagueTotal={leagueGoalieCount} accentColor="#FF8C00" />
 

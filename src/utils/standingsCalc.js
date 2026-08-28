@@ -273,7 +273,7 @@ export function computeH2H(teamA, teamB, games) {
           });
           result.push(...enriched);
         }
-      });
+      }); 
     return result;
   }
   

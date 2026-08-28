@@ -889,7 +889,7 @@ export default function Standings() {
   const [sortConfig, setSortConfig] = useState({
     key: 'default',
     direction: 'descending',
-  });
+  }); 
   const reverseSortColumns = ['ga', 'l', 'otl'];
   const [tiebreakerInfo, setTiebreakerInfo] = useState(null);
   const [sosInfo, setSosInfo] = useState(null);

@@ -67,7 +67,7 @@ export const CLINCH_CONFIG = {
           team: t.team,
           pts: t.pts,
           seed: sortedStandings.indexOf(t) + 1,
-        }));
+        })); 
         return { status: 'clinched', ...base, nearbySeeds };
       }
 

@@ -1579,7 +1579,7 @@ export default function TeamDrawer({
                       color: activeTab === tabKey ? '#FFD700' : 'rgba(255,255,255,.4)',
                       transition: 'all .2s',
                     }}
-                  >
+                  > 
                     {tabKey === 'stats' ? 'TEAM STATS' : 'PLAYOFF SCENARIO'}
                   </button>
                 ))}

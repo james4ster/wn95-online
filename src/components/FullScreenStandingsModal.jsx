@@ -520,6 +520,7 @@ export default function FullScreenStandingsModal({
   showCoach,    
   gfPerG,        
   gaPerG,
+  sosData,
 }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'default',

@@ -801,12 +801,12 @@ function ClinchPanel({ data, accentColor, playoffTeams, seasonTeams, rawGames, r
         {bw && (
           <div style={{ display: 'flex', justifyContent: 'center', gap: 24, marginTop: 12, paddingTop: 12, borderTop: '1px solid rgba(0,221,96,.2)' }}>
             <div>
-              <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.32rem', color: 'rgba(0,221,96,.65)', letterSpacing: 1, marginBottom: 4 }}>BEST POSSIBLE</div>
+              <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.64rem', color: 'rgba(0,221,96,.65)', letterSpacing: 1, marginBottom: 4 }}>BEST POSSIBLE</div>
               <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.6rem', color: '#00DD60' }}>Seed #{bw.bestSeed}</div>
             </div>
             <div style={{ width: 1, background: 'rgba(255,255,255,.1)' }} />
             <div>
-              <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.32rem', color: 'rgba(255,176,0,.65)', letterSpacing: 1, marginBottom: 4 }}>WORST POSSIBLE</div>
+              <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.64rem', color: 'rgba(255,176,0,.65)', letterSpacing: 1, marginBottom: 4 }}>WORST POSSIBLE</div>
               <div style={{ fontFamily: "'VT323', monospace", fontSize: '1.6rem', color: '#FFB000' }}>Seed #{bw.worstSeed}</div>
             </div>
           </div>
@@ -987,7 +987,7 @@ function MatchupRow({ x, y, idx, count, current, onSet, focusTeam }) {
                 background: active ? `linear-gradient(180deg, ${color}45, ${color}20)` : 'transparent',
                 color: active ? color : 'rgba(255,255,255,.32)',
                 fontFamily: "'Press Start 2P', monospace",
-                fontSize: seg.label.length > 2 ? '.32rem' : '.42rem',
+                fontSize: seg.label.length > 2 ? '.48rem' : '.62rem',
                 letterSpacing: 1,
                 cursor: 'pointer',
                 boxShadow: active ? `inset 0 0 14px ${color}55` : 'none',
@@ -1008,7 +1008,7 @@ function MatchupRow({ x, y, idx, count, current, onSet, focusTeam }) {
       </div>
 
       {count > 1 && (
-        <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.28rem',
+        <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.42rem',
           color: 'rgba(255,255,255,.25)', flexShrink: 0, marginLeft: 4 }}>
           {idx + 1}/{count}
         </span>
@@ -1044,11 +1044,34 @@ function WhatIfStandings({ simTeams, targetTeam, seasonTeams, rawGames,
     [targetTeam, seasonTeams, rawGames, rsGamesVs]
   );
 
-  // Rival matchups — games between OTHER bubble teams (not involving the target)
-  const rivalMatchups = useMemo(() => {
+    // Rival matchups — games between OTHER bubble teams (not involving the target)
+    const rivalMatchups = useMemo(() => {
+      const bubbleTeams = simTeams.filter(t => t !== targetTeam);
+      return buildSimMatchups(bubbleTeams, seasonTeams, rawGames, rsGamesVs);
+    }, [simTeams, targetTeam, seasonTeams, rawGames, rsGamesVs]);
+  
+      // Each rival's OWN remaining schedule, regardless of who the opponent is —
+  // grouped by rival so the UI can collapse each team's games independently.
+  // Dedupes against pairs already shown in rivalMatchups so no game appears twice.
+  const rivalOwnMatchupGroups = useMemo(() => {
     const bubbleTeams = simTeams.filter(t => t !== targetTeam);
-    return buildSimMatchups(bubbleTeams, seasonTeams, rawGames, rsGamesVs);
-  }, [simTeams, targetTeam, seasonTeams, rawGames, rsGamesVs]);
+    const alreadyShown = new Set(rivalMatchups.map(m => `${m.x}::${m.y}`));
+    const seen = new Set();
+    const groups = [];
+    bubbleTeams.forEach((rival) => {
+      const matchups = buildTargetMatchups(rival, seasonTeams, rawGames, rsGamesVs).filter((m) => {
+        const key = `${m.x}::${m.y}`;
+        if (alreadyShown.has(key) || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      if (matchups.length > 0) {
+        const totalGames = matchups.reduce((sum, m) => sum + m.count, 0);
+        groups.push({ team: rival, matchups, totalGames });
+      }
+    });
+    return groups;
+  }, [simTeams, targetTeam, rivalMatchups, seasonTeams, rawGames, rsGamesVs]);
 
   // Recompute standings with hypothetical results injected
   const whatIfRows = useMemo(() => {
@@ -1128,7 +1151,7 @@ function WhatIfStandings({ simTeams, targetTeam, seasonTeams, rawGames,
         </div>
 
         {/* Target's own games */}
-        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.38rem',
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.64rem',
           color: accentColor, letterSpacing: 2, marginBottom: 8 }}>
           {targetTeam}'S REMAINING GAMES
         </div>
@@ -1138,21 +1161,65 @@ function WhatIfStandings({ simTeams, targetTeam, seasonTeams, rawGames,
           : <div style={{ marginBottom: 16 }}>{renderMatchupGroup(targetMatchups, true)}</div>
         }
 
-        {/* Other bubble matchups */}
-        {rivalMatchups.length > 0 && (
+                {/* Other bubble matchups */}
+                {rivalMatchups.length > 0 && (
           <>
-            <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.38rem',
+            <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.64rem',
               color: 'rgba(135,206,235,.6)', letterSpacing: 2, marginBottom: 8 }}>
-              OTHER BUBBLE MATCHUPS
+              IMPACT MATCHUPS
             </div>
-            {renderMatchupGroup(rivalMatchups, false)}
+            <div style={{ marginBottom: 16 }}>{renderMatchupGroup(rivalMatchups, false)}</div>
+          </>
+        )}
+
+                {/* Rivals' own games — collapsed per-team accordion to limit scroll */}
+                {rivalOwnMatchupGroups.length > 0 && (
+          <>
+            <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.64em',
+              color: 'rgba(255,255,255,.35)', letterSpacing: 2, marginBottom: 8 }}>
+              OTHER IMPACT GAMES
+            </div>
+            {rivalOwnMatchupGroups.map(({ team, matchups, totalGames }) => (
+              <details key={team} style={{
+                marginBottom: 6, borderRadius: 8, overflow: 'hidden',
+                background: 'rgba(255,255,255,.02)', border: '1px solid rgba(255,255,255,.07)',
+              }}>
+                <summary style={{
+                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                  cursor: 'pointer', userSelect: 'none',
+                }}>
+                  <img src={`/assets/teamLogos/${team}.png`} alt={team}
+                    style={{ width: 22, height: 22, objectFit: 'contain' }}
+                    onError={e => { e.target.style.display = 'none'; }} />
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontWeight: 700, fontSize: '.95rem', color: '#E0E0E0' }}>
+                    {team}
+                  </span>
+                  <span style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.42rem', color: 'rgba(255,255,255,.3)', marginLeft: 'auto' }}>
+                    {totalGames} GAME{totalGames === 1 ? '' : 'S'}
+                  </span>
+                </summary>
+                <div style={{ padding: '2px 10px 8px' }}>
+                  {matchups.map(({ x, y, count }) =>
+                    Array.from({ length: count }).map((_, idx) => {
+                      const key = `${x}::${y}::${idx}`;
+                      return (
+                        <MatchupRow key={key} x={x} y={y} idx={idx} count={count}
+                          focusTeam={team}
+                          current={hypResults[key]?.code}
+                          onSet={(outcome) => setResult(x, y, idx, outcome)} />
+                      );
+                    })
+                  )}
+                </div>
+              </details>
+            ))}
           </>
         )}
       </div>
 
       {/* RIGHT: what-if standings */}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.38rem',
+        <div style={{ fontFamily: "'Press Start 2P', monospace", fontSize: '.64rem',
           color: 'rgba(255,255,255,.35)', letterSpacing: 2, marginBottom: 8 }}>
           PROJECTED STANDINGS
         </div>
@@ -1167,7 +1234,7 @@ function WhatIfStandings({ simTeams, targetTeam, seasonTeams, rawGames,
             borderBottom: '1px solid rgba(255,255,255,.08)' }}>
             {['#', 'TEAM', 'GP', 'W', 'L', 'T', 'OTL', 'PTS'].map((h, i) => (
               <div key={i} style={{ fontFamily: "'Press Start 2P', monospace",
-                fontSize: '.32rem', color: 'rgba(255,255,255,.3)',
+                fontSize: '.48rem', color: 'rgba(255,255,255,.3)',
                 textAlign: i <= 1 ? 'left' : 'center' }}>{h}</div>
             ))}
           </div>
@@ -1292,9 +1359,10 @@ function quickBtnStyle(color) {
 export default function TeamDrawer({
   selectedSeason, computedStandings, primaryTeam, compareTeam, onClose,
   sortedStandings, playoffTeams, clinched, eliminated, rawGames, seasonTeams, rsGamesVs, tiebreakerRuleset,
+  activeTab, setActiveTab,
 }) {
   const [dataMode, setDataMode]                 = useState('season');
-  const [activeTab, setActiveTab]               = useState('stats'); // 'stats' | 'clinch'
+  //const [activeTab, setActiveTab]               = useState('stats'); // 'stats' | 'clinch'
   const [loading, setLoading]                   = useState(false);
   const [allSkaters, setAllSkaters]             = useState([]);
   const [allGoalies, setAllGoalies]             = useState([]);
@@ -1633,7 +1701,8 @@ export default function TeamDrawer({
                                           </>
                                         ) : isCompare ? (
                       <>
-              <TeamSectionDivider team={primaryTeam} accentColor="#FF8C00" label="SKATERS" />
+               <TeamSectionDivider team={primaryTeam} accentColor="#FF8C00" label="SKATERS" />
+              <PlayerTable players={skatersA} statKeys={['goals','assists','points','shots','chk','pim']} colLabels={['G','A','PTS','S','HIT','PIM']} ranks={skaterRanks} title="" leagueTotal={leagueSkaterCount} accentColor="#FF8C00" />
               <LabelDivider label="GOALIES" accentColor="#FF8C00" />
               <PlayerTable players={goaliesA} statKeys={goalieStatKeys} colLabels={goalieColLabels} ranks={goalieRanks} title="" leagueTotal={leagueGoalieCount} accentColor="#FF8C00" />
 

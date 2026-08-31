@@ -954,6 +954,7 @@ export default function Standings() {
   const [totalGamesPerTeam, setTotalGamesPerTeam] = useState(null);
   const [rsGamesVs, setRsGamesVs] = useState(null);
   const [tiebreakerRuleset, setTiebreakerRuleset] = useState('v1_h2h_w_gd');
+  const [drawerActiveTab, setDrawerActiveTab] = useState('stats');
   const [compactView, setCompactView] = useState(false);
   const [fullScreenOpen, setFullScreenOpen] = useState(false);
 
@@ -1699,6 +1700,18 @@ export default function Standings() {
                               style={{ cursor: 'pointer' }}
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (drawerActiveTab === 'clinch') {
+                                  // No compare feature on Playoff Scenario tab —
+                                  // clicking any row just switches to that team.
+                                  if (drawerPrimary === s.team) {
+                                    setDrawerPrimary(null);
+                                    setDrawerCompare(null);
+                                  } else {
+                                    setDrawerPrimary(s.team);
+                                    setDrawerCompare(null);
+                                  }
+                                  return;
+                                }
                                 if (!drawerPrimary) {
                                   setDrawerPrimary(s.team);
                                   setDrawerCompare(null);
@@ -2030,24 +2043,26 @@ export default function Standings() {
           AND the playoffs block, so it renders regardless of activeView.
           Blocked on mobile (both orientations). */}
             {!isMobileLandscape && !isMobilePortrait && (
-        <TeamDrawer
-          selectedSeason={selectedSeason}
-          computedStandings={computedStandings}
-          primaryTeam={drawerPrimary}
-          compareTeam={drawerCompare}
-          onClose={() => {
-            setDrawerPrimary(null);
-            setDrawerCompare(null);
-          }}
-          sortedStandings={defaultSorted}
-          playoffTeams={playoffTeams}
-          clinched={clinched}
-          eliminated={eliminated}
-          rawGames={rawGames}
-          seasonTeams={seasonTeams}
-          rsGamesVs={rsGamesVs}
-          tiebreakerRuleset={tiebreakerRuleset}
-        />
+                <TeamDrawer
+                selectedSeason={selectedSeason}
+                computedStandings={computedStandings}
+                primaryTeam={drawerPrimary}
+                compareTeam={drawerCompare}
+                onClose={() => {
+                  setDrawerPrimary(null);
+                  setDrawerCompare(null);
+                }}
+                sortedStandings={defaultSorted}
+                playoffTeams={playoffTeams}
+                clinched={clinched}
+                eliminated={eliminated}
+                rawGames={rawGames}
+                seasonTeams={seasonTeams}
+                rsGamesVs={rsGamesVs}
+                tiebreakerRuleset={tiebreakerRuleset}
+                activeTab={drawerActiveTab}
+                setActiveTab={setDrawerActiveTab}
+              />
       )}
 
       <style>{`

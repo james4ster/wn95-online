@@ -1,0 +1,16 @@
+{
+    "name": "WN95HL",
+    "short_name": "WN95HL",
+    "description": "WN95HL — NHL 95 Sega Genesis Online League",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#111111",
+    "theme_color": "#111111",
+    "icons": [
+      {
+        "src": "/assets/leagueLogos/w.png",
+        "sizes": "477x477",
+        "type": "image/png"
+      }
+    ]
+  }

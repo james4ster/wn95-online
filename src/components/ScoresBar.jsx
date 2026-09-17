@@ -221,11 +221,24 @@ function ScoreCard({ game, index, flippedCard, setFlippedCard }) {
 
   const updateHoverPosition = () => {
     if (!cardRef.current) return;
-
+  
     const rect = cardRef.current.getBoundingClientRect();
-
+  
+    const popupWidth = 250;
+    const margin = 8;
+  
+    const centerX = rect.left + rect.width / 2;
+  
+    const left = Math.max(
+      popupWidth / 2 + margin,
+      Math.min(
+        centerX,
+        window.innerWidth - popupWidth / 2 - margin
+      )
+    );
+  
     setHoverPos({
-      left: rect.left + rect.width / 2,
+      left,
       top: rect.bottom + 6,
     });
   };
@@ -672,6 +685,7 @@ export default function ScoresBar() {
           position: relative;
           overflow: visible;
           min-width: 0;
+          padding-left: 4px;
         }
         .sb-fade-left, .sb-fade-right {
           position: absolute; top: 0; bottom: 0; width: 32px;
@@ -750,6 +764,7 @@ export default function ScoresBar() {
 
         /* ── DESKTOP H2H HOVER PANEL ───────────────────────────────────────────── */
         @media (min-width: 601px) {
+          
           .sc-wrap:hover {
             z-index: 100;
           }
@@ -779,6 +794,29 @@ export default function ScoresBar() {
 
             z-index: 999999;
             pointer-events: none;
+          }
+
+          .sc-desktop-h2h .sc-h2h-vs-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 8px;
+          }
+          
+          .sc-desktop-h2h .sc-h2h-line {
+            display: block;
+            width: auto;
+            min-width: 40px;
+            height: 1px;
+            flex: 1 1 40px;
+            background: rgba(255,255,255,.35);
+            opacity: 1;
+          }
+          
+          .sc-desktop-h2h .sc-h2h-vs {
+            flex: 0 0 auto;
+            font-size: .48rem;
+            white-space: nowrap;
           }
 
           /* Desktop-only sizing */
@@ -816,6 +854,7 @@ export default function ScoresBar() {
           align-items: center;
           gap: .35rem;
           position: relative;
+
         }
         .sc-logo {
           width: 28px; height: 28px;
@@ -1038,6 +1077,10 @@ export default function ScoresBar() {
         @media (max-width: 600px) {
           .sb-root {
             min-height: 64px;
+          }
+
+          .sb-track-wrap {
+            padding-left: 4px;
           }
         
           .sc-wrap {

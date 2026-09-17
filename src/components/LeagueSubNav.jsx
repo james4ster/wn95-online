@@ -102,25 +102,31 @@ export default function LeagueSubNav() {
           display: flex;
           align-items: stretch;
           justify-content: center;
-          padding: 0 14px;
-          overflow-x: auto;
-          scrollbar-width: none;
+          gap: 1.4rem;
+          padding: 0 12px;
+          overflow: hidden;
         }
+
         .subnav-inner::-webkit-scrollbar { display: none; }
 
+        
         .snl {
           display: flex;
           align-items: center;
-          gap: 0.5rem;
-          padding: 0 1.6rem;
+          justify-content: center;
+          gap: 0.4rem;
+          padding: 0;
           height: 48px;
+
+          flex: 0 0 auto;
+
           color: var(--holiday-accent, rgba(135, 206, 235, 0.65));
           font-family: 'VT323', monospace;
           font-size: 1.15rem;
           letter-spacing: 1.5px;
           text-decoration: none;
           white-space: nowrap;
-          flex-shrink: 0;
+
           position: relative;
           transition: color 0.15s, background 0.15s;
           border-bottom: 3px solid transparent;
@@ -161,14 +167,21 @@ export default function LeagueSubNav() {
         }
         .snt {
           font-family: 'Press Start 2P', monospace;
-          font-size: 0.6rem;
-          letter-spacing: 2px;
+          font-size: 0.55rem;
+          letter-spacing: 1.5px;
         }
 
         @media (max-width: 768px) {
           .league-subnav { top: 64px; position: static; top: auto;}
           .snl { padding: 0 0.85rem; }
           .snt { display: none; }
+          .subnav-inner {
+            justify-content: center;
+            gap: 0;
+            padding: 0;
+            overflow-x: auto;
+            overflow-y: hidden;
+          }
         }
         @media (max-width: 480px) {
           .snl { padding: 0 0.6rem; height: 42px; }

@@ -644,21 +644,43 @@ export default function ScoresBar() {
       <div className="sb-root" style={{ '--sb': color }}>
         {/* Scrollable cards area */}
         <div className="sb-track-wrap">
-        <div className="sb-cards">
+        <button
+  className="sb-scroll-arrow sb-scroll-left"
+  onClick={() =>
+    document.querySelector('.sb-cards')?.scrollBy({
+      left: -300,
+      behavior: 'smooth',
+    })
+  }
+>
+  ‹
+</button>
+
+          <div className="sb-cards">
             {slots.map((g, i) => (
               <ScoreCard
-              key={i}
-              game={loading ? null : g}
-              index={i}
-              flippedCard={flippedCard}
-              setFlippedCard={setFlippedCard}
-              totalGames={slots.filter(Boolean).length}
-            />
+                key={i}
+                game={loading ? null : g}
+                index={i}
+                flippedCard={flippedCard}
+                setFlippedCard={setFlippedCard}
+                totalGames={slots.filter(Boolean).length}
+              />
             ))}
           </div>
-          {/* Edge fade masks */}
-          <div className="sb-fade-left" />
-          <div className="sb-fade-right" />
+
+          <button
+            className="sb-scroll-arrow sb-scroll-right"
+            onClick={() => {
+              document.querySelector('.sb-cards')?.scrollBy({
+                left: 300,
+                behavior: 'smooth',
+              });
+            }}
+            aria-label="Scroll scores right"
+          >
+            ›
+          </button>
         </div>
 
         {/* Defending Champion — far right of bar */}
@@ -685,14 +707,57 @@ export default function ScoresBar() {
           position: relative;
           overflow: visible;
           min-width: 0;
-          padding-left: 4px;
+          padding-left: 36px;
+          padding-right: 36px;
         }
-        .sb-fade-left, .sb-fade-right {
-          position: absolute; top: 0; bottom: 0; width: 32px;
-          z-index: 2; pointer-events: none;
+
+        .sb-scroll-left::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          background: #050510;
+          z-index: -1;
         }
-        .sb-fade-left  { left:  0; background: linear-gradient(90deg,  #050510, transparent); }
-        .sb-fade-right { right: 0; background: linear-gradient(-90deg, #050510, transparent); }
+
+        /* Arrow */
+          .sb-scroll-arrow {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            z-index: 1000;
+
+            border: 0;
+            background: #050510;
+            color: rgba(255,255,255,.7);
+
+            font-family: Arial, sans-serif;
+            font-size: 1.8rem;
+            line-height: 1;
+
+            cursor: pointer;
+            padding: 0;
+          }
+
+         .sb-scroll-left {
+            left: 0;
+            width: 36px;
+          }
+
+          .sb-scroll-right {
+            right: 0;
+            width: 30px;
+          }
+        
+        .sb-scroll-arrow:hover {
+          color: #FFD700;
+          text-shadow: 0 0 8px rgba(255,215,0,.5);
+        }
 
         .sb-cards {
           display: flex;
@@ -704,6 +769,7 @@ export default function ScoresBar() {
           scroll-snap-type: x mandatory;
           align-items: center;
         }
+
         .sb-cards::-webkit-scrollbar { display: none; }
 
         /* ─────────────────────────────────────────────────────────────────── */
@@ -798,12 +864,13 @@ export default function ScoresBar() {
         
           /* Divider */
           .sc-desktop-h2h .sc-h2h-vs-row {
+            position: relative;
             display: flex;
             align-items: center;
             width: 100%;
             gap: .4rem;
           }
-        
+
           .sc-desktop-h2h .sc-h2h-line {
             flex: 1 1 auto;
             min-width: 0;
@@ -811,13 +878,13 @@ export default function ScoresBar() {
             background: rgba(255,255,255,.35);
             opacity: 1;
           }
-        
+
           .sc-desktop-h2h .sc-h2h-vs {
             flex: 0 0 auto;
             font-size: .48rem;
             white-space: nowrap;
           }
-        
+
           /* Team rows */
           .sc-desktop-h2h .sc-h2h-team-row {
             position: relative;
@@ -826,19 +893,14 @@ export default function ScoresBar() {
             display: flex;
             align-items: center;
           }
-          
+
           .sc-desktop-h2h .sc-h2h-logo {
             width: 38px;
             height: 38px;
             flex-shrink: 0;
           }
-          
-          .sc-desktop-h2h .sc-h2h-stack {
-            flex: 1;
-            height: 100%;
-            position: static;
-          }
-          
+
+          /* Record is centered to the entire popup */
           .sc-desktop-h2h .sc-h2h-record {
             position: absolute;
             left: 50%;
@@ -846,7 +908,8 @@ export default function ScoresBar() {
             font-size: 1.35rem;
             white-space: nowrap;
           }
-          
+
+          /* Streak stays at the far right */
           .sc-desktop-h2h .sc-streak {
             position: absolute;
             right: 0;
@@ -1093,6 +1156,10 @@ export default function ScoresBar() {
           .sc-wrap {
             width: 104px;
             height: 62px;
+          }
+
+          .sb-scroll-arrow {
+            display: none;
           }
         
           /* ── FRONT ── */

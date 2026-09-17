@@ -20,7 +20,7 @@ const LEAGUE_CFG = {
 };
 
 // ─── H2H data fetch ───────────────────────────────────────────────────────────
-async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
+async function fetchH2H(teamA, teamB, lg, isPlayoff = false, cutoffId = null) {
   // Get all seasons belonging to the same league family.
   // Example: W18 -> W18, W17, W16, W15...
   const prefix = lgPrefix(lg);
@@ -50,7 +50,7 @@ async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
   // PLAYOFF H2H — playoff history only, across all seasons in this league
   // ─────────────────────────────────────────────────────────────────────────
   if (isPlayoff) {
-    const { data, error } = await supabase
+    let poQuery = supabase
       .from('playoff_games')
       .select(
         'id, team_code_a, team_code_b, team_a_score, team_b_score, lg, round, game_number'
@@ -59,7 +59,12 @@ async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
       .or(
         `and(team_code_a.eq.${teamA},team_code_b.eq.${teamB}),and(team_code_a.eq.${teamB},team_code_b.eq.${teamA})`
       )
-      .not('team_a_score', 'is', null)
+      .not('team_a_score', 'is', null);
+
+    // Point-in-time: only history up to AND INCLUDING this game
+    if (cutoffId != null) poQuery = poQuery.lte('id', cutoffId);
+
+    const { data, error } = await poQuery
       .order('id', { ascending: false })
       .limit(10);
 
@@ -68,17 +73,20 @@ async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
       return null;
     }
 
-    const games = (data || []).map((g) => ({
-      home: g.team_code_a,
-      away: g.team_code_b,
-      score_home: g.team_a_score,
-      score_away: g.team_b_score,
-      result_home: Number(g.team_a_score) > Number(g.team_b_score) ? 'W' : 'L',
-      result_away: Number(g.team_b_score) > Number(g.team_a_score) ? 'W' : 'L',
-      ot: 0,
-      lg: g.lg,
-      _isPlayoff: true,
-    }));
+    const games = (data || []).map((g) => {
+      const aWin = Number(g.team_a_score) > Number(g.team_b_score);
+      return {
+        home: g.team_code_a,
+        away: g.team_code_b,
+        score_home: g.team_a_score,
+        score_away: g.team_b_score,
+        result_home: aWin ? 'W' : 'L',
+        result_away: aWin ? 'L' : 'W',
+        ot: 0,
+        lg: g.lg,
+        _isPlayoff: true,
+      };
+    });
 
     if (!games.length) return null;
 
@@ -88,18 +96,25 @@ async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
   // ─────────────────────────────────────────────────────────────────────────
   // REGULAR-SEASON H2H — regular-season history only, across all seasons
   // ─────────────────────────────────────────────────────────────────────────
-  const { data, error } = await supabase
-    .from('games')
-    .select(
-      'legacy_game_id, home, away, score_home, score_away, result_home, result_away, ot, lg'
-    )
-    .in('lg', validLgs)
-    .or(
-      `and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`
-    )
-    .not('score_home', 'is', null)
-    .order('legacy_game_id', { ascending: false })
-    .limit(10);
+  let rsQuery = supabase
+  .from('games')
+  .select(
+    'id, legacy_game_id, home, away, score_home, score_away, result_home, result_away, ot, lg'
+  )
+  .in('lg', validLgs)
+  .or(
+    `and(home.eq.${teamA},away.eq.${teamB}),and(home.eq.${teamB},away.eq.${teamA})`
+  )
+  .not('score_home', 'is', null);
+
+// Point-in-time: only history up to AND INCLUDING this game.
+// Uses the DB `id` (matches ordering everywhere else in the app) — legacy_game_id
+// isn't reliably populated/chronological for current-season games.
+if (cutoffId != null) rsQuery = rsQuery.lte('id', cutoffId);
+
+const { data, error } = await rsQuery
+  .order('id', { ascending: false })
+  .limit(10);
 
   if (error) {
     console.error('[ScoresBar] H2H error:', error);
@@ -113,73 +128,80 @@ async function fetchH2H(teamA, teamB, lg, isPlayoff = false) {
   return buildH2HResult(games, teamA, teamB);
 }
 
-function buildH2HResult(games, teamA, teamB) {
-  const getResult = (g, team) => {
-    const isHome = g.home === team;
+// Returns 'W' | 'OTW' | 'OTL' | 'L' | 'T' from `team`'s perspective
+function getOutcome(g, team) {
+  const isHome = g.home === team;
+  const raw = ((isHome ? g.result_home : g.result_away) || '').toUpperCase();
+  if (raw === 'W' || raw === 'OTW' || raw === 'OTL' || raw === 'L' || raw === 'T') return raw;
 
-    const result = (isHome ? g.result_home : g.result_away || '').toUpperCase();
+  // Fallback to score when result column is missing
+  const mine = Number(isHome ? g.score_home : g.score_away);
+  const theirs = Number(isHome ? g.score_away : g.score_home);
+  if (Number.isNaN(mine) || Number.isNaN(theirs)) return null;
+  if (mine === theirs) return 'T';
+  const isOT = Number(g.ot) === 1;
+  if (mine > theirs) return isOT ? 'OTW' : 'W';
+  return isOT ? 'OTL' : 'L';
+}
 
-    if (result === 'W' || result === 'OTW') return 'W';
-    if (result === 'L' || result === 'OTL') return 'L';
-
-    // Fallback to score
-    const teamScore = Number(isHome ? g.score_home : g.score_away);
-    const opponentScore = Number(isHome ? g.score_away : g.score_home);
-
-    if (teamScore > opponentScore) return 'W';
-    if (teamScore < opponentScore) return 'L';
-
-    return null;
-  };
-
-  const validGames = games.filter(
-    (g) => getResult(g, teamA) !== null && getResult(g, teamB) !== null
-  );
-
-  let winsA = 0;
-  let winsB = 0;
-
-  validGames.forEach((g) => {
-    if (getResult(g, teamA) === 'W') {
-      winsA++;
-    } else {
-      winsB++;
-    }
+function tallyRecord(games, team) {
+  const rec = { w: 0, l: 0, t: 0, otl: 0 };
+  games.forEach((g) => {
+    const o = getOutcome(g, team);
+    if (o === 'W' || o === 'OTW') rec.w++;
+    else if (o === 'L') rec.l++;
+    else if (o === 'OTL') rec.otl++;
+    else if (o === 'T') rec.t++;
   });
+  return rec;
+}
 
-  const calcStreak = (team) => {
-    if (!validGames.length) return 0;
+// Streak buckets: wins (W/OTW), regulation losses, OT losses, ties — each its own run
+function calcStreak(games, team) {
+  if (!games.length) return null;
+  const bucket = (o) => (o === 'W' || o === 'OTW' ? 'W' : o);
+  const first = bucket(getOutcome(games[0], team));
+  if (!first) return null;
+  let count = 0;
+  for (const g of games) {
+    if (bucket(getOutcome(g, team)) !== first) break;
+    count++;
+  }
+  return { type: first, count };
+}
 
-    const first = getResult(validGames[0], team);
-    let count = 0;
-
-    for (const g of validGames) {
-      if (getResult(g, team) !== first) break;
-      count++;
-    }
-
-    return first === 'W' ? count : -count;
-  };
+function buildH2HResult(games, teamA, teamB) {
+  const validGames = games.filter(
+    (g) => getOutcome(g, teamA) !== null && getOutcome(g, teamB) !== null
+  );
+  if (!validGames.length) return null;
 
   return {
     games: validGames,
-    winsA,
-    winsB,
-    streakA: calcStreak(teamA),
-    streakB: calcStreak(teamB),
+    recA: tallyRecord(validGames, teamA),
+    recB: tallyRecord(validGames, teamB),
+    streakA: calcStreak(validGames, teamA),
+    streakB: calcStreak(validGames, teamB),
     total: validGames.length,
   };
 }
 
+function fmtRecord(rec) {
+  const parts = [rec.w, rec.l];
+  if (rec.t > 0 || rec.otl > 0) parts.push(rec.t);
+  if (rec.otl > 0) parts.push(rec.otl);
+  return parts.join('–');
+}
+
 // ─── Streak display helper ────────────────────────────────────────────────────
-function StreakBadge({ val }) {
-  if (!val) return <span className="sc-streak sc-streak-none">–</span>;
-  const isWin = val > 0;
-  const n = Math.abs(val);
+const STREAK_CLS = { W: 'sc-streak-w', L: 'sc-streak-l', OTL: 'sc-streak-otl', T: 'sc-streak-t' };
+
+function StreakBadge({ streak }) {
+  if (!streak || !streak.count) return <span className="sc-streak sc-streak-none">–</span>;
   return (
-    <span className={`sc-streak ${isWin ? 'sc-streak-w' : 'sc-streak-l'}`}>
-      {isWin ? 'W' : 'L'}
-      {n}
+    <span className={`sc-streak ${STREAK_CLS[streak.type] || 'sc-streak-none'}`}>
+      {streak.type}
+      {streak.count}
     </span>
   );
 }
@@ -200,12 +222,16 @@ function ScoreCard({ game, index }) {
       if (!fetchedRef.current) {
         fetchedRef.current = true;
         setH2hLoad(true);
-        const result = await fetchH2H(
-          game.away,
-          game.home,
-          game.lg,
-          !!game._isPlayoff
-        );
+        const cutoffId = game._isPlayoff
+        ? game._rawId ?? null
+        : game.id ?? null;
+      const result = await fetchH2H(
+        game.away,
+        game.home,
+        game.lg,
+        !!game._isPlayoff,
+        cutoffId
+      );
         setH2h(result);
         setH2hLoad(false);
       }
@@ -284,24 +310,41 @@ function ScoreCard({ game, index }) {
           </span>
         </div>
 
-        <div className="sc-div-line" />
+        {/* Replace the sc-div-line div with this */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <div className="sc-div-line" style={{ flex: 1 }} />
+              <span style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.4rem',
+                color: game._isPlayoff  ? 'rgba(255,215,0,.8)'  : 'rgba(255,255,255,.75)',
+                letterSpacing: 1,
+                flexShrink: 0,
+                lineHeight: 1,
+              }}>
+                {game._isPlayoff
+                  ? `G${game.game_number ?? '?'}`
+                  : `G${game._meetingNumber ?? '?'}`
+                }
+              </span>
+              <div className="sc-div-line" style={{ flex: 1 }} />
+            </div>
 
-        <div className="sc-team-row">
-          <img
-            src={`/assets/teamLogos/${game.home}.png`}
-            alt={game.home}
-            className="sc-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="sc-logo-fb">{(game.home || '').slice(0, 3)}</div>
-          <span className={`sc-score ${homeWin ? 'sc-win' : ''}`}>
-            {game.score_home ?? '–'}
-          </span>
+          <div className="sc-team-row">
+            <img
+              src={`/assets/teamLogos/${game.home}.png`}
+              alt={game.home}
+              className="sc-logo"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling.style.display = 'flex';
+              }}
+            />
+            <div className="sc-logo-fb">{(game.home || '').slice(0, 3)}</div>
+            <span className={`sc-score ${homeWin ? 'sc-win' : ''}`}>
+              {game.score_home ?? '–'}
+            </span>
+          </div>
         </div>
-      </div>
 
       {/* ── BACK ── */}
       <div className="sc-card sc-back">
@@ -313,8 +356,8 @@ function ScoreCard({ game, index }) {
           </div>
         ) : h2h ? (
           <>
-            {/* Away team row */}
-            <div className="sc-h2h-team-row">
+              {/* Away team row */}
+              <div className="sc-h2h-team-row">
               <img
                 src={`/assets/teamLogos/${game.away}.png`}
                 alt={game.away}
@@ -323,10 +366,10 @@ function ScoreCard({ game, index }) {
                   e.currentTarget.style.display = 'none';
                 }}
               />
-              <span className="sc-h2h-record">
-                {h2h.winsA}–{h2h.winsB}
-              </span>
-              <StreakBadge val={h2h.streakA} />
+              <div className="sc-h2h-stack">
+                <span className="sc-h2h-record">{fmtRecord(h2h.recA)}</span>
+                <StreakBadge streak={h2h.streakA} />
+              </div>
             </div>
 
             {/* VS divider with game count */}
@@ -338,7 +381,7 @@ function ScoreCard({ game, index }) {
                   game._isPlayoff
                     ? {
                         color: '#FFD700',
-                        textShadow: '0 0 8px rgba(255,215,0,.6)',
+                        textShadow: '0 0 8px rgba(255,215,0,.6)', 
                       }
                     : {}
                 }
@@ -358,28 +401,10 @@ function ScoreCard({ game, index }) {
                   e.currentTarget.style.display = 'none';
                 }}
               />
-              <span className="sc-h2h-record">
-                {h2h.winsB}–{h2h.winsA}
-              </span>
-              <StreakBadge val={h2h.streakB} />
-            </div>
-
-            {/* Mini dot history — away team perspective */}
-            <div className="sc-dots-row">
-              {h2h.games.slice(0, 10).map((g, i) => {
-                const aIsHome = g.home === game.away;
-                const r = (
-                  (aIsHome ? g.result_home : g.result_away) || ''
-                ).toUpperCase();
-                const win = r === 'W' || r === 'OTW';
-                return (
-                  <span
-                    key={i}
-                    className={`sc-mini-dot ${win ? 'sc-md-w' : 'sc-md-l'}`}
-                    title={win ? 'W' : 'L'}
-                  />
-                );
-              })}
+             <div className="sc-h2h-stack">
+               <span className="sc-h2h-record">{fmtRecord(h2h.recB)}</span>
+               <StreakBadge streak={h2h.streakB} />
+             </div>
             </div>
           </>
         ) : (
@@ -435,8 +460,9 @@ export default function ScoresBar() {
 
       console.log('[ScoresBar] latest season:', latest.lg, latest.status);
 
-      // 3️⃣ Fetch season games and playoff games in parallel
-      const [{ data: seasonData }, { data: playoffData }] = await Promise.all([
+            // 3️⃣ Fetch season games and playoff games in parallel, plus a lightweight
+      // full-season id/home/away list used only to compute each pair's meeting number.
+      const [{ data: seasonData }, { data: playoffData }, { data: allSeasonPairs }] = await Promise.all([
         supabase
           .from('games')
           .select(
@@ -455,7 +481,23 @@ export default function ScoresBar() {
           .not('team_a_score', 'is', null)
           .order('id', { ascending: false })
           .limit(8),
+        supabase
+          .from('games')
+          .select('id, home, away')
+          .eq('lg', latest.lg)
+          .not('score_home', 'is', null)
+          .order('id', { ascending: true }),
       ]);
+
+      // Build id -> meeting number map: for each unordered team pair, count which
+      // numbered meeting (1st, 2nd, ...) this game was, in chronological order.
+      const meetingNumberById = {};
+      const pairCounts = {};
+      (allSeasonPairs || []).forEach((g) => {
+        const key = [g.home, g.away].sort().join('::');
+        pairCounts[key] = (pairCounts[key] || 0) + 1;
+        meetingNumberById[g.id] = pairCounts[key];
+      });
 
       // 4️⃣ Normalize playoff rows
       const playoffRows = (playoffData || []).map((g) => ({
@@ -469,14 +511,21 @@ export default function ScoresBar() {
         result_home: g.team_a_score > g.team_b_score ? 'W' : 'L',
         result_away: g.team_b_score > g.team_a_score ? 'W' : 'L',
         _isPlayoff: true,
+        _rawId: g.id,
         round: g.round,
         game_number: g.game_number,
       }));
 
-      // 5️⃣ Merge, sort, slice 8
-      const all = [...playoffRows, ...(seasonData || [])]
-        .sort((a, b) => (b.legacy_game_id || 0) - (a.legacy_game_id || 0))
-        .slice(0, 8);
+            // Attach meeting number to season games before merging
+            const seasonRowsWithMeeting = (seasonData || []).map((g) => ({
+              ...g,
+              _meetingNumber: meetingNumberById[g.id] ?? null,
+            }));
+      
+            // 5️⃣ Merge, sort, slice 8
+            const all = [...playoffRows, ...seasonRowsWithMeeting]
+              .sort((a, b) => (b.legacy_game_id || 0) - (a.legacy_game_id || 0))
+              .slice(0, 8);
 
       setGames(all);
       setLoading(false);
@@ -490,9 +539,14 @@ export default function ScoresBar() {
       <div className="sb-root" style={{ '--sb': color }}>
         {/* Scrollable cards area */}
         <div className="sb-track-wrap">
-          <div className="sb-cards">
+        <div className="sb-cards">
             {slots.map((g, i) => (
-              <ScoreCard key={i} game={loading ? null : g} index={i} />
+              <ScoreCard
+                key={i}
+                game={loading ? null : g}
+                index={i}
+                totalGames={slots.filter(Boolean).length}
+              />
             ))}
           </div>
           {/* Edge fade masks */}
@@ -547,7 +601,7 @@ export default function ScoresBar() {
         /* ── CARD FLIP WRAPPER ── */
         .sc-wrap {
           flex-shrink: 0;
-          width: 112px;
+          width: 124px;
           height: 74px;
           perspective: 800px;
           scroll-snap-align: start;
@@ -591,7 +645,7 @@ export default function ScoresBar() {
           border: 1px solid color-mix(in srgb, var(--sb) 40%, transparent);
           box-shadow: inset 0 0 16px color-mix(in srgb, var(--sb) 6%, transparent);
           transform: rotateY(180deg);
-          padding: .32rem .42rem;
+          padding: .28rem .34rem;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -638,13 +692,17 @@ export default function ScoresBar() {
 
         /* Divider between teams */
         .sc-div-line {
-          height: 1.5px;
-          margin: .1rem 0;
+          height: 2px;
+          font-size: 1rem;
+          font-weight: 700;
+          margin: .15rem 0;
+        
           background: linear-gradient(90deg,
-            rgba(255,255,255,.22) 0%,
-            rgba(255,255,255,.07) 65%,
+            rgba(255,255,255,.45) 0%,
+            rgba(255,255,255,.18) 65%,
             transparent 100%);
-          border-radius: 1px;
+        
+          border-radius: 2px;
         }
 
         /* OT badge — floats above the card top edge, clears scores entirely */
@@ -679,29 +737,41 @@ export default function ScoresBar() {
           width: 100%;
         }
         .sc-h2h-logo {
-          width: 24px; height: 24px;
+          width: 21px; height: 21px;
           object-fit: contain; flex-shrink: 0;
           filter: drop-shadow(0 0 3px rgba(255,255,255,.15));
         }
+        /* Record + streak side by side — room freed up once the dots row was removed */
+        .sc-h2h-stack {
+          display: flex;
+          flex-direction: row;
+          align-items: center;
+          justify-content: space-between;
+          gap: .2rem;
+          flex: 1;
+          min-width: 0;
+          overflow: visible;
+          padding-right: 1px;
+        }
         .sc-h2h-record {
           font-family: 'VT323', monospace;
-          font-size: 1.55rem;
+          font-size: 1.25rem;  /* down from 1.4 */
           color: rgba(255,255,255,.85);
           line-height: 1;
-          flex: 1;
           white-space: nowrap;
-          letter-spacing: .5px;
+          letter-spacing: 0;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
-
-        /* Streak badge — big and readable */
         .sc-streak {
           font-family: 'Press Start 2P', monospace;
-          font-size: .52rem;
-          padding: .1rem .28rem;
+          font-size: .4rem;   /* down from .46 */
+          padding: .1rem .2rem;
           border-radius: 3px;
           line-height: 1;
           white-space: nowrap;
-          flex-shrink: 0;
+          flex-shrink: 0;      /* never let it squish */
         }
         .sc-streak-w {
           color: #00CC55;
@@ -714,6 +784,18 @@ export default function ScoresBar() {
           background: rgba(107,159,255,.12);
           border: 1px solid rgba(107,159,255,.38);
           text-shadow: 0 0 8px rgba(107,159,255,.45);
+        }
+        .sc-streak-otl {
+          color: #FFA500;
+          background: rgba(255,165,0,.12);
+          border: 1px solid rgba(255,165,0,.38);
+          text-shadow: 0 0 8px rgba(255,165,0,.45);
+        }
+        .sc-streak-t {
+          color: #87CEEB;
+          background: rgba(135,206,235,.12);
+          border: 1px solid rgba(135,206,235,.38);
+          text-shadow: 0 0 8px rgba(135,206,235,.45);
         }
         .sc-streak-none {
           color: rgba(255,255,255,.2);
@@ -730,10 +812,10 @@ export default function ScoresBar() {
         }
         .sc-h2h-vs {
           font-family: 'Press Start 2P', monospace;
-          font-size: .26rem;
+          font-size: .4rem;
           letter-spacing: 1px;
           white-space: nowrap;
-          color: rgba(255,255,255,.2);
+          color: rgba(255,255,255,.75);
         }
 
         /* Mini dot history row */
@@ -744,8 +826,10 @@ export default function ScoresBar() {
         .sc-mini-dot {
           width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0;
         }
-        .sc-md-w { background: #00CC55; box-shadow: 0 0 3px rgba(0,204,85,.5); }
-        .sc-md-l { background: #4477CC; box-shadow: 0 0 3px rgba(68,119,204,.4); }
+        .sc-md-w   { background: #00CC55; box-shadow: 0 0 3px rgba(0,204,85,.5); }
+        .sc-md-l   { background: #4477CC; box-shadow: 0 0 3px rgba(68,119,204,.4); }
+        .sc-md-otl { background: #FFA500; box-shadow: 0 0 3px rgba(255,165,0,.45); }
+        .sc-md-t   { background: #87CEEB; box-shadow: 0 0 3px rgba(135,206,235,.4); }
 
         /* Game stats link */
         .sc-stats-link {
@@ -791,12 +875,76 @@ export default function ScoresBar() {
 
         /* ── Responsive ── */
         @media (max-width: 600px) {
-          .sb-root { min-height: 64px; }
-          .sc-wrap { width: 94px; height: 62px; }
-          .sc-logo, .sc-h2h-logo { width: 22px; height: 22px; }
-          .sc-score { font-size: 1.45rem; }
-          .sc-streak { font-size: .44rem; }
-          .sc-h2h-record { font-size: 1.3rem; }
+          .sb-root {
+            min-height: 64px;
+          }
+        
+          .sc-wrap {
+            width: 104px;
+            height: 62px;
+          }
+        
+          /* ── FRONT ── */
+          .sc-front {
+            padding: .25rem .4rem .2rem;
+          }
+        
+          .sc-team-row {
+            gap: .25rem;
+          }
+        
+          .sc-logo {
+            width: 21px;
+            height: 21px;
+          }
+        
+          .sc-div-line {
+            margin: .08rem 0;
+          }
+        
+          .sc-score {
+            font-size: 1.4rem;
+          }
+        
+          /* ── BACK ── */
+          .sc-back {
+            padding: .28rem .2rem;
+          }
+        
+          .sc-h2h-logo {
+            width: 18px;
+            height: 18px;
+          }
+        
+          .sc-h2h-team-row {
+            width: 100%;
+            min-width: 0;
+            justify-content: flex-start;
+            gap: .3rem;
+          }
+        
+          .sc-h2h-stack {
+            flex: 0 1 auto;
+            min-width: 0;
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 0;
+            overflow: visible;
+            padding-right: 0;
+          }
+        
+          .sc-h2h-record {
+            font-size: 1.15rem;
+            margin-left: .15rem;
+            white-space: nowrap;
+            overflow: visible;
+          }
+        
+          /* Hide streak pill on mobile */
+          .sc-streak {
+            display: none;
+          }
         }
       `}</style>
     </>

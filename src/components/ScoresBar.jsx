@@ -6,6 +6,7 @@
 // • Back face: H2H record large, streaks large, logos only (no codes), stats link
 // • DefendingChampion banner embedded on the far right
 // ─────────────────────────────────────────────────────────────────────────────
+import { createPortal } from 'react-dom';
 import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { useLeague } from './LeagueContext';
@@ -207,31 +208,55 @@ function StreakBadge({ streak }) {
 }
 
 // ─── Individual card ──────────────────────────────────────────────────────────
-function ScoreCard({ game, index }) {
-  const [flipped, setFlipped] = useState(false);
+function ScoreCard({ game, index, flippedCard, setFlippedCard }) {
+  const cardRef = useRef(null);
   const [h2h, setH2h] = useState(null);
   const [h2hLoad, setH2hLoad] = useState(false);
+  const [desktopHover, setDesktopHover] = useState(false);
+  const [hoverPos, setHoverPos] = useState(null);
   const fetchedRef = useRef(false);
   const hoverTimerRef = useRef(null);
+
+  const flipped = flippedCard === index;
+
+  const updateHoverPosition = () => {
+    if (!cardRef.current) return;
+
+    const rect = cardRef.current.getBoundingClientRect();
+
+    setHoverPos({
+      left: rect.left + rect.width / 2,
+      top: rect.bottom + 6,
+    });
+  };
 
   // Hover handlers — 150 ms delay prevents accidental flips
   const handleMouseEnter = () => {
     if (!game) return;
+
     hoverTimerRef.current = setTimeout(async () => {
-      setFlipped(true);
+      // Mobile: retain the existing flip behavior.
+      if (window.innerWidth > 600) {
+        updateHoverPosition();
+        setDesktopHover(true);
+      }
+
       if (!fetchedRef.current) {
         fetchedRef.current = true;
         setH2hLoad(true);
+
         const cutoffId = game._isPlayoff
-        ? game._rawId ?? null
-        : game.id ?? null;
-      const result = await fetchH2H(
-        game.away,
-        game.home,
-        game.lg,
-        !!game._isPlayoff,
-        cutoffId
-      );
+          ? game._rawId ?? null
+          : game.id ?? null;
+
+        const result = await fetchH2H(
+          game.away,
+          game.home,
+          game.lg,
+          !!game._isPlayoff,
+          cutoffId
+        );
+
         setH2h(result);
         setH2hLoad(false);
       }
@@ -240,7 +265,16 @@ function ScoreCard({ game, index }) {
 
   const handleMouseLeave = () => {
     clearTimeout(hoverTimerRef.current);
-    setFlipped(false);
+
+    if (window.innerWidth > 600) {
+      setDesktopHover(false);
+    }
+  };
+
+  const handleClick = () => {
+    if (window.innerWidth <= 600) {
+      setFlippedCard(flipped ? null : index);
+    }
   };
 
   // Cleanup on unmount
@@ -271,63 +305,160 @@ function ScoreCard({ game, index }) {
     Number(game.ot) === 1 ||
     (game.result_home || '').toUpperCase().includes('OT') ||
     (game.result_away || '').toUpperCase().includes('OT');
+
   const homeWin = Number(game.score_home) > Number(game.score_away);
   const awayWin = Number(game.score_away) > Number(game.score_home);
 
-  return (
-    <div
-      className={`sc-wrap ${flipped ? 'sc-flipped' : ''}`}
-      style={{ animationDelay: `${index * 0.04}s` }}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      {/* ── FRONT ── */}
-      <div className="sc-card sc-front">
-        {/* OT badge — top-right, clear of logos */}
-        {game._isPlayoff && (
-          <span
-            className="sc-ot"
-            style={{ color: '#FFD700', borderColor: 'rgba(255,215,0,.55)' }}
-          >
-            PO
-          </span>
-        )}
-        {!game._isPlayoff && isOT && <span className="sc-ot">OT</span>}
-
-        <div className="sc-team-row">
-          <img
-            src={`/assets/teamLogos/${game.away}.png`}
-            alt={game.away}
-            className="sc-logo"
-            onError={(e) => {
-              e.currentTarget.style.display = 'none';
-              e.currentTarget.nextElementSibling.style.display = 'flex';
-            }}
-          />
-          <div className="sc-logo-fb">{(game.away || '').slice(0, 3)}</div>
-          <span className={`sc-score ${awayWin ? 'sc-win' : ''}`}>
-            {game.score_away ?? '–'}
-          </span>
+  // Shared H2H content used by both mobile flip and desktop portal
+  const h2hContent = (
+    <>
+      {h2hLoad ? (
+        <div className="sc-back-loading">
+          <span className="sc-bl" />
+          <span className="sc-bl" />
+          <span className="sc-bl" />
         </div>
+      ) : h2h ? (
+        <>
+          {/* Away team row */}
+          <div className="sc-h2h-team-row">
+            <img
+              src={`/assets/teamLogos/${game.away}.png`}
+              alt={game.away}
+              className="sc-h2h-logo"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <div className="sc-h2h-stack">
+              <span className="sc-h2h-record">
+                {fmtRecord(h2h.recA)}
+              </span>
+              <StreakBadge streak={h2h.streakA} />
+            </div>
+          </div>
 
-        {/* Replace the sc-div-line div with this */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div className="sc-div-line" style={{ flex: 1 }} />
-              <span style={{
+          {/* VS divider with game count */}
+          <div className="sc-h2h-vs-row">
+            <div className="sc-h2h-line" />
+            <span
+              className="sc-h2h-vs"
+              style={
+                game._isPlayoff
+                  ? {
+                      color: '#FFD700',
+                      textShadow: '0 0 8px rgba(255,215,0,.6)',
+                    }
+                  : {}
+              }
+            >
+              {game._isPlayoff ? 'L10-PO' : `L${h2h.total}`}
+            </span>
+            <div className="sc-h2h-line" />
+          </div>
+
+          {/* Home team row */}
+          <div className="sc-h2h-team-row">
+            <img
+              src={`/assets/teamLogos/${game.home}.png`}
+              alt={game.home}
+              className="sc-h2h-logo"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+              }}
+            />
+            <div className="sc-h2h-stack">
+              <span className="sc-h2h-record">
+                {fmtRecord(h2h.recB)}
+              </span>
+              <StreakBadge streak={h2h.streakB} />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className="sc-no-h2h">NO HISTORY</div>
+      )}
+    </>
+  );
+
+  return (
+    <>
+      <div
+        ref={cardRef}
+        className={`sc-wrap ${flipped ? 'sc-flipped' : ''}`}
+        style={{ animationDelay: `${index * 0.04}s` }}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+      >
+        {/* ── FRONT ── */}
+        <div className="sc-card sc-front">
+          {/* OT badge — top-right, clear of logos */}
+          {game._isPlayoff && (
+            <span
+              className="sc-ot"
+              style={{
+                color: '#FFD700',
+                borderColor: 'rgba(255,215,0,.55)',
+              }}
+            >
+              PO
+            </span>
+          )}
+
+          {!game._isPlayoff && isOT && (
+            <span className="sc-ot">OT</span>
+          )}
+
+          <div className="sc-team-row">
+            <img
+              src={`/assets/teamLogos/${game.away}.png`}
+              alt={game.away}
+              className="sc-logo"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling.style.display = 'flex';
+              }}
+            />
+
+            <div className="sc-logo-fb">
+              {(game.away || '').slice(0, 3)}
+            </div>
+
+            <span className={`sc-score ${awayWin ? 'sc-win' : ''}`}>
+              {game.score_away ?? '–'}
+            </span>
+          </div>
+
+          {/* Game number divider */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+            }}
+          >
+            <div className="sc-div-line" style={{ flex: 1 }} />
+
+            <span
+              style={{
                 fontFamily: "'Press Start 2P', monospace",
                 fontSize: '.4rem',
-                color: game._isPlayoff  ? 'rgba(255,215,0,.8)'  : 'rgba(255,255,255,.75)',
+                color: game._isPlayoff
+                  ? 'rgba(255,215,0,.8)'
+                  : 'rgba(255,255,255,.75)',
                 letterSpacing: 1,
                 flexShrink: 0,
                 lineHeight: 1,
-              }}>
-                {game._isPlayoff
-                  ? `G${game.game_number ?? '?'}`
-                  : `G${game._meetingNumber ?? '?'}`
-                }
-              </span>
-              <div className="sc-div-line" style={{ flex: 1 }} />
-            </div>
+              }}
+            >
+              {game._isPlayoff
+                ? `G${game.game_number ?? '?'}`
+                : `G${game._meetingNumber ?? '?'}`}
+            </span>
+
+            <div className="sc-div-line" style={{ flex: 1 }} />
+          </div>
 
           <div className="sc-team-row">
             <img
@@ -339,79 +470,39 @@ function ScoreCard({ game, index }) {
                 e.currentTarget.nextElementSibling.style.display = 'flex';
               }}
             />
-            <div className="sc-logo-fb">{(game.home || '').slice(0, 3)}</div>
+
+            <div className="sc-logo-fb">
+              {(game.home || '').slice(0, 3)}
+            </div>
+
             <span className={`sc-score ${homeWin ? 'sc-win' : ''}`}>
               {game.score_home ?? '–'}
             </span>
           </div>
         </div>
 
-      {/* ── BACK ── */}
-      <div className="sc-card sc-back">
-        {h2hLoad ? (
-          <div className="sc-back-loading">
-            <span className="sc-bl" />
-            <span className="sc-bl" />
-            <span className="sc-bl" />
-          </div>
-        ) : h2h ? (
-          <>
-              {/* Away team row */}
-              <div className="sc-h2h-team-row">
-              <img
-                src={`/assets/teamLogos/${game.away}.png`}
-                alt={game.away}
-                className="sc-h2h-logo"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-              <div className="sc-h2h-stack">
-                <span className="sc-h2h-record">{fmtRecord(h2h.recA)}</span>
-                <StreakBadge streak={h2h.streakA} />
-              </div>
-            </div>
-
-            {/* VS divider with game count */}
-            <div className="sc-h2h-vs-row">
-              <div className="sc-h2h-line" />
-              <span
-                className="sc-h2h-vs"
-                style={
-                  game._isPlayoff
-                    ? {
-                        color: '#FFD700',
-                        textShadow: '0 0 8px rgba(255,215,0,.6)', 
-                      }
-                    : {}
-                }
-              >
-                {game._isPlayoff ? 'L10-PO' : `L${h2h.total}`}
-              </span>
-              <div className="sc-h2h-line" />
-            </div>
-
-            {/* Home team row */}
-            <div className="sc-h2h-team-row">
-              <img
-                src={`/assets/teamLogos/${game.home}.png`}
-                alt={game.home}
-                className="sc-h2h-logo"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
-             <div className="sc-h2h-stack">
-               <span className="sc-h2h-record">{fmtRecord(h2h.recB)}</span>
-               <StreakBadge streak={h2h.streakB} />
-             </div>
-            </div>
-          </>
-        ) : (
-          <div className="sc-no-h2h">NO HISTORY</div>
-        )}
+        {/* ── BACK — MOBILE FLIP ── */}
+        <div className="sc-card sc-back">
+          {h2hContent}
+        </div>
       </div>
-    </div>
+
+      {/* ── DESKTOP H2H PORTAL ── */}
+      {desktopHover &&
+        hoverPos &&
+        createPortal(
+          <div
+            className="sc-desktop-h2h"
+            style={{
+              left: `${hoverPos.left}px`,
+              top: `${hoverPos.top}px`,
+            }}
+          >
+            {h2hContent}
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 
@@ -420,6 +511,7 @@ export default function ScoresBar() {
   const { selectedLeague } = useLeague();
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [flippedCard, setFlippedCard] = useState(null);
 
   const color = LEAGUE_CFG[selectedLeague]?.color ?? '#aaa';
 
@@ -542,11 +634,13 @@ export default function ScoresBar() {
         <div className="sb-cards">
             {slots.map((g, i) => (
               <ScoreCard
-                key={i}
-                game={loading ? null : g}
-                index={i}
-                totalGames={slots.filter(Boolean).length}
-              />
+              key={i}
+              game={loading ? null : g}
+              index={i}
+              flippedCard={flippedCard}
+              setFlippedCard={setFlippedCard}
+              totalGames={slots.filter(Boolean).length}
+            />
             ))}
           </div>
           {/* Edge fade masks */}
@@ -576,7 +670,7 @@ export default function ScoresBar() {
         .sb-track-wrap {
           flex: 1;
           position: relative;
-          overflow: hidden;
+          overflow: visible;
           min-width: 0;
         }
         .sb-fade-left, .sb-fade-right {
@@ -590,6 +684,7 @@ export default function ScoresBar() {
           display: flex;
           gap: .55rem;
           overflow-x: auto;
+          overflow-y: visible;
           padding: .45rem .6rem;
           scrollbar-width: none;
           scroll-snap-type: x mandatory;
@@ -601,7 +696,7 @@ export default function ScoresBar() {
         /* ── CARD FLIP WRAPPER ── */
         .sc-wrap {
           flex-shrink: 0;
-          width: 124px;
+          width: 135px;
           height: 74px;
           perspective: 800px;
           scroll-snap-align: start;
@@ -653,10 +748,68 @@ export default function ScoresBar() {
           gap: .12rem;
         }
 
-        /* Flip active */
-        .sc-wrap.sc-flipped .sc-front { transform: rotateY(-180deg); }
-        .sc-wrap.sc-flipped .sc-back  { transform: rotateY(0deg); }
+        /* ── DESKTOP H2H HOVER PANEL ───────────────────────────────────────────── */
+        @media (min-width: 601px) {
+          .sc-wrap:hover {
+            z-index: 100;
+          }
 
+          .sc-desktop-h2h {
+            position: fixed;
+            width: 250px;
+            height: 135px;
+            box-sizing: border-box;
+
+            transform: translateX(-50%);
+
+            background: linear-gradient(160deg, #0c0c22 0%, #060610 100%);
+            border: 1px solid color-mix(in srgb, var(--sb) 55%, transparent);
+
+            box-shadow:
+              0 10px 28px rgba(0,0,0,.8),
+              inset 0 0 18px color-mix(in srgb, var(--sb) 8%, transparent);
+
+            padding: .45rem .55rem;
+
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            gap: .2rem;
+
+            z-index: 999999;
+            pointer-events: none;
+          }
+
+          /* Desktop-only sizing */
+          .sc-desktop-h2h .sc-h2h-logo {
+            width: 38px;
+            height: 38px;
+          }
+
+          .sc-desktop-h2h .sc-h2h-record {
+            font-size: 1.35rem;
+          }
+
+          .sc-desktop-h2h .sc-streak {
+            font-size: .46rem;
+            padding: .12rem .25rem;
+          }
+
+          .sc-desktop-h2h .sc-h2h-team-row {
+            gap: .45rem;
+          }
+
+          .sc-desktop-h2h .sc-h2h-vs-row {
+            width: 100%;
+            gap: .4rem;
+          }
+
+          .sc-desktop-h2h .sc-h2h-vs {
+            font-size: .48rem;
+          }
+        }
+        
         /* ── Front: team rows ── */
         .sc-team-row {
           display: flex;
@@ -871,6 +1024,14 @@ export default function ScoresBar() {
           font-family: 'Press Start 2P', monospace;
           font-size: .3rem; color: rgba(255,255,255,.2);
           letter-spacing: 1px; padding: .4rem 0;
+        }
+
+        .sc-wrap.sc-flipped .sc-front {
+          transform: rotateY(-180deg);
+        }
+        
+        .sc-wrap.sc-flipped .sc-back {
+          transform: rotateY(0deg);
         }
 
         /* ── Responsive ── */

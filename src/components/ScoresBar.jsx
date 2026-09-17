@@ -1080,7 +1080,7 @@ export default function ScoresBar() {
           }
 
           .sb-track-wrap {
-            padding-left: 4px;
+            padding-left: 7px;
           }
         
           .sc-wrap {

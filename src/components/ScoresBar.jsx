@@ -764,87 +764,94 @@ export default function ScoresBar() {
 
         /* ── DESKTOP H2H HOVER PANEL ───────────────────────────────────────────── */
         @media (min-width: 601px) {
-          
+
           .sc-wrap:hover {
             z-index: 100;
           }
-
+        
           .sc-desktop-h2h {
             position: fixed;
             width: 250px;
             height: 135px;
             box-sizing: border-box;
-
+        
             transform: translateX(-50%);
-
+        
             background: linear-gradient(160deg, #0c0c22 0%, #060610 100%);
             border: 1px solid color-mix(in srgb, var(--sb) 55%, transparent);
-
+        
             box-shadow:
               0 10px 28px rgba(0,0,0,.8),
               inset 0 0 18px color-mix(in srgb, var(--sb) 8%, transparent);
-
+        
             padding: .45rem .55rem;
-
+        
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: space-between;
             gap: .2rem;
-
+        
             z-index: 999999;
             pointer-events: none;
           }
-
+        
+          /* Divider */
           .sc-desktop-h2h .sc-h2h-vs-row {
             display: flex;
             align-items: center;
             width: 100%;
-            gap: 8px;
+            gap: .4rem;
           }
-          
+        
           .sc-desktop-h2h .sc-h2h-line {
-            display: block;
-            width: auto;
-            min-width: 40px;
+            flex: 1 1 auto;
+            min-width: 0;
             height: 1px;
-            flex: 1 1 40px;
             background: rgba(255,255,255,.35);
             opacity: 1;
           }
-          
+        
           .sc-desktop-h2h .sc-h2h-vs {
             flex: 0 0 auto;
             font-size: .48rem;
             white-space: nowrap;
           }
-
-          /* Desktop-only sizing */
+        
+          /* Team rows */
+          .sc-desktop-h2h .sc-h2h-team-row {
+            position: relative;
+            width: 100%;
+            height: 38px;
+            display: flex;
+            align-items: center;
+          }
+          
           .sc-desktop-h2h .sc-h2h-logo {
             width: 38px;
             height: 38px;
+            flex-shrink: 0;
           }
-
+          
+          .sc-desktop-h2h .sc-h2h-stack {
+            flex: 1;
+            height: 100%;
+            position: static;
+          }
+          
           .sc-desktop-h2h .sc-h2h-record {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
             font-size: 1.35rem;
+            white-space: nowrap;
           }
-
+          
           .sc-desktop-h2h .sc-streak {
+            position: absolute;
+            right: 0;
             font-size: .46rem;
             padding: .12rem .25rem;
-          }
-
-          .sc-desktop-h2h .sc-h2h-team-row {
-            gap: .45rem;
-          }
-
-          .sc-desktop-h2h .sc-h2h-vs-row {
-            width: 100%;
-            gap: .4rem;
-          }
-
-          .sc-desktop-h2h .sc-h2h-vs {
-            font-size: .48rem;
           }
         }
         

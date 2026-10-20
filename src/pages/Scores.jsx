@@ -6,6 +6,43 @@ import GameOverviewModal from '../components/GameOverviewModal';
 
 const TYPE_TAG    = { PP: 'PP', SH: 'SH', EN: 'EN', PS: 'PS' };
 
+// Date-only strings ("2026-09-01") parse as UTC and can slip back a day locally,
+// so build those in local time. Full timestamps parse normally.
+function parseDate(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+
+  // Date-only ("2026-06-28", playoff_games) — build in local time so it can't slip a day
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+
+  // Postgres timestamptz ("2026-10-20 03:08:39.410747+00") — normalize to valid ISO
+  const iso = s
+    .replace(' ', 'T')
+    .replace(/(\.\d{3})\d+/, '$1')
+    .replace(/([+-]\d{2})$/, '$1:00');
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Works whether or not the played_at mapping is present on the row
+const playedAt = (g) => g?.played_at ?? g?.updated_at ?? g?.game_date ?? null;
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function DayDivider({ date }) {
+  const label = date
+    ? `${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}/${date.getFullYear()}`
+    : 'DATE UNKNOWN';
+  return (
+    <div className="sp-day">
+      <span className="sp-day-line" />
+      <span className="sp-day-txt">{label}</span>
+      <span className="sp-day-line" />
+    </div>
+  );
+}
+
 // ─── Shared logo component ────────────────────────────────────────────────────
 const Logo = ({ team, size = 32 }) => (
   <img
@@ -158,7 +195,7 @@ export default function Scores() {
       if (mode === 'Playoffs') {
         const q = supabase
           .from('playoff_games')
-          .select('id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score')
+          .select('id,lg,round,series_number,game_number,team_code_a,team_code_b,seed_a,seed_b,team_a_score,team_b_score,game_date')
           .eq('lg', season)
           .not('team_a_score', 'is', null)
           .order('round', { ascending: !isAll })
@@ -175,12 +212,12 @@ export default function Scores() {
           home: g.team_code_a, away: g.team_code_b,
           score_home: g.team_a_score, score_away: g.team_b_score,
           ot: 0, round: g.round, series_number: g.series_number,
-          game_number: g.game_number, isPlayoff: true,
+          game_number: g.game_number, isPlayoff: true, played_at: g.game_date,
         }));
       } else {
         const q = supabase
           .from('games')
-          .select('id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot')
+          .select('id,lg,legacy_game_id,mode,home,away,score_home,score_away,ot,updated_at')
           .eq('lg', season)
           .or('mode.eq.Season,mode.eq.season')
           .not('score_home', 'is', null)
@@ -191,7 +228,7 @@ export default function Scores() {
   
         const res = await q;
         error = res.error;
-        data = res.data;
+        data = (res.data || []).map(g => ({ ...g, played_at: g.updated_at }));
       }
   
       if (error) console.error(error);
@@ -240,6 +277,8 @@ export default function Scores() {
     return acc;
   }, { w: 0, l: 0, otl: 0, t: 0 });
 
+  //debug
+  console.log(games[0])
   return (
     <div className="sp">
       <style>{`
@@ -302,6 +341,15 @@ export default function Scores() {
 
         /* ── GAME LIST ──────────────────────────────────────────────────── */
         .sp-list { max-width:1160px; margin:0 auto; display:flex; flex-direction:column; gap:.55rem; }
+
+        /* Day divider */
+        .sp-day { display:flex; align-items:center; gap:.8rem; margin:.7rem 0 .1rem; }
+        .sp-day:first-child { margin-top:0; }
+        .sp-day-line { flex:1; height:1px; background:linear-gradient(90deg,transparent,rgba(255,140,0,.35),transparent); }
+        .sp-day-txt {
+          font-family:'Press Start 2P',monospace; font-size:.52rem; letter-spacing:2px;
+          color:#FF8C00; text-shadow:0 0 8px rgba(255,140,0,.4); white-space:nowrap;
+        }
 
         /* ════════════════════════════════════════════════════════════════════
            GAME CARD
@@ -433,6 +481,10 @@ export default function Scores() {
         
           /* Badge (W/L) — keep it */
           .gc-badge { font-size:.48rem; padding:.28rem .35rem; }
+
+          /* Day divider */
+          .sp-day { gap:.5rem; }
+          .sp-day-txt { font-size:.42rem; letter-spacing:1px; }
         }
       `}</style>
 
@@ -481,18 +533,27 @@ export default function Scores() {
       ) : games.length === 0 ? (
         <div className="sp-empty-page">NO GAMES FOUND</div>
       ) : (
-        <div className="sp-list">
-          {games.map((g, i) => (
-            <GameCard
-              key={g.id}
-              game={g}
-              selectedTeam={team}
-              index={i}
-              onOpenModal={setModalGame}
-              streak={team === '__all__' ? null : streaks[i]}
-              isAll={team === '__all__'}
-            />
-          ))}
+                <div className="sp-list">
+          {games.map((g, i) => {
+            const d = parseDate(playedAt(g));
+            const key = d ? d.toDateString() : 'unknown';
+            const prev = i > 0 ? parseDate(playedAt(games[i - 1])) : null;
+            const prevKey = prev ? prev.toDateString() : 'unknown';
+            const showDay = i === 0 || key !== prevKey;
+            return (
+              <React.Fragment key={g.id}>
+                {showDay && <DayDivider date={d} />}
+                <GameCard
+                  game={g}
+                  selectedTeam={team}
+                  index={i}
+                  onOpenModal={setModalGame}
+                  streak={team === '__all__' ? null : streaks[i]}
+                  isAll={team === '__all__'}
+                />
+              </React.Fragment>
+            );
+          })}
         </div>
       )}
 

@@ -110,10 +110,17 @@ const HOLIDAYS = [
     accent: '#00A651',
   },
   {
-    id: 'boxingday', tier: 'minor',
+    id: 'boxingday', tier: 'major',
     getDate: (y) => new Date(y, 11, 26),
     window: 1,
-    accent: ' #C0C0C0',
+    effect: 'boxingday',
+    banner: {
+      emoji1: '🥊', emoji2: '🎁',
+      lines: ['HAPPY BOXING DAY'],
+      accent: '#C0C0C0',
+      accent2: '#4A90D9',
+      footer: 'FROM NEWSPAPER CLIPPINGS',
+    },
   },
 ];
 
@@ -123,6 +130,7 @@ const PETAL_EMOJIS = ['🌸', '🌷', '🌺'];
 const SPOOKY_EMOJIS = ['🎃', '🦇', '👻'];
 const HARVEST_EMOJIS = ['🍂', '🎃', '🍁'];
 const CHRISTMAS_EMOJIS = ['🎄', '🎁', '⭐', '🔔'];
+const BOXING_DAY_EMOJIS = ['🥊', '🎁', '⭐'];
 
 // ── TEMP TEST TOGGLE — force a specific holiday to preview, delete when done ──
 const FORCE_HOLIDAY_TEST = null; //'boxingday'; // set to a holiday id below to preview, e.g. 'halloween'
@@ -586,6 +594,13 @@ function EffectCanvas({ effect }) {
         <>
           <SnowCanvas />
           <FallingEmojiCanvas emojis={CHRISTMAS_EMOJIS} count={18} minSize={18} maxSize={28} speedMult={0.6} />
+        </>
+      );
+    case 'boxingday':
+      return (
+        <>
+          <SnowCanvas />
+          <FallingEmojiCanvas emojis={BOXING_DAY_EMOJIS} count={22} minSize={20} maxSize={34} speedMult={0.7} />
         </>
       );
     case 'leaves':

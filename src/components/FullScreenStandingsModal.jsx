@@ -1,83 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { sortStandings, computeH2H, orderTiedGroupV2 } from '../utils/standingsCalc';
 
-function computeH2H(teamA, teamB, games) {
-  let ptsA = 0,
-    ptsB = 0;
-  (games || []).forEach((g) => {
-    const aIsHome = g.home === teamA && g.away === teamB;
-    const aIsAway = g.home === teamB && g.away === teamA;
-    if (!aIsHome && !aIsAway) return;
-    const sA = aIsHome ? g.score_home : g.score_away;
-    const sB = aIsHome ? g.score_away : g.score_home;
-    if (sA > sB) ptsA += 2;
-    else if (sB > sA) ptsB += 2;
-    else {
-      ptsA += 1;
-      ptsB += 1;
-    }
-  });
-  return { ptsA, ptsB };
-}
-
-function sortWithTiebreakers(teams, games) {
-  const computeH2HLocal = (teamA, teamB) => {
-    let ptsA = 0,
-      ptsB = 0;
-    (games || []).forEach((g) => {
-      const aIsHome = g.home === teamA && g.away === teamB;
-      const aIsAway = g.home === teamB && g.away === teamA;
-      if (!aIsHome && !aIsAway) return;
-      const sA = aIsHome ? g.score_home : g.score_away;
-      const sB = aIsHome ? g.score_away : g.score_home;
-      if (sA > sB) ptsA += 2;
-      else if (sB > sA) ptsB += 2;
-      else {
-        ptsA += 1;
-        ptsB += 1;
-      }
-    });
-    return { ptsA, ptsB };
-  };
-  const h2hCache = {};
-  const getH2H = (a, b) => {
-    const key = [a, b].sort().join('::');
-    if (!h2hCache[key]) h2hCache[key] = computeH2HLocal(a, b);
-    return h2hCache[key];
-  };
-  const byPts = {};
-  teams.forEach((t) => {
-    if (!byPts[t.pts]) byPts[t.pts] = [];
-    byPts[t.pts].push(t);
-  });
-  const result = [];
-  Object.keys(byPts)
-    .map(Number)
-    .sort((a, b) => b - a)
-    .forEach((pts) => {
-      const tier = byPts[pts];
-      if (tier.length === 1) {
-        result.push({ ...tier[0], _h2hPts: 0 });
-      } else {
-        const enriched = tier.map((t) => {
-          let h2hPts = 0;
-          tier.forEach((other) => {
-            if (other.team === t.team) return;
-            const { ptsA } = getH2H(t.team, other.team);
-            h2hPts += ptsA;
-          });
-          return { ...t, _h2hPts: h2hPts };
-        });
-        enriched.sort((a, b) => {
-          if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
-          if (b.w !== a.w) return b.w - a.w;
-          return b.gd - a.gd;
-        });
-        result.push(...enriched);
-      }
-    });
-  return result;
-}
 
 // ── Tooltip: SOS ──────────────────────────────────────────────────────────────
 function SOSTooltip({ sosInfo }) {
@@ -507,6 +431,282 @@ function TiebreakerTooltip({
   );
 }
 
+function TiebreakerTooltipV2({
+  hoveredTeam,
+  tiedStandings,
+  seasonGames,
+  anchorRect,
+}) {
+  if (!hoveredTeam || !tiedStandings || tiedStandings.length < 2 || !anchorRect)
+    return null;
+
+  const ranked = orderTiedGroupV2(tiedStandings, seasonGames);
+  const baseSeed = Math.min(...tiedStandings.map((s) => s._sortRank ?? 1));
+  const maxH2H = Math.max(...ranked.map((r) => r.h2hPts ?? 0), 1);
+
+  const tooltipW = 380;
+  const fixedLeft = window.innerWidth - tooltipW - 16;
+  const tooltipHeight = 200;
+  const desiredTop = anchorRect.top + anchorRect.height / 2 - tooltipHeight / 2;
+  const fixedTop = Math.max(
+    16,
+    Math.min(desiredTop, window.innerHeight - tooltipHeight - 16)
+  );
+
+  const StatBar = ({ value, max, color }) => (
+    <div
+      style={{
+        flex: 1,
+        height: 5,
+        background: 'rgba(255,255,255,.08)',
+        borderRadius: 2,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          height: '100%',
+          width: `${Math.max(0, ((value ?? 0) / (max || 1)) * 100)}%`,
+          background: color,
+          borderRadius: 2,
+          boxShadow: `0 0 6px ${color}`,
+          transition: 'width .4s cubic-bezier(.4,0,.2,1)',
+        }}
+      />
+    </div>
+  );
+
+  const gridCols = '40px 1fr 42px 42px 48px 48px';
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        top: fixedTop,
+        left: fixedLeft,
+        zIndex: 9999,
+        width: tooltipW,
+        pointerEvents: 'none',
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          inset: -8,
+          background:
+            'radial-gradient(ellipse at center, rgba(255,215,0,.12) 0%, transparent 70%)',
+          borderRadius: 16,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          background:
+            'linear-gradient(155deg, rgba(8,6,20,.98) 0%, rgba(18,14,38,.98) 100%)',
+          border: '1px solid rgba(255,215,0,.5)',
+          borderRadius: 12,
+          boxShadow:
+            '0 0 0 1px rgba(255,140,0,.15), 0 8px 32px rgba(0,0,0,.8), 0 0 40px rgba(255,215,0,.1)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: '10px 16px 8px',
+            borderBottom: '1px solid rgba(255,215,0,.15)',
+            background:
+              'linear-gradient(90deg, rgba(255,140,0,.08) 0%, rgba(255,215,0,.04) 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.6rem',
+              color: '#FF8C00',
+              letterSpacing: 2,
+              textShadow: '0 0 8px rgba(255,140,0,.7)',
+            }}
+          >
+            TIEBREAKER
+          </div>
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.5rem',
+              color: 'rgba(255,255,255,.4)',
+              letterSpacing: 1,
+            }}
+          >
+            {ranked.length} TEAMS · {ranked[0].pts} PTS
+          </div>
+        </div>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: gridCols,
+            gap: '0 6px',
+            padding: '6px 16px 4px',
+            borderBottom: '1px solid rgba(255,255,255,.05)',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: '.45rem',
+              color: 'rgba(255,255,255,.3)',
+              textAlign: 'center',
+            }}
+          >
+            SEED
+          </div>
+          <div />
+          {['W', 'H2H', 'H2HGD', 'GD'].map((lbl) => (
+            <div
+              key={lbl}
+              style={{
+                fontFamily: "'Press Start 2P', monospace",
+                fontSize: '.55rem',
+                color: 'rgba(135,206,235,.5)',
+                textAlign: 'center',
+                letterSpacing: 1,
+              }}
+            >
+              {lbl}
+            </div>
+          ))}
+        </div>
+        {ranked.map((row, idx) => {
+          const seedNum = baseSeed + idx;
+          const gdSign = row.gd > 0 ? '+' : '';
+          const h2hGDSign = row.h2hGD != null && row.h2hGD > 0 ? '+' : '';
+          return (
+            <div
+              key={row.team}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: gridCols,
+                gap: '0 6px',
+                padding: '9px 16px',
+                background:
+                  idx % 2 === 0 ? 'rgba(255,255,255,.015)' : 'transparent',
+                borderBottom:
+                  idx < ranked.length - 1
+                    ? '1px solid rgba(255,255,255,.04)'
+                    : 'none',
+                alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.6rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 8px rgba(255,140,0,.6)',
+                  lineHeight: 1,
+                }}
+              >
+                {seedNum}
+              </div>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 5,
+                  minWidth: 0,
+                }}
+              >
+                <span
+                  style={{
+                    fontFamily: "'VT323', monospace",
+                    fontSize: '1.5rem',
+                    color: '#E0E0E0',
+                    letterSpacing: 1,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    lineHeight: 1,
+                  }}
+                >
+                  {row.team}
+                </span>
+                <StatBar value={row.h2hPts} max={maxH2H} color="#FF8C00" />
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#87CEEB',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(135,206,235,.4)',
+                }}
+              >
+                {row.w}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.4rem',
+                  color: '#FF8C00',
+                  textAlign: 'center',
+                  textShadow: '0 0 6px rgba(255,140,0,.5)',
+                }}
+              >
+                {row.h2hPts ?? '—'}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.3rem',
+                  color:
+                    row.h2hGD == null
+                      ? '#888'
+                      : row.h2hGD > 0
+                      ? '#00FF88'
+                      : row.h2hGD < 0
+                      ? '#FF4444'
+                      : '#888',
+                  textAlign: 'center',
+                  textShadow:
+                    row.h2hGD != null && row.h2hGD > 0
+                      ? '0 0 6px rgba(0,255,136,.5)'
+                      : row.h2hGD != null && row.h2hGD < 0
+                      ? '0 0 6px rgba(255,68,68,.5)'
+                      : 'none',
+                }}
+              >
+                {row.h2hGD != null ? `${h2hGDSign}${row.h2hGD}` : '—'}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'VT323', monospace",
+                  fontSize: '1.3rem',
+                  color:
+                    row.gd > 0 ? '#00FF88' : row.gd < 0 ? '#FF4444' : '#888',
+                  textAlign: 'center',
+                  textShadow:
+                    row.gd > 0
+                      ? '0 0 6px rgba(0,255,136,.5)'
+                      : row.gd < 0
+                      ? '0 0 6px rgba(255,68,68,.5)'
+                      : 'none',
+                }}
+              >
+                {gdSign}
+                {row.gd}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 export default function FullScreenStandingsModal({
   onClose,
   groupedStandings,
@@ -521,6 +721,7 @@ export default function FullScreenStandingsModal({
   gfPerG,        
   gaPerG,
   sosData,
+  tiebreakerRuleset,
 }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'default',
@@ -632,9 +833,9 @@ export default function FullScreenStandingsModal({
       sortConfig.key === 'pts' ||
       sortConfig.key === 'season_rank'
     ) {
-      teams = sortWithTiebreakers(group.teams, rawGames).map((s, i) => ({
+      teams = sortStandings(group.teams, rawGames, tiebreakerRuleset).map((s, i) => ({
         ...s,
-        _sortRank: s._sortRank ?? i + 1,
+        _sortRank: i + 1,
       }));
       if (
         sortConfig.direction === 'ascending' &&
@@ -664,12 +865,21 @@ export default function FullScreenStandingsModal({
       {tiebreakerInfo &&
         tiebreakerInfo.anchorRect &&
         createPortal(
-          <TiebreakerTooltip
-            hoveredTeam={tiebreakerInfo.hoveredTeam}
-            tiedStandings={tiebreakerInfo.tiedStandings}
-            seasonGames={rawGames}
-            anchorRect={tiebreakerInfo.anchorRect}
-          />,
+          tiebreakerRuleset === 'v2_wins_h2h_gd' ? (
+            <TiebreakerTooltipV2
+              hoveredTeam={tiebreakerInfo.hoveredTeam}
+              tiedStandings={tiebreakerInfo.tiedStandings}
+              seasonGames={rawGames}
+              anchorRect={tiebreakerInfo.anchorRect}
+            />
+          ) : (
+            <TiebreakerTooltip
+              hoveredTeam={tiebreakerInfo.hoveredTeam}
+              tiedStandings={tiebreakerInfo.tiedStandings}
+              seasonGames={rawGames}
+              anchorRect={tiebreakerInfo.anchorRect}
+            />
+          ),
           document.body
         )}
       {sosInfo &&

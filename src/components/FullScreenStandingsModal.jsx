@@ -1,83 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { sortStandings, computeH2H } from '../utils/standingsCalc';
 
-function computeH2H(teamA, teamB, games) {
-  let ptsA = 0,
-    ptsB = 0;
-  (games || []).forEach((g) => {
-    const aIsHome = g.home === teamA && g.away === teamB;
-    const aIsAway = g.home === teamB && g.away === teamA;
-    if (!aIsHome && !aIsAway) return;
-    const sA = aIsHome ? g.score_home : g.score_away;
-    const sB = aIsHome ? g.score_away : g.score_home;
-    if (sA > sB) ptsA += 2;
-    else if (sB > sA) ptsB += 2;
-    else {
-      ptsA += 1;
-      ptsB += 1;
-    }
-  });
-  return { ptsA, ptsB };
-}
-
-function sortWithTiebreakers(teams, games) {
-  const computeH2HLocal = (teamA, teamB) => {
-    let ptsA = 0,
-      ptsB = 0;
-    (games || []).forEach((g) => {
-      const aIsHome = g.home === teamA && g.away === teamB;
-      const aIsAway = g.home === teamB && g.away === teamA;
-      if (!aIsHome && !aIsAway) return;
-      const sA = aIsHome ? g.score_home : g.score_away;
-      const sB = aIsHome ? g.score_away : g.score_home;
-      if (sA > sB) ptsA += 2;
-      else if (sB > sA) ptsB += 2;
-      else {
-        ptsA += 1;
-        ptsB += 1;
-      }
-    });
-    return { ptsA, ptsB };
-  };
-  const h2hCache = {};
-  const getH2H = (a, b) => {
-    const key = [a, b].sort().join('::');
-    if (!h2hCache[key]) h2hCache[key] = computeH2HLocal(a, b);
-    return h2hCache[key];
-  };
-  const byPts = {};
-  teams.forEach((t) => {
-    if (!byPts[t.pts]) byPts[t.pts] = [];
-    byPts[t.pts].push(t);
-  });
-  const result = [];
-  Object.keys(byPts)
-    .map(Number)
-    .sort((a, b) => b - a)
-    .forEach((pts) => {
-      const tier = byPts[pts];
-      if (tier.length === 1) {
-        result.push({ ...tier[0], _h2hPts: 0 });
-      } else {
-        const enriched = tier.map((t) => {
-          let h2hPts = 0;
-          tier.forEach((other) => {
-            if (other.team === t.team) return;
-            const { ptsA } = getH2H(t.team, other.team);
-            h2hPts += ptsA;
-          });
-          return { ...t, _h2hPts: h2hPts };
-        });
-        enriched.sort((a, b) => {
-          if (b._h2hPts !== a._h2hPts) return b._h2hPts - a._h2hPts;
-          if (b.w !== a.w) return b.w - a.w;
-          return b.gd - a.gd;
-        });
-        result.push(...enriched);
-      }
-    });
-  return result;
-}
 
 // ── Tooltip: SOS ──────────────────────────────────────────────────────────────
 function SOSTooltip({ sosInfo }) {
@@ -521,6 +445,7 @@ export default function FullScreenStandingsModal({
   gfPerG,        
   gaPerG,
   sosData,
+  tiebreakerRuleset,
 }) {
   const [sortConfig, setSortConfig] = useState({
     key: 'default',
@@ -632,9 +557,9 @@ export default function FullScreenStandingsModal({
       sortConfig.key === 'pts' ||
       sortConfig.key === 'season_rank'
     ) {
-      teams = sortWithTiebreakers(group.teams, rawGames).map((s, i) => ({
+      teams = sortStandings(group.teams, rawGames, tiebreakerRuleset).map((s, i) => ({
         ...s,
-        _sortRank: s._sortRank ?? i + 1,
+        _sortRank: i + 1,
       }));
       if (
         sortConfig.direction === 'ascending' &&

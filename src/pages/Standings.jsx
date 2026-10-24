@@ -2036,6 +2036,7 @@ export default function Standings() {
           gfPerG={gfPerG}
           gaPerG={gaPerG}
           sosData={sosData}
+          tiebreakerRuleset={tiebreakerRuleset}
         />
       )}
 

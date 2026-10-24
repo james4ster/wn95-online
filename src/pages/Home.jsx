@@ -1519,10 +1519,11 @@ function LeagueGazette({
           .si-cover-line { font-size:11px; }
           .si-skel-grid { grid-template-columns:1fr; }
           .si-skel-hero { min-height:130px; }
-          .si-hero-featured {
+          si-hero-featured {
             object-position: center 25%;
-        }
-      `}</style>
+          }
+          }
+          `}</style>
     </div>
   );
 }
@@ -2602,15 +2603,15 @@ setNextSeason(nextSeason);
 
         {/* ── CENTER COLUMN — GAZETTE ── */}
         <div className="cg-b">
-        {isPlayoffActive && currentSeason?.status === 'playoffs' && (
-            <PlayoffEliminationBoard
-            playoffSeriesData={playoffSeriesData}
-            playoffTeamCodes={playoffTeamCodes}
-            teamNameMap={teamNameMap}
-            seasonTeams={seasonTeams}
-            currentSeason={currentSeason}
-          />
-          )}
+        {currentSeason?.status === 'playoffs' && playoffTeamCodes.length > 0 && (
+        <PlayoffEliminationBoard
+          playoffSeriesData={playoffSeriesData}
+          playoffTeamCodes={playoffTeamCodes}
+          teamNameMap={teamNameMap}
+          seasonTeams={seasonTeams}
+          currentSeason={currentSeason}
+        />
+            )}
           <LeagueGazette
             leagueLabel={cfg.label}
             recentForm={recentForm}

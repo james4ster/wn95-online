@@ -128,7 +128,7 @@ const HOLIDAYS = [
 const LEAF_EMOJIS = ['🍁', '🍂', '🍃'];
 const PETAL_EMOJIS = ['🌸', '🌷', '🌺'];
 const SPOOKY_EMOJIS = ['🎃', '🦇', '👻'];
-const HARVEST_EMOJIS = ['🍂', '🎃', '🍁'];
+const HARVEST_EMOJIS = ['🍂', '🍁', '🌽', '🥧', '🦃'];
 const CHRISTMAS_EMOJIS = ['🎄', '🎁', '⭐', '🔔'];
 const BOXING_DAY_EMOJIS = ['🥊', '🎁', '⭐'];
 
@@ -695,16 +695,14 @@ function HolidayBanner({ banner }) {
 
 // ─── Minor-tier holidays: site-wide accent color swap, no canvas/banner ─────
 export function HolidayAccent() {
-  const holiday = FORCE_HOLIDAY_TEST
-    ? HOLIDAYS.find((h) => h.id === FORCE_HOLIDAY_TEST)
-    : getActiveHoliday();
+  const holiday = getActiveHoliday();
 
-    useEffect(() => {
-      if (holiday?.tier === 'minor' && holiday.accent) {
-        document.documentElement.style.setProperty('--holiday-accent', holiday.accent);
-      } else {
-        document.documentElement.style.removeProperty('--holiday-accent');
-      }
+  useEffect(() => {
+    if (holiday?.tier === 'minor' && holiday.accent) {
+      document.documentElement.style.setProperty('--holiday-accent', holiday.accent);
+    } else {
+      document.documentElement.style.removeProperty('--holiday-accent');
+    }
     return () => {
       document.documentElement.style.removeProperty('--holiday-accent');
     };
@@ -713,23 +711,22 @@ export function HolidayAccent() {
   return null;
 }
 
-
 // ─── Main export ─────────────────────────────────────────────────────────────
 export default function SeasonalFlair({ fullscreen = false }) {
   const holiday = getActiveHoliday();
-  if (!holiday || holiday.tier !== 'major') return null; // ← only majors get the takeover
+  const isMajor = holiday?.tier === 'major';
 
-  const [seen, setSeen] = useState(
-    fullscreen && holiday ? hasSeenToday(holiday.id) : false
+  const [seen] = useState(
+    fullscreen && isMajor ? hasSeenToday(holiday.id) : false
   );
 
   useEffect(() => {
-    if (fullscreen && holiday && !hasSeenToday(holiday.id)) {
+    if (fullscreen && isMajor && !hasSeenToday(holiday.id)) {
       markSeenToday(holiday.id);
     }
-  }, [fullscreen, holiday?.id]);
+  }, [fullscreen, isMajor, holiday?.id]);
 
-  if (!holiday) return null;
+  if (!isMajor) return null;
   if (fullscreen && seen) return null;
 
   return (

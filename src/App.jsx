@@ -62,7 +62,7 @@ function AppShell() {
   return (
     <div className="app">
       {  <ZamboniOffseasonBar variant="classic" championLogoUrl="/assets/teamLogos/PIT.png" />   }    { /* }=== CHANGE TO CHAMPION FOR OFFSEASON ZAMBONI VISUAL */ }
-      <ScoresBar />   
+      { /* <ScoresBar /> */ }   
       <MainNavigation />
       <LeagueSubNav />
       <Routes>
